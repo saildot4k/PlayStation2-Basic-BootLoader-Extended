@@ -13,7 +13,7 @@ export HEADER
 # ---{BUILD CFG}--- #
 HAS_EMBED_IRX = 1 # whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
-CHAINLOAD ?= 0 # Only inits the system and boots CHAINLOAD_PATH from the memory card
+CHAINLOAD ?= 1 # Only inits the system and boots CHAINLOAD_PATH from the memory card
 CHAINLOAD_PATH ?= "mc?:OSDMENU/PAYLOAD.ELF"
 PSX ?= 0 # PSX DESR support
 HDD ?= 0 #wether to add internal HDD support
