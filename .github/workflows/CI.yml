@@ -114,7 +114,7 @@ jobs:
             release/*
 
       - name: Create prerelease
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/9paths'
         uses: mathieucarbou/marvinpinto-action-automatic-releases@latest
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
