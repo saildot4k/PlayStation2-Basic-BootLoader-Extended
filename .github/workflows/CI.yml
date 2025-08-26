@@ -70,7 +70,7 @@ jobs:
 
       - name: Compile PS2 MMCE HDD build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2_MMCE_HDD/ MMCE=1 HDD=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2_MMCE_HDD/ MMCE=1, HDD=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
 
       - name: Compile PSX MMCE build
         run: |
