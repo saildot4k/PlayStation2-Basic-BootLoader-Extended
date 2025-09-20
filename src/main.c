@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef HDD
-    else if (LoadHDDIRX() < 0) // only load HDD crap if filexio and iomanx are up and running
+    if (LoadHDDIRX() < 0) // only load HDD crap if filexio and iomanx are up and running
     {
         scr_setbgcolor(0x0000ff);
         scr_clear();
