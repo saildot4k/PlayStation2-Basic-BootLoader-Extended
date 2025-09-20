@@ -20,7 +20,7 @@ on:
         description: compile with debugging functionality
       printf:
         type: choice
-        description: wich debugging messages variant to use
+        description: which debugging messages variant to use
         options:
         - NONE
         - PRINTF
@@ -78,7 +78,7 @@ jobs:
 
       - name: Compile PS2 chainload build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} CHAINLOAD=1 BINDIR=PS2_CHAINLOAD/ ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} CHAINLOAD=1 BINDIR=PS2_CHAINLOAD/ HDD=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
 
       - name: Compile PSX chainload build
         run: |
@@ -145,7 +145,7 @@ jobs:
 
       - name: Compile OSDMenu chainloader build
         run: |
-          make release CHAINLOAD=1 CHAINLOAD_PATH="mc?:/BOOT/osdmenu.elf" COMMIT_HASH=${GITHUB_SHA::7} BINDIR=OSDMENU/
+          make release CHAINLOAD=1 HDD=1 CHAINLOAD_PATH="mc?:/BOOT/osdmenu.elf" COMMIT_HASH=${GITHUB_SHA::7} BINDIR=OSDMENU/
 
       - name: Compile OSDMenu SAS chainloader build
         run: |
