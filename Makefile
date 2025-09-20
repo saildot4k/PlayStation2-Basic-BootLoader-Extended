@@ -13,21 +13,21 @@ export HEADER
 # ---{BUILD CFG}--- #
 HAS_EMBED_IRX ?= 1# whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
-CHAINLOAD ?= 0 # Only inits the system and boots CHAINLOAD_PATH from the memory card. If specified file doesn't exist, attempts to boot RESCUE.ELF from USB
-CHAINLOAD_PATH ?= "mc?:BOOT/PAYLOAD.ELF"
+CHAINLOAD ?= 1 # Only inits the system and boots CHAINLOAD_PATH from the memory card. If specified file doesn't exist, attempts to boot RESCUE.ELF from USB
+CHAINLOAD_PATH ?= "hdd0:__system:pfs:/p2lboot/PSBBN.ELF"
 PSX ?= 0 # PSX DESR support
-HDD ?= 0 #wether to add internal HDD support
+HDD ?= 1 #wether to add internal HDD support
 MMCE ?= 0
 MX4SIO ?= 0
-PROHBIT_DVD_0100 ?= 0 # prohibit the DVD Players v1.00 and v1.01 from being booted.
+PROHBIT_DVD_0100 ?= 1 # prohibit the DVD Players v1.00 and v1.01 from being booted.
 XCDVD_READKEY ?= 0 # Enable the newer sceCdReadKey checks, which are only supported by a newer CDVDMAN module.
 UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
-FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
-DEV9_NEED ?= 0    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
+FILEXIO_NEED ?= 1 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
+DEV9_NEED ?= 1    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
 
 # Related to binary size reduction (it disables some features, please be sure you won't disable something you need)
 KERNEL_NOPATCH = 1
