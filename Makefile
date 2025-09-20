@@ -11,7 +11,7 @@ export HEADER
 
 
 # ---{BUILD CFG}--- #
-HAS_EMBED_IRX ?= 1# whether to embed or not non vital IRX (wich will be loaded from memcard files)
+HAS_EMBED_IRX ?= 1# whether to embed or not non vital IRX (which will be loaded from memcard files)
 DEBUG ?= 0
 CHAINLOAD ?= 1 # Only inits the system and boots CHAINLOAD_PATH from the memory card. If specified file doesn't exist, attempts to boot RESCUE.ELF from USB
 CHAINLOAD_PATH ?= "hdd0:__system:pfs:/p2lboot/PSBBN.ELF"
@@ -26,11 +26,11 @@ PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
-FILEXIO_NEED ?= 1 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
+FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
 DEV9_NEED ?= 1    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
 
 # Related to binary size reduction (it disables some features, please be sure you won't disable something you need)
-KERNEL_NOPATCH = 1
+KERNEL_NOPATCH = 0
 NEWLIB_NANO = 1
 DUMMY_TIMEZONE = 1
 
