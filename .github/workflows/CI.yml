@@ -78,7 +78,7 @@ jobs:
 
       - name: Compile PS2 chainload build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} CHAINLOAD=1 BINDIR=PS2_CHAINLOAD/ HDD=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2_CHAINLOAD/ HDD=1 CHAINLOAD=1 CHAINLOAD_PATH="hdd0:__system:pfs:/p2lboot/PSBBN.ELF" ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
 
       - name: Compile PSX chainload build
         run: |
