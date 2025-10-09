@@ -19,7 +19,7 @@ PSX ?= 0 # PSX DESR support
 HDD ?= 0 #wether to add internal HDD support
 MMCE ?= 0
 MX4SIO ?= 0
-PROHBIT_DVD_0100 ?= 1 # prohibit the DVD Players v1.00 and v1.01 from being booted.
+PROHBIT_DVD_0100 ?= 0 # prohibit the DVD Players v1.00 and v1.01 from being booted.
 XCDVD_READKEY ?= 0 # Enable the newer sceCdReadKey checks, which are only supported by a newer CDVDMAN module.
 UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
@@ -170,13 +170,14 @@ else
 endif
 
 ifeq ($(HDD), 1)
+  HAS_EMBED_IRX = 1
   $(info --- compiling with HDD support)
   EE_LIBS += -lpoweroff
   EE_OBJS += ps2fs_irx.o ps2hdd_irx.o ps2atad_irx.o poweroff_irx.o
   EE_CFLAGS += -DHDD
   FILEXIO_NEED = 1
   DEV9_NEED = 1
-  KELFTYPE = HDD
+#  KELFTYPE = HDD
 endif
 
 ifeq ($(UDPTTY), 1)
