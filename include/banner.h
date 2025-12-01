@@ -4,11 +4,6 @@
 
 const char *BANNER =
 // change the banner text depending on system type, leave versioning and credits the same
-#define BANNER_FOOTER                                                   \
-    "\tPS2 Basic BootLoader - By Matias Israelson AKA: EL_isra \n"
-    "\tv" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS
-    "\n"
-    "\thttps://ps2store.com - Modified - 9 Paths               \n"
 #ifdef PSX
     "\t\t__________  _____________  _______________________.____\n"
     "\t\t\\______   \\/   _____/\\   \\/  /\\______   \\______   \\    |\n"
@@ -29,6 +24,11 @@ const char *BANNER =
 #ifdef DEBUG
     " - DEBUG"
 #endif
-    "\n"
     "\n";
+#define BANNER_FOOTER                                                   \
+    "\tPS2 Basic BootLoader - By Matias Israelson AKA: EL_isra \n"
+    "\tv" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS
+    "\n"
+    "https://ps2store.com - Modified - 9 Paths               \n"
+    
 #endif
