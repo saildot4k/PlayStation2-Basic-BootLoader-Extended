@@ -26,9 +26,9 @@ const char *BANNER =
 #endif
     "\n";
 #define BANNER_FOOTER                                                   \
-    "\tPS2 Basic BootLoader - By Matias Israelson AKA: EL_isra \n"
-    "\tv" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS
-    "\n"
+    "\tPS2 Basic BootLoader - By Matias Israelson AKA: EL_isra \n"  \
+    "\tv" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS \
+    "\n"    \
     "https://ps2store.com - Modified - 9 Paths               \n"
-    
+
 #endif
