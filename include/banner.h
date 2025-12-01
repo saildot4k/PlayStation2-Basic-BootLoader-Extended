@@ -31,5 +31,5 @@ const char *BANNER =
     "\n"
     "\n";
 #define BANNER_FOOTER                                                   \
-
+    "\n"
 #endif
