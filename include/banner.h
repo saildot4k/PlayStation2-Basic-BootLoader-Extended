@@ -23,7 +23,7 @@ const char *BANNER =
     "\t       /\\: OSD-XMB                      /\\:WLE-ISR              \n"
     "\t<: USER    >: RETROLauncher  []: POPSLoader  O: WLE-ISR (REVERSE) \n"
     "\t       \\/: XEB+                         X: DKWDRV                \n"
-    "\t     SELECT: DISC SKIP LOGO             START: DISC               \n"
+    "\t     SELECT: DISC SKIP LOGO            START: DISC               \n"
 #endif
     
 #ifdef DEBUG
