@@ -128,9 +128,9 @@ const char *KEYS_ID[17] = {
 
 /** default paths used if config file can't be loaded */
 char *DEFPATH[] = {
-    "mc?:/BOOT/ULE.ELF", // AUTO [0]
-    "mc?:/APPS/ULE/ELF",
-    "mass:/BOOT/BOOT.ELF",
+    "mc?:/SYS_OSDMENU/osdmenu.elf", // AUTO [0]
+    "mc?:/SYS_FMCBD-1966/FMDBD-1966.ELF",
+    "mass:/BOOT/BOOT2.ELF",
     "",
     "",
     "",
@@ -155,8 +155,8 @@ char *DEFPATH[] = {
     "",
     "",
     "",
-    "mc?:/OPL/OPNPS2LD.ELF", // L1 [CONFIG_KEY_INDEXES * 3]
-    "mc?:/APPS/OPNPS2LD/ELF",
+    "mc?:/APP_OPL.ELF", // L1 [CONFIG_KEY_INDEXES * 3]
+    "mc?:/APPS/OPNPS2LD.ELF",
     "mass:/PS2BBL/OPNPS2LD.ELF",
     "",
     "",
