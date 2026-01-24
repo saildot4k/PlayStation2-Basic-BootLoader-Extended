@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     u32 STAT;
     u64 tstart;
     int button, x, j, cnf_size, fd, result;
-    static int num_buttons = 4, pad_button = 0x0100; // first pad button is L2
+    static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
     ResetIOP();
@@ -196,8 +196,8 @@ int main(int argc, char *argv[])
 
     if (config_source != SOURCE_INVALID) {
         DPRINTF("valid config on device '%s', reading now\n", SOURCES[config_source]);
-        pad_button = 0x0001; // on valid config, change the value of `pad_button` so the pad detection loop iterates all the buttons instead of only those configured on default paths
-        num_buttons = 16;
+        //pad_button = 0x0001; // on valid config, change the value of `pad_button` so the pad detection loop iterates all the buttons instead of only those configured on default paths
+        //num_buttons = 16;
         fseek(fp, 0, SEEK_END);
         cnf_size = ftell(fp);
         fseek(fp, 0, SEEK_SET);
@@ -253,10 +253,10 @@ int main(int argc, char *argv[])
                 }
             } else {
                 fclose(fp);
-                DPRINTF("\tERROR: could not read %d bytes of config file, only %d readed\n", cnf_size, temp);
+                DPRINTF("\tERROR: could not read %d bytes of config file, only %d read\n", cnf_size, temp);
 #ifdef REPORT_FATAL_ERRORS
                 scr_setfontcolor(0x0000ff);
-                scr_printf("\tERROR: could not read %d bytes of config file, only %d readed\n", cnf_size, temp);
+                scr_printf("\tERROR: could not read %d bytes of config file, only %d read\n", cnf_size, temp);
                 scr_setfontcolor(0xffffff);
 #endif
             }
