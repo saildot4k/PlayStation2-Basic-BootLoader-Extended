@@ -280,7 +280,7 @@ int main(int argc, char *argv[])
 #endif
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
-        for (x = 0; x < 5; x++)
+        for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = CheckPath(DEFPATH[CONFIG_KEY_INDEXES * x + j]);
         sleep(1);
@@ -348,9 +348,14 @@ int main(int argc, char *argv[])
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
             if (PAD & button) {
                 DPRINTF("PAD detected\n");
+                // calculate key index
+                int key_index = 0;
+                u32 temp = button;
+                while (temp > 1) { temp >>= 1; key_index++; }
+                key_index += 1;
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
-                    EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
+                    EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[key_index][j]);
                     if (exist(EXECPATHS[j])) {
                         scr_setfontcolor(0x00ff00);
                         scr_printf("\tLoading %s\n", EXECPATHS[j]);
