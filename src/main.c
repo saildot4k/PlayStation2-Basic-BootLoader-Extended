@@ -16,49 +16,12 @@ u8 ROMVER[16];
 int PAD = 0;
 static int config_source = SOURCE_INVALID;
 unsigned char *config_buf = NULL; // pointer to allocated config file
-
-// Trim leading/trailing whitespace (spaces/tabs) and line endings (CR/LF) in-place.
-// Returns a pointer to the first non-whitespace character within the original buffer.
-static char *trim_inplace(char *s)
-{
-    char *p, *end;
-
-    if (s == NULL)
-        return NULL;
-
-    // Left-trim spaces/tabs.
-    p = s;
-    while ((*p == ' ') || (*p == '\t'))
-        p++;
-
-    // Right-trim spaces/tabs + CR/LF.
-    end = p + strlen(p);
-    while (end > p) {
-        char c = end[-1];
-        if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
-            *--end = '\0';
-            continue;
-        }
-        break;
-    }
-
-    // Strip surrounding quotes after trimming: "value" -> value
-    if (*p == '"') {
-        size_t n = strlen(p);
-        if (n >= 2 && p[n - 1] == '"') {
-            p[n - 1] = '\0';
-            p++;
-        }
-    }
-
-    return p;
-}
 int main(int argc, char *argv[])
 {
     u32 STAT;
     u64 tstart;
     int button, x, j, cnf_size, fd, result;
-    static int num_buttons = 4, pad_button = 0x0100; // first pad button is L2
+    static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
     ResetIOP();
@@ -250,24 +213,12 @@ int main(int argc, char *argv[])
                 int var_cnt = 0;
                 char TMP[64];
                 for (var_cnt = 0; get_CNF_string(&CNFBUFF, &name, &value); var_cnt++) {
-                    // Robust parsing: tolerate whitespace around '=' and Windows CRLF.
-                    // get_CNF_string() returns pointers into CNFBUFF; trimming is safe in-place.
-                    name = trim_inplace(name);
-                    value = trim_inplace(value);
-
-                    if (name == NULL || *name == '\0')
-                        continue;
-                    if (value == NULL)
-                        value = "";
                     // DPRINTF("reading entry %d", var_cnt);
                     if (!strcmp("OSDHISTORY_READ", name)) {
                         GLOBCFG.OSDHISTORY_READ = atoi(value);
                         continue;
                     }
                     if (!strncmp("LOAD_IRX_E", name, 10)) {
-                        // Allow blank entries without breaking parsing.
-                        if (*value == '\0')
-                            continue;
                         j = SifLoadStartModule(CheckPath(value), 0, NULL, &x);
                         DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n", name, value, j, x);
                         continue;
@@ -293,7 +244,6 @@ int main(int argc, char *argv[])
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                                 sprintf(TMP, "LK_%s_E%d", KEYS_ID[x], j + 1);
                                 if (!strcmp(name, TMP)) {
-                                    // Store the (trimmed) pointer into CNFBUFF.
                                     GLOBCFG.KEYPATHS[x][j] = value;
                                     break;
                                 }
@@ -400,10 +350,7 @@ int main(int argc, char *argv[])
                 DPRINTF("PAD detected\n");
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
-                    char *raw = GLOBCFG.KEYPATHS[x + 1][j];
-                    if (raw == NULL || raw[0] == ' ')
-                        continue; // Skip blank slots instead of aborting.
-                    EXECPATHS[j] = CheckPath(raw);
+                    EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
                     if (exist(EXECPATHS[j])) {
                         scr_setfontcolor(0x00ff00);
                         scr_printf("\tLoading %s\n", EXECPATHS[j]);
@@ -423,10 +370,7 @@ int main(int argc, char *argv[])
     DPRINTF("Wait time consummed. Running AUTO entry\n");
     TimerEnd();
     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
-        char *raw = GLOBCFG.KEYPATHS[0][j];
-        if (raw == NULL || raw[0] == ' ')
-            continue; // Skip blank slots instead of aborting.
-        EXECPATHS[j] = CheckPath(raw);
+        EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
         if (exist(EXECPATHS[j])) {
             scr_setfontcolor(0x00ff00);
             scr_printf("\tLoading %s\n", EXECPATHS[j]);
