@@ -196,8 +196,8 @@ int main(int argc, char *argv[])
 
     if (config_source != SOURCE_INVALID) {
         DPRINTF("valid config on device '%s', reading now\n", SOURCES[config_source]);
-        //pad_button = 0x0001; // on valid config, change the value of `pad_button` so the pad detection loop iterates all the buttons instead of only those configured on default paths
-        //num_buttons = 16;
+        pad_button = 0x0001; // on valid config, change the value of `pad_button` so the pad detection loop iterates all the buttons instead of only those configured on default paths
+        num_buttons = 16;
         fseek(fp, 0, SEEK_END);
         cnf_size = ftell(fp);
         fseek(fp, 0, SEEK_SET);
