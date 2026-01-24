@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
                                 sprintf(TMP, "LK_%s_E%d", KEYS_ID[x], j + 1);
                                 if (!strcmp(name, TMP)) {
                                     // Store the (trimmed) pointer into CNFBUFF.
-                                    GLOBCFG.KEYPATHS[x][j] = CheckPath(value);
+                                    GLOBCFG.KEYPATHS[x][j] = value;
                                     break;
                                 }
                             }
