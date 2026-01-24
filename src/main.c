@@ -348,11 +348,6 @@ int main(int argc, char *argv[])
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
             if (PAD & button) {
                 DPRINTF("PAD detected\n");
-                // calculate key index
-                int key_index = 0;
-                u32 temp = button;
-                while (temp > 1) { temp >>= 1; key_index++; }
-                key_index += 1;
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                     EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[key_index][j]);
@@ -372,7 +367,7 @@ int main(int argc, char *argv[])
             button = button << 1; // sll of 1 cleared bit to move to next pad button
         }
     }
-    DPRINTF("Wait time consummed. running AUTO entry\n");
+    DPRINTF("Wait time consummed. Running AUTO entry\n");
     TimerEnd();
     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
@@ -388,7 +383,7 @@ int main(int argc, char *argv[])
 
     scr_clear();
     scr_setfontcolor(0x00ffff);
-    scr_printf("\n\n\tEND OF EXECUTION REACHED\nCould not find any of the default applications\nCheck your config file for the LK_AUTO_E# entries\nOr press a key while logo displays to run the bound application\npress R1+START to enter emergency mode");
+    scr_printf("\n\n\t\tEND OF EXECUTION REACHED\n\t\tCould not find any of the default applications\n\t\tCheck your config file for the LK_AUTO_E# entries\n\t\tOr press a key while logo displays to run the bound application\n\n\t\tPress R1+START to launch mass:/RESCUE.ELF");
     scr_setfontcolor(0xffffff);
     while (1) {
         sleep(1);
@@ -403,7 +398,7 @@ int main(int argc, char *argv[])
 void EMERGENCY(void)
 {
     scr_clear();
-    scr_printf("\n\n\n\tEmergency mode\n\n\t doing infinite attempts to boot\n\t\tmass:/RESCUE.ELF\n");
+    scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
     scr_setfontcolor(0xffffff);
     while (1) {
         scr_printf(".");
