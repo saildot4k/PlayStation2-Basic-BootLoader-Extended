@@ -1,4 +1,28 @@
 #include "main.h"
+
+// Whitespace/CRLF trimming for config values (in-place)
+// Returns a pointer to the first non-whitespace character (may be inside the original buffer).
+static char *trim_ws_inplace(char *s)
+{
+    char *end;
+    if (!s)
+        return s;
+
+    // Left trim
+    while (*s == ' ' || *s == '\t' || *s == '\r' || *s == '\n')
+        s++;
+
+    if (*s == '\0')
+        return s;
+
+    // Right trim
+    end = s + strlen(s);
+    while (end > s && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '\r' || end[-1] == '\n'))
+        end--;
+    *end = '\0';
+
+    return s;
+}
 // --------------- glob stuff --------------- //
 typedef struct
 {
@@ -213,12 +237,23 @@ int main(int argc, char *argv[])
                 int var_cnt = 0;
                 char TMP[64];
                 for (var_cnt = 0; get_CNF_string(&CNFBUFF, &name, &value); var_cnt++) {
+                    // Normalize parsed tokens (handle CRLF + surrounding whitespace)
+                    name = trim_ws_inplace(name);
+                    value = trim_ws_inplace(value);
+
+                    if (name == NULL || *name == '\0')
+                        continue;
+
                     // DPRINTF("reading entry %d", var_cnt);
                     if (!strcmp("OSDHISTORY_READ", name)) {
                         GLOBCFG.OSDHISTORY_READ = atoi(value);
                         continue;
                     }
                     if (!strncmp("LOAD_IRX_E", name, 10)) {
+                        if (value == NULL || *value == '\0') {
+                            DPRINTF("# Skipping empty IRX path for config entry [%s]\n", name);
+                            continue;
+                        }
                         j = SifLoadStartModule(CheckPath(value), 0, NULL, &x);
                         DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n", name, value, j, x);
                         continue;
@@ -239,12 +274,16 @@ int main(int argc, char *argv[])
                         GLOBCFG.LOGO_DISP = atoi(value);
                         continue;
                     }
-                    if (strncmp(name, "LK_", sizeof("LK_") - 1) == 0) {
+                    if (strncmp(name, "LK_", 3) == 0) {
                         for (x = 0; x < 17; x++) {
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                                 sprintf(TMP, "LK_%s_E%d", KEYS_ID[x], j + 1);
                                 if (!strcmp(name, TMP)) {
-                                    GLOBCFG.KEYPATHS[x][j] = value;
+                                    // Empty string means: skip this slot (try next E# when executing)
+                                    if (value == NULL || *value == '\0')
+                                        GLOBCFG.KEYPATHS[x][j] = NULL;
+                                    else
+                                        GLOBCFG.KEYPATHS[x][j] = value;
                                     break;
                                 }
                             }
@@ -350,6 +389,9 @@ int main(int argc, char *argv[])
                 DPRINTF("PAD detected\n");
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
+                    // Skip empty/unset entries (common when config has blank LK_* values)
+                    if (GLOBCFG.KEYPATHS[x + 1][j] == NULL || *GLOBCFG.KEYPATHS[x + 1][j] == '\0')
+                        continue;
                     EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
                     if (exist(EXECPATHS[j])) {
                         scr_setfontcolor(0x00ff00);
@@ -370,6 +412,9 @@ int main(int argc, char *argv[])
     DPRINTF("Wait time consummed. Running AUTO entry\n");
     TimerEnd();
     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
+        // Skip empty/unset AUTO entries too
+        if (GLOBCFG.KEYPATHS[0][j] == NULL || *GLOBCFG.KEYPATHS[0][j] == '\0')
+            continue;
         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
         if (exist(EXECPATHS[j])) {
             scr_setfontcolor(0x00ff00);
