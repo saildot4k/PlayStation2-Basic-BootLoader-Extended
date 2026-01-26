@@ -473,8 +473,7 @@ int main(int argc, char *argv[])
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
-        scr_printf("\n  Model: %s | PS1DRV: %s | DVD: %s\n"
-                    "  Config Source: %s\n",
+        scr_printf("\n  Model: %s | PS1DRV: %s | DVD: %s | Cfg Src: %s\n",
                     ModelNameGet(),
                     PS1DRVGetVersion(),
                     DVDPlayerGetVersion(),
