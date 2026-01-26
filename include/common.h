@@ -126,6 +126,49 @@ const char *KEYS_ID[17] = {
     "SQUARE"    // 0x8000
 };
 
+/** default hotkey names used when no NAME_* config is provided */
+#ifdef PSX
+    const char *DEFAULT_KEYNAMES[17] = {
+        "wLE ISR exFAT USB",
+        "DISC NO LOGO",
+        "L3",
+        "R3",
+        "DISC",
+        "OSD-XMB",
+        "RETROLauncher",
+        "XEB+",
+        "",
+        "wLE ISR exFAT USB",
+        "OPL",
+        "PSBBN FORWARDER",
+        "NEUTRINO",
+        "wLE ISR exFAT USB",
+        "wLE ISR (REVERSED)",
+        "DKWDRV",
+        "POPSLOADER",
+    };
+#else
+    const char *DEFAULT_KEYNAMES[17] = {
+        "HACKED OSDSYS",
+        "DISC NO LOGO",
+        "L3",
+        "R3",
+        "DISC",
+        "OSD-XMB",
+        "RETROLauncher",
+        "XEB+",
+        "",
+        "HACKED OSDSYS",
+        "OPL",
+        "PSBBN FORWARDER",
+        "NEUTRINO",
+        "wLE ISR exFAT USB",
+        "wLE ISR (REVERSED)",
+        "DKWDRV",
+        "POPSLOADER",
+    };
+#endif
+
 /** default paths used if config file can't be loaded */
 #ifdef PSX
     char *DEFPATH[] = {
@@ -138,7 +181,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
-        "", // SELECT [CONFIG_KEY_INDEXES * 1]
+        "$CDVD_NO_PS2LOGO", // SELECT [CONFIG_KEY_INDEXES * 1]
         "",
         "",
         "",
@@ -165,7 +208,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
-        "", // START [CONFIG_KEY_INDEXES *4]
+        "$CDVD", // START [CONFIG_KEY_INDEXES *4]
         "",
         "",
         "",
@@ -294,7 +337,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
-        "", // SELECT [CONFIG_KEY_INDEXES * 1]
+        "$CDVD_NO_PS2LOGO", // SELECT [CONFIG_KEY_INDEXES * 1]
         "",
         "",
         "",
@@ -321,7 +364,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
-        "", // START [CONFIG_KEY_INDEXES * 4]
+        "$CDVD", // START [CONFIG_KEY_INDEXES * 4]
         "",
         "",
         "",

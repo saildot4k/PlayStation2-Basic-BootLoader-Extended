@@ -28,6 +28,7 @@ typedef struct
 {
     int SKIPLOGO;
     char *KEYPATHS[17][CONFIG_KEY_INDEXES];
+    const char *KEYNAMES[17];
     int DELAY;
     int OSDHISTORY_READ;
     int TRAYEJECT;
@@ -35,11 +36,71 @@ typedef struct
 } CONFIG;
 CONFIG GLOBCFG;
 
+static const char *get_hotkey_name(int key)
+{
+    const char *name = GLOBCFG.KEYNAMES[key];
+    if (name != NULL && *name != '\0')
+        return name;
+    return "";
+}
+
+static void PrintHotkeyNamesTemplate(const char *tmpl)
+{
+    char buf[128];
+    int bi = 0;
+    const char *p = tmpl;
+
+    while (*p) {
+        if (*p == '{' && !strncmp(p, "{NAME_", 6)) {
+            const char *start = p + 6;
+            const char *end = strchr(start, '}');
+            if (end != NULL) {
+                size_t len = (size_t)(end - start);
+                int k, matched = 0;
+
+                if (bi > 0) {
+                    buf[bi] = '\0';
+                    scr_printf("%s", buf);
+                    bi = 0;
+                }
+
+                for (k = 0; k < 17; k++) {
+                    if (len == strlen(KEYS_ID[k]) && !strncmp(start, KEYS_ID[k], len)) {
+                        scr_printf("%s", get_hotkey_name(k));
+                        matched = 1;
+                        break;
+                    }
+                }
+
+                if (!matched) {
+                    scr_printf("{NAME_%.*s}", (int)len, start);
+                }
+
+                p = end + 1;
+                continue;
+            }
+        }
+
+        buf[bi++] = *p++;
+        if (bi >= (int)sizeof(buf) - 1) {
+            buf[bi] = '\0';
+            scr_printf("%s", buf);
+            bi = 0;
+        }
+    }
+
+    if (bi > 0) {
+        buf[bi] = '\0';
+        scr_printf("%s", buf);
+    }
+}
+
 char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
 int PAD = 0;
 static int config_source = SOURCE_INVALID;
 unsigned char *config_buf = NULL; // pointer to allocated config file
+
 int main(int argc, char *argv[])
 {
     u32 STAT;
@@ -60,7 +121,9 @@ int main(int argc, char *argv[])
     for (x = 0; x < argc; x++)
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
+    scr_setfontcolor(0x212121);
     scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
+    scr_setfontcolor(0xffffff);
     // print a simple dot to allow gbs control to start displaying video before banner and pad timeout begins to run. othersiwe, users with timeout lower than 4000 will have issues to respond in time
     DPRINTF("enabling LoadModuleBuffer\n");
     sbv_patch_enable_lmb(); // The old IOP kernel has no support for LoadModuleBuffer. Apply the patch to enable it.
@@ -222,6 +285,8 @@ int main(int argc, char *argv[])
         DPRINTF("valid config on device '%s', reading now\n", SOURCES[config_source]);
         pad_button = 0x0001; // on valid config, change the value of `pad_button` so the pad detection loop iterates all the buttons instead of only those configured on default paths
         num_buttons = 16;
+        for (x = 0; x < 17; x++)
+            GLOBCFG.KEYNAMES[x] = NULL;
         fseek(fp, 0, SEEK_END);
         cnf_size = ftell(fp);
         fseek(fp, 0, SEEK_SET);
@@ -272,6 +337,19 @@ int main(int argc, char *argv[])
                     }
                     if (!strcmp("LOGO_DISPLAY", name)) {
                         GLOBCFG.LOGO_DISP = atoi(value);
+                        continue;
+                    }
+                    if (strncmp(name, "NAME_", 5) == 0) {
+                        for (x = 0; x < 17; x++) {
+                            sprintf(TMP, "NAME_%s", KEYS_ID[x]);
+                            if (!strcmp(name, TMP)) {
+                                if (value == NULL || *value == '\0')
+                                    GLOBCFG.KEYNAMES[x] = NULL;
+                                else
+                                    GLOBCFG.KEYNAMES[x] = value;
+                                break;
+                            }
+                        }
                         continue;
                     }
                     if (strncmp(name, "LK_", 3) == 0) {
@@ -360,10 +438,14 @@ int main(int argc, char *argv[])
     }
     // Stores last key during DELAY msec
     scr_clear();
-    if (GLOBCFG.LOGO_DISP > 1)
+    if (GLOBCFG.LOGO_DISP == 3) {
+        scr_printf("\n\n\n\n%s", BANNER_HOTKEYS);
+        PrintHotkeyNamesTemplate(BANNER_HOTKEYS_NAMES);
+    } else if (GLOBCFG.LOGO_DISP > 1) {
         scr_printf("\n\n\n\n%s", BANNER);
+    }
     scr_setfontcolor(0xffffff);
-    if (GLOBCFG.LOGO_DISP > 1)
+    if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
         scr_printf("\n\n\tModel:\t\t%s\n"
@@ -535,11 +617,13 @@ void SetDefaultSettings(void)
     for (i = 0; i < 17; i++)
         for (j = 0; j < CONFIG_KEY_INDEXES; j++)
             GLOBCFG.KEYPATHS[i][j] = "isra:/";
+    for (i = 0; i < 17; i++)
+        GLOBCFG.KEYNAMES[i] = DEFAULT_KEYNAMES[i];
     GLOBCFG.SKIPLOGO = 0;
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;
     GLOBCFG.TRAYEJECT = 0;
-    GLOBCFG.LOGO_DISP = 2;
+    GLOBCFG.LOGO_DISP = 3;
 }
 
 int LoadUSBIRX(void)
@@ -994,7 +1078,7 @@ static void InitPSX()
         WARNING! If the stack pointer resides above the 32MB offset at the point of remap, a TLB exception will occur.
         This example has the stack pointer configured to be within the 32MB limit. */
 
-    /// WARNING: untill further investigation, the memory mode should remain on 64mb. changing it to 32 breaks SDK ELF Loader
+    /// WARNING: until further investigation, the memory mode should remain on 64mb. changing it to 32 breaks SDK ELF Loader
     /// SetMemoryMode(1);
     ///_InitTLB();
 

@@ -41,6 +41,7 @@
 #include "ps2.h"
 #include "modelname.h"
 #include "banner.h"
+#include "banner_hotkeys.h"
 
 #ifdef PSX
 #include <iopcontrol_special.h>
