@@ -425,6 +425,7 @@ int main(int argc, char *argv[])
     }
 
     int R = 0x80, G = 0x80, B = 0x80;
+    u32 banner_color = 0xffffff;
     if (GLOBCFG.OSDHISTORY_READ && (GLOBCFG.LOGO_DISP > 1)) {
         j = 1;
         // Try to load the history file from memory card slot 1
@@ -451,8 +452,8 @@ int main(int argc, char *argv[])
                         B += (HistoryEntries[j].LaunchCount * 2);
                 }
             }
-            scr_setfontcolor(RBG2INT(B, G, R));
-            DPRINTF("New banner color is: #%8x\n", RBG2INT(B, G, R));
+            banner_color = RBG2INT(B, G, R);
+            DPRINTF("New banner color is: #%8x\n", banner_color);
         } else {
             DPRINTF("can't find any osd history for banner color\n");
         }
@@ -460,30 +461,23 @@ int main(int argc, char *argv[])
     // Stores last key during DELAY msec
     scr_clear();
     if (GLOBCFG.LOGO_DISP == 3) {
+        scr_setfontcolor(banner_color);
         scr_printf("\n%s", BANNER_HOTKEYS);
+        scr_setfontcolor(0xffffff);
         PrintHotkeyNamesTemplate(BANNER_HOTKEYS_NAMES);
     } else if (GLOBCFG.LOGO_DISP > 1) {
+        scr_setfontcolor(banner_color);
         scr_printf("\n\n\n\n%s", BANNER);
     }
     scr_setfontcolor(0xffffff);
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
-        if (GLOBCFG.LOGO_DISP == 3) {
-            scr_printf("\n\n\tModel: %s | PS1DRV: %s | DVD: %s | Config Source: %s\n",
-                       ModelNameGet(),
-                       PS1DRVGetVersion(),
-                       DVDPlayerGetVersion(),
-                       SOURCES[config_source]);
-        } else {
-            scr_printf("\n\tModel:\t\t%s\n"
-                       "\tPlayStation Driver:\t%s\n"
-                       "\tDVD Player:\t%s\n"
-                       "\tConfig source:\t%s\n",
-                       ModelNameGet(),
-                       PS1DRVGetVersion(),
-                       DVDPlayerGetVersion(),
-                       SOURCES[config_source]);
+        scr_printf("\n\n\tModel: %s  |  PS1DRV: %s  |  DVD: %s  |  Config Source: %s\n",
+                    ModelNameGet(),
+                    PS1DRVGetVersion(),
+                    DVDPlayerGetVersion(),
+                    SOURCES[config_source]);
         }
 #ifndef NO_TEMP_DISP
         PrintTemperature();
