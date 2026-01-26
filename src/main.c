@@ -473,7 +473,7 @@ int main(int argc, char *argv[])
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
-        scr_printf("\n\n\tModel: %s  |  PS1DRV: %s  |  DVD: %s  |  Config Source: %s\n",
+        scr_printf("\n\n  Model: %s | PS1DRV: %s | DVD: %s | Cfg Source: %s\n",
                     ModelNameGet(),
                     PS1DRVGetVersion(),
                     DVDPlayerGetVersion(),
@@ -499,7 +499,7 @@ int main(int argc, char *argv[])
                     EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
                     if (exist(EXECPATHS[j])) {
                         scr_setfontcolor(0x00ff00);
-                        scr_printf("\tLoading %s\n", EXECPATHS[j]);
+                        scr_printf("  Loading %s\n", EXECPATHS[j]);
                         CleanUp();
                         RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                     } else {
@@ -522,7 +522,7 @@ int main(int argc, char *argv[])
         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
         if (exist(EXECPATHS[j])) {
             scr_setfontcolor(0x00ff00);
-            scr_printf("\tLoading %s\n", EXECPATHS[j]);
+            scr_printf("  Loading %s\n", EXECPATHS[j]);
             CleanUp();
             RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
         } else {
@@ -1205,7 +1205,7 @@ void PrintTemperature()
 
     if (!stat) {
         unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
-        scr_printf("\tTemp: %02d.%02dC\n", (temp - (temp % 128)) / 128, (temp % 128));
+        scr_printf("  Temp: %02d.%02dC\n", (temp - (temp % 128)) / 128, (temp % 128));
     } else {
         DPRINTF("Failed 0x03 0xEF command. stat=%x \n", stat);
     }
