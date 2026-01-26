@@ -27,7 +27,7 @@ const char *BANNER_HOTKEYS =
     "\tPS2 Basic BootLoader v" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS "- By Matias Israelson AKA: EL_isra \n"
 #endif
     "\thttps://ps2homebrewstore.com - Modified - 9 Paths                    \n"
-    "\n"
+    "\n";
 const char *BANNER_HOTKEYS_NAMES =
     "\tAUTO:     " NAME_AUTO "\n"
     "\tTRIANGLE: " NAME_TRIANGLE "\n"
@@ -50,6 +50,6 @@ const char *BANNER_HOTKEYS_NAMES =
 #ifdef DEBUG
     " - DEBUG"
 #endif
-    "\n"
+    "\n";
 
 #endif
