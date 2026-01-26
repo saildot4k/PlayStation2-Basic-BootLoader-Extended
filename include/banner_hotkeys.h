@@ -50,6 +50,3 @@ const char *BANNER_HOTKEYS_NAMES =
 #ifdef DEBUG
     " - DEBUG"
 #endif
-    "\n";
-
-#endif

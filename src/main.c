@@ -448,7 +448,7 @@ int main(int argc, char *argv[])
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
-        scr_printf("\n\n\tModel:\t\t%s\n"
+        scr_printf("\n\tModel:\t\t%s\n"
                    "\tPlayStation Driver:\t%s\n"
                    "\tDVD Player:\t%s\n"
                    "\tConfig source:\t%s\n",
