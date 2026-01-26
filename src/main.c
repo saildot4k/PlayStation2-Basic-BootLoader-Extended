@@ -121,10 +121,10 @@ int main(int argc, char *argv[])
     for (x = 0; x < argc; x++)
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
-    scr_setfontcolor(0x212121);
+    scr_setfontcolor(0x101010);
     scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
     scr_setfontcolor(0xffffff);
-    // print a simple dot to allow gbs control to start displaying video before banner and pad timeout begins to run. othersiwe, users with timeout lower than 4000 will have issues to respond in time
+    // print a simple dot to allow gbs control to start displaying video before banner and pad timeout begins to run. othersiwe, users with timeout lower than 4000 will have issues to respond in time, then resets back to white text
     DPRINTF("enabling LoadModuleBuffer\n");
     sbv_patch_enable_lmb(); // The old IOP kernel has no support for LoadModuleBuffer. Apply the patch to enable it.
 
@@ -439,7 +439,7 @@ int main(int argc, char *argv[])
     // Stores last key during DELAY msec
     scr_clear();
     if (GLOBCFG.LOGO_DISP == 3) {
-        scr_printf("\n\n\n\n%s", BANNER_HOTKEYS);
+        scr_printf("\n%s", BANNER_HOTKEYS);
         PrintHotkeyNamesTemplate(BANNER_HOTKEYS_NAMES);
     } else if (GLOBCFG.LOGO_DISP > 1) {
         scr_printf("\n\n\n\n%s", BANNER);
