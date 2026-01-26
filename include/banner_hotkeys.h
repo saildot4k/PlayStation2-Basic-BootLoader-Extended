@@ -46,7 +46,9 @@ const char *BANNER_HOTKEYS_NAMES =
     "\tR3:       " NAME_R3 "\n"
     "\tSTART:    " NAME_START "\n"
     "\tSELECT:   " NAME_SELECT "\n"
-    
 #ifdef DEBUG
     " - DEBUG"
+#endif
+    "";
+
 #endif
