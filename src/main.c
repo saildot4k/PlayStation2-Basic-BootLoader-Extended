@@ -469,14 +469,22 @@ int main(int argc, char *argv[])
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
-        scr_printf("\n\tModel:\t\t%s\n"
-                   "\tPlayStation Driver:\t%s\n"
-                   "\tDVD Player:\t%s\n"
-                   "\tConfig source:\t%s\n",
-                   ModelNameGet(),
-                   PS1DRVGetVersion(),
-                   DVDPlayerGetVersion(),
-                   SOURCES[config_source]);
+        if (GLOBCFG.LOGO_DISP == 3) {
+            scr_printf("\n\n\tModel: %s | PS1DRV: %s | DVD: %s | Config Source: %s\n",
+                       ModelNameGet(),
+                       PS1DRVGetVersion(),
+                       DVDPlayerGetVersion(),
+                       SOURCES[config_source]);
+        } else {
+            scr_printf("\n\tModel:\t\t%s\n"
+                       "\tPlayStation Driver:\t%s\n"
+                       "\tDVD Player:\t%s\n"
+                       "\tConfig source:\t%s\n",
+                       ModelNameGet(),
+                       PS1DRVGetVersion(),
+                       DVDPlayerGetVersion(),
+                       SOURCES[config_source]);
+        }
 #ifndef NO_TEMP_DISP
         PrintTemperature();
 #endif
