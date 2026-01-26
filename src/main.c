@@ -28,6 +28,8 @@ typedef struct
 {
     int SKIPLOGO;
     char *KEYPATHS[17][CONFIG_KEY_INDEXES];
+    char *KEYARGS[17][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
+    int KEYARGC[17][CONFIG_KEY_INDEXES];
     const char *KEYNAMES[17];
     int DELAY;
     int OSDHISTORY_READ;
@@ -352,6 +354,25 @@ int main(int argc, char *argv[])
                         }
                         continue;
                     }
+                    if (strncmp(name, "ARG_", 4) == 0) {
+                        for (x = 0; x < 17; x++) {
+                            for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
+                                sprintf(TMP, "ARG_%s_E%d", KEYS_ID[x], j + 1);
+                                if (!strcmp(name, TMP)) {
+                                    if (value == NULL || *value == '\0')
+                                        break;
+                                    if (GLOBCFG.KEYARGC[x][j] < MAX_ARGS_PER_ENTRY) {
+                                        GLOBCFG.KEYARGS[x][j][GLOBCFG.KEYARGC[x][j]] = value;
+                                        GLOBCFG.KEYARGC[x][j]++;
+                                    } else {
+                                        DPRINTF("# Too many args for [%s], max=%d\n", name, MAX_ARGS_PER_ENTRY);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        continue;
+                    }
                     if (strncmp(name, "LK_", 3) == 0) {
                         for (x = 0; x < 17; x++) {
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
@@ -479,7 +500,7 @@ int main(int argc, char *argv[])
                         scr_setfontcolor(0x00ff00);
                         scr_printf("\tLoading %s\n", EXECPATHS[j]);
                         CleanUp();
-                        RunLoaderElf(EXECPATHS[j], MPART);
+                        RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                     } else {
                         scr_setfontcolor(0x00ffff);
                         DPRINTF("%s not found\n", EXECPATHS[j]);
@@ -502,7 +523,7 @@ int main(int argc, char *argv[])
             scr_setfontcolor(0x00ff00);
             scr_printf("\tLoading %s\n", EXECPATHS[j]);
             CleanUp();
-            RunLoaderElf(EXECPATHS[j], MPART);
+            RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
         } else {
             scr_printf("%s %-15s\r", EXECPATHS[j], "not found");
         }
@@ -532,7 +553,7 @@ void EMERGENCY(void)
         sleep(1);
         if (exist("mass:/RESCUE.ELF")) {
             CleanUp();
-            RunLoaderElf("mass:/RESCUE.ELF", NULL);
+            RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
         }
     }
 }
@@ -615,8 +636,11 @@ void SetDefaultSettings(void)
 {
     int i, j;
     for (i = 0; i < 17; i++)
-        for (j = 0; j < CONFIG_KEY_INDEXES; j++)
+        for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             GLOBCFG.KEYPATHS[i][j] = "isra:/";
+            GLOBCFG.KEYARGC[i][j] = 0;
+            memset(GLOBCFG.KEYARGS[i][j], 0, sizeof(GLOBCFG.KEYARGS[i][j]));
+        }
     for (i = 0; i < 17; i++)
         GLOBCFG.KEYNAMES[i] = DEFAULT_KEYNAMES[i];
     GLOBCFG.SKIPLOGO = 0;
@@ -1127,10 +1151,7 @@ static void AlarmCallback(s32 alarm_id, u16 time, void *common)
 void CleanUp(void)
 {
     sceCdInit(SCECdEXIT);
-    if (config_buf) {
-        free(config_buf);
-        config_buf = NULL;
-    }
+    // Keep config_buf alive so argv pointers remain valid during ELF load.
     PadDeinitPads();
 }
 

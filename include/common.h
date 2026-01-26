@@ -2,6 +2,7 @@
 #define COMMONDEF
 
 #define CONFIG_KEY_INDEXES 9
+#define MAX_ARGS_PER_ENTRY 8
 
 enum
 {

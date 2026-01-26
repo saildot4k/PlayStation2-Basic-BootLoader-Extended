@@ -58,7 +58,7 @@ void fioInit();
 #define RBG2INT(R, G, B) ((0 << 24) + (R << 16) + (G << 8) + B)
 #include "irx_import.h"
 
-void RunLoaderElf(char *filename, char *party);
+void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[]);
 void EMERGENCY(void);
 // Reboot the PS1 CPU and perform additional tasks if building for PSX DESR
 void ResetIOP(void);
