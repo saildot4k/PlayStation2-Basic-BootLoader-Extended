@@ -26,8 +26,10 @@ const char *BANNER =
     "\n"
     "\n";
 #define BANNER_FOOTER                                                   \
-    "\t\t		PlayStation2 Basic BootLoader - By Matias Israelson\n"       \
+    "\t\t		PlayStation2 Basic BootLoader - By Matias Israelson\n"  \
     "\t\t                                             (AKA: El_isra)\n" \
-    "\t\tGet it Free on: github.com/israpps/PlayStation2-Basic-BootLoader\n"
+    "\t\t       https://ps2homebrewstore.com - Modified - 9 Paths\n"    \
+    "\n" \
+    "\n" \
 
 #endif
