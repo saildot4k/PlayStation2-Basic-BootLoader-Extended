@@ -478,7 +478,6 @@ int main(int argc, char *argv[])
                     PS1DRVGetVersion(),
                     DVDPlayerGetVersion(),
                     SOURCES[config_source]);
-        }
 #ifndef NO_TEMP_DISP
         PrintTemperature();
 #endif
