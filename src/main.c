@@ -133,7 +133,7 @@ static int normalize_hotkey_display(int value)
 }
 
 // Validate paths, clear invalid entries, and set display names per mode.
-static void ValidateKeypathsAndSetNames(int display_mode)
+static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 {
     static char name_buf[17][MAX_LEN];
     const char *first_valid[17];
@@ -142,23 +142,25 @@ static void ValidateKeypathsAndSetNames(int display_mode)
     for (i = 0; i < 17; i++)
         first_valid[i] = NULL;
 
-    for (i = 0; i < 17; i++) {
-        for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
-            char *path = GLOBCFG.KEYPATHS[i][j];
-            if (path == NULL || *path == '\0') {
-                GLOBCFG.KEYPATHS[i][j] = "";
-                continue;
-            }
-            if (is_command_token(path)) {
-                continue; // Commands only run on keypress.
-            }
-            path = CheckPath(path);
-            if (exist(path)) {
-                GLOBCFG.KEYPATHS[i][j] = path;
-                if (first_valid[i] == NULL)
-                    first_valid[i] = path;
-            } else {
-                GLOBCFG.KEYPATHS[i][j] = "";
+    if (scan_paths) {
+        for (i = 0; i < 17; i++) {
+            for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
+                char *path = GLOBCFG.KEYPATHS[i][j];
+                if (path == NULL || *path == '\0') {
+                    GLOBCFG.KEYPATHS[i][j] = "";
+                    continue;
+                }
+                if (is_command_token(path)) {
+                    continue; // Commands only run on keypress.
+                }
+                path = CheckPath(path);
+                if (exist(path)) {
+                    GLOBCFG.KEYPATHS[i][j] = path;
+                    if (first_valid[i] == NULL)
+                        first_valid[i] = path;
+                } else {
+                    GLOBCFG.KEYPATHS[i][j] = "";
+                }
             }
         }
     }
@@ -505,13 +507,13 @@ int main(int argc, char *argv[])
                 DPRINTF("ERROR: Could not unmount 'pfs0:'\n");
         }
 #endif
-        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY);
+        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, GLOBCFG.HOTKEY_DISPLAY != 2);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
-        ValidateKeypathsAndSetNames(HOTKEY_DISPLAY_NO_CONFIG_DEFAULT);
+        ValidateKeypathsAndSetNames(HOTKEY_DISPLAY_NO_CONFIG_DEFAULT, 1);
         sleep(1);
     }
 
