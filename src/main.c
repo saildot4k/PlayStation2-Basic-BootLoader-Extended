@@ -228,6 +228,18 @@ static int device_available_for_path(const char *path)
     return dev_state[dev];
 }
 
+static int path_cached_exists(const char *path, const char **cache, int count)
+{
+    int i;
+    if (path == NULL || *path == '\0')
+        return 0;
+    for (i = 0; i < count; i++) {
+        if (cache[i] != NULL && strcmp(cache[i], path) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 static int is_elf_ext_ci(const char *s, size_t len)
 {
     if (len < 4)
@@ -261,6 +273,10 @@ static int normalize_hotkey_display(int value)
 static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 {
     static char name_buf[17][MAX_LEN];
+    const char *known_exists[17 * CONFIG_KEY_INDEXES];
+    const char *known_missing[17 * CONFIG_KEY_INDEXES];
+    int known_count = 0;
+    int missing_count = 0;
     const char *first_valid[17];
     int i, j;
 
@@ -290,13 +306,28 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     continue;
                 }
                 path = CheckPath(path);
-                if (exist(path)) {
+                if (path_cached_exists(path, known_exists, known_count)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
                     if (first_valid[i] == NULL)
                         first_valid[i] = path;
                     found = 1;
+                    continue;
+                }
+                if (path_cached_exists(path, known_missing, missing_count)) {
+                    GLOBCFG.KEYPATHS[i][j] = "";
+                    continue;
+                }
+                if (exist(path)) {
+                    GLOBCFG.KEYPATHS[i][j] = path;
+                    if (first_valid[i] == NULL)
+                        first_valid[i] = path;
+                    if (known_count < (int)(sizeof(known_exists) / sizeof(known_exists[0])))
+                        known_exists[known_count++] = path;
+                    found = 1;
                 } else {
                     GLOBCFG.KEYPATHS[i][j] = "";
+                    if (missing_count < (int)(sizeof(known_missing) / sizeof(known_missing[0])))
+                        known_missing[missing_count++] = path;
                 }
             }
         }
