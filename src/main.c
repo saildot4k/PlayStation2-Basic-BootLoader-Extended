@@ -31,6 +31,7 @@ typedef struct
     char *KEYARGS[17][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
     int KEYARGC[17][CONFIG_KEY_INDEXES];
     const char *KEYNAMES[17];
+    int HOTKEY_DISPLAY; // 0=path, 1=filename, 2=user-defined name
     int DELAY;
     int OSDHISTORY_READ;
     int TRAYEJECT;
@@ -94,6 +95,92 @@ static void PrintHotkeyNamesTemplate(const char *tmpl)
     if (bi > 0) {
         buf[bi] = '\0';
         scr_printf("%s", buf);
+    }
+}
+
+static int is_command_token(const char *path)
+{
+    return (path != NULL && path[0] == '$');
+}
+
+static int is_elf_ext_ci(const char *s, size_t len)
+{
+    if (len < 4)
+        return 0;
+    return ((s[len - 4] == '.') &&
+            ((s[len - 3] == 'e' || s[len - 3] == 'E')) &&
+            ((s[len - 2] == 'l' || s[len - 2] == 'L')) &&
+            ((s[len - 1] == 'f' || s[len - 1] == 'F')));
+}
+
+static const char *path_basename(const char *path)
+{
+    const char *base = path;
+    const char *p = path;
+    if (p == NULL)
+        return "";
+    while (*p) {
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+        p++;
+    }
+    return base;
+}
+
+static int normalize_hotkey_display(int value)
+{
+    return (value >= 0 && value <= 2) ? value : 2;
+}
+
+// Validate paths, clear invalid entries, and set display names per mode.
+static void ValidateKeypathsAndSetNames(int display_mode)
+{
+    static char name_buf[17][MAX_LEN];
+    const char *first_valid[17];
+    int i, j;
+
+    for (i = 0; i < 17; i++)
+        first_valid[i] = NULL;
+
+    for (i = 0; i < 17; i++) {
+        for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
+            char *path = GLOBCFG.KEYPATHS[i][j];
+            if (path == NULL || *path == '\0') {
+                GLOBCFG.KEYPATHS[i][j] = "";
+                continue;
+            }
+            if (is_command_token(path)) {
+                continue; // Commands only run on keypress.
+            }
+            path = CheckPath(path);
+            if (exist(path)) {
+                GLOBCFG.KEYPATHS[i][j] = path;
+                if (first_valid[i] == NULL)
+                    first_valid[i] = path;
+            } else {
+                GLOBCFG.KEYPATHS[i][j] = "";
+            }
+        }
+    }
+
+    display_mode = normalize_hotkey_display(display_mode);
+    if (display_mode == 2)
+        return; // keep user-defined names
+
+    for (i = 0; i < 17; i++) {
+        if (display_mode == 0) {
+            GLOBCFG.KEYNAMES[i] = (first_valid[i] != NULL) ? first_valid[i] : "";
+        } else {
+            const char *base = (first_valid[i] != NULL) ? path_basename(first_valid[i]) : "";
+            size_t len = strlen(base);
+            if (is_elf_ext_ci(base, len))
+                len -= 4;
+            if (len >= MAX_LEN)
+                len = MAX_LEN - 1;
+            memcpy(name_buf[i], base, len);
+            name_buf[i][len] = '\0';
+            GLOBCFG.KEYNAMES[i] = name_buf[i];
+        }
     }
 }
 
@@ -287,8 +374,6 @@ int main(int argc, char *argv[])
         DPRINTF("valid config on device '%s', reading now\n", SOURCES[config_source]);
         pad_button = 0x0001; // on valid config, change the value of `pad_button` so the pad detection loop iterates all the buttons instead of only those configured on default paths
         num_buttons = 16;
-        for (x = 0; x < 17; x++)
-            GLOBCFG.KEYNAMES[x] = NULL;
         fseek(fp, 0, SEEK_END);
         cnf_size = ftell(fp);
         fseek(fp, 0, SEEK_SET);
@@ -327,6 +412,10 @@ int main(int argc, char *argv[])
                     }
                     if (!strcmp("SKIP_PS2LOGO", name)) {
                         GLOBCFG.SKIPLOGO = atoi(value);
+                        continue;
+                    }
+                    if (!strcmp("HOTKEY_DISPLAY", name)) {
+                        GLOBCFG.HOTKEY_DISPLAY = atoi(value);
                         continue;
                     }
                     if (!strcmp("KEY_READ_WAIT_TIME", name)) {
@@ -416,11 +505,13 @@ int main(int argc, char *argv[])
                 DPRINTF("ERROR: Could not unmount 'pfs0:'\n");
         }
 #endif
+        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
-                GLOBCFG.KEYPATHS[x][j] = CheckPath(DEFPATH[CONFIG_KEY_INDEXES * x + j]);
+                GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
+        ValidateKeypathsAndSetNames(HOTKEY_DISPLAY_NO_CONFIG_DEFAULT);
         sleep(1);
     }
 
@@ -519,6 +610,8 @@ int main(int argc, char *argv[])
         // Skip empty/unset AUTO entries too
         if (GLOBCFG.KEYPATHS[0][j] == NULL || *GLOBCFG.KEYPATHS[0][j] == '\0')
             continue;
+        if (is_command_token(GLOBCFG.KEYPATHS[0][j]))
+            continue; // Don't execute commands without a key press.
         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
         if (exist(EXECPATHS[j])) {
             scr_setfontcolor(0x00ff00);
@@ -644,6 +737,7 @@ void SetDefaultSettings(void)
         }
     for (i = 0; i < 17; i++)
         GLOBCFG.KEYNAMES[i] = DEFAULT_KEYNAMES[i];
+    GLOBCFG.HOTKEY_DISPLAY = 2;
     GLOBCFG.SKIPLOGO = 0;
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;

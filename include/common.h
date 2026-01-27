@@ -1,8 +1,12 @@
 #ifndef COMMONDEF
 #define COMMONDEF
 
-#define CONFIG_KEY_INDEXES 9
+#define CONFIG_KEY_INDEXES 10
 #define MAX_ARGS_PER_ENTRY 8
+#define MAX_LEN     64
+#define CNF_LEN_MAX 20480                  // 20kb should be enough for massive CNF's
+#define HOTKEY_DISPLAY_NO_CONFIG_DEFAULT 0 // Hotkey display modes when no config is found: 0=path, 1=filename (no .elf), 2=defined name below
+#define DEFDELAY 5000                      // default ammount of time this program will wait for a key press in ms/
 
 enum
 {
@@ -78,11 +82,7 @@ static const char *SOURCES[SOURCE_COUNT] = {
     "NOT FOUND",
 };
 
-#define MAX_LEN     64
-#define CNF_LEN_MAX 20480 // 20kb should be enough for massive CNF's
 
-/** default ammount of time this program will wait for a key press*/
-#define DEFDELAY 4000
 
 /** dualshock keys enumerator */
 enum
@@ -127,7 +127,7 @@ const char *KEYS_ID[17] = {
     "SQUARE"    // 0x8000
 };
 
-/** default hotkey names used when no NAME_* config is provided */
+/** default hotkey names used when HOTKEY_DISPLAY_NO_CONFIG_DEFAULT = 2 is set for compiling */
 #ifdef PSX
     const char *DEFAULT_KEYNAMES[17] = {
         "wLE ISR exFAT USB",
@@ -182,7 +182,9 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "$CDVD_NO_PS2LOGO", // SELECT [CONFIG_KEY_INDEXES * 1]
+        "",
         "",
         "",
         "",
@@ -200,7 +202,9 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "", // R3 [CONFIG_KEY_INDEXES * 3]
+        "",
         "",
         "",
         "",
@@ -218,10 +222,12 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mass:/OSDXMB/OSDXMB.ELF", // UP [CONFIG_KEY_INDEXES * 5]
         "mmce?:/OSDXMB/OSDXMB.ELF",
         "mc?:/APP_OSDXMB/OSDXMB.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "",
@@ -236,6 +242,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mass:/XEBPLUS/XEBPLUS_XMAS.ELF", // DOWN [CONFIG_KEY_INDEXES * 7]
         "mc?:/BOOT/BOOT2.ELF",
         "",
@@ -245,7 +252,9 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "", // LEFT [CONFIG_KEY_INDEXES * 8]
+        "",
         "",
         "",
         "",
@@ -263,6 +272,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mass:/APPS/APP_OPL/OPL.ELF", // R2 [CONFIG_KEY_INDEXES * 10]
         "mmce?:/APPS/APP_OPL/OPL.ELF",
         "mc?:/APP_OPL/OPL.ELF",
@@ -272,8 +282,10 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mc:?/APP_PSBBN-FORWARDER/PSBBN-FORWARDER.ELF", // L1 [CONFIG_KEY_INDEXES * 11]
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "",
@@ -290,11 +302,13 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mass:/RESCUE.ELF", // TRIANGLE [CONFIG_KEY_INDEXES * 13]
         "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "",
@@ -308,8 +322,10 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mc?:/PS1_DKWDRV/DKWDRV.ELF", // CROSS [CONFIG_KEY_INDEXES * 15]
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "",
@@ -321,6 +337,7 @@ const char *KEYS_ID[17] = {
         "mmce?:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
         "mc?:/PS1_POPSLOADER/POPSLOADER.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "",
@@ -338,7 +355,9 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "$CDVD_NO_PS2LOGO", // SELECT [CONFIG_KEY_INDEXES * 1]
+        "",
         "",
         "",
         "",
@@ -356,7 +375,9 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "", // R3 [CONFIG_KEY_INDEXES * 3]
+        "",
         "",
         "",
         "",
@@ -374,6 +395,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mass:/OSDXMB/OSDXMB.ELF", // UP [CONFIG_KEY_INDEXES * 5]
         "mmce?:/OSDXMB/OSDXMB.ELF",
         "mc?:/APP_OSDXMB/OSDXMB.ELF",
@@ -383,6 +405,7 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "mass:/RETROLauncher/RETROLauncher.elf", // RIGHT [CONFIG_KEY_INDEXES * 6]
         "mmce?:/RETROLauncher/RETROLauncher.elf",
         "mc?:/APP_OSDXMB/OSDXMB.ELF",
@@ -392,6 +415,7 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "mass:/XEBPLUS/XEBPLUS_XMAS.ELF", // DOWN [CONFIG_KEY_INDEXES * 7]
         "mc?:/SYS_OSDMENU/osdmenu.elf",
         "mc?:/SYS_FMCBD-1966/FMCBD-1966.ELF",
@@ -401,7 +425,9 @@ const char *KEYS_ID[17] = {
         "mc?:/BOOT/BOOT2.ELF",
         "",
         "",
+        "",
         "", // LEFT [CONFIG_KEY_INDEXES * 8]
+        "",
         "",
         "",
         "",
@@ -419,6 +445,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mass:/APPS/APP_OPL/OPL.ELF", // R2 [CONFIG_KEY_INDEXES * 10]
         "mmce?:/APPS/APP_OPL/OPL.ELF",
         "mc?:/APP_OPL/OPL.ELF",
@@ -428,6 +455,7 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "mc:?/APP_PSBBN-FORWARDER/PSBBN-FORWARDER.ELF", // L1 [CONFIG_KEY_INDEXES * 11]
         "mc?:/SYS_OSDMENU/osdmenu.elf",
         "mc?:/SYS_FMCBD-1966/FMCBD-1966.ELF",
@@ -435,6 +463,7 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "mmce?:/NEUTRINO/nhddl.elf", // R1 [CONFIG_KEY_INDEXES * 12]
@@ -446,11 +475,13 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "mass:/RESCUE.ELF", // TRIANGLE [CONFIG_KEY_INDEXES * 13]
         "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "",
@@ -464,6 +495,7 @@ const char *KEYS_ID[17] = {
         "",
         "",
         "",
+        "",
         "mc?:/PS1_DKWDRV/DKWDRV.ELF", // CROSS [CONFIG_KEY_INDEXES * 15]
         "mc?:/SYS_OSDMENU/osdmenu.elf",
         "mc?:/SYS_FMCBD-1966/FMCBD-1966.ELF",
@@ -471,6 +503,7 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
         "",
         "",
         "mass:/APPS/PS1_POPSLOADER/POPSLOADER.ELF", // SQUARE [CONFIG_KEY_INDEXES * 16]
@@ -482,6 +515,7 @@ const char *KEYS_ID[17] = {
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "",
     };
 #endif
 
