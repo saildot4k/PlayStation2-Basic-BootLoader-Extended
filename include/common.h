@@ -5,7 +5,7 @@
 #define MAX_ARGS_PER_ENTRY 8
 #define MAX_LEN     64
 #define CNF_LEN_MAX 20480                  // 20kb should be enough for massive CNF's
-#define HOTKEY_DISPLAY_NO_CONFIG_DEFAULT 0 // Hotkey display modes when no config is found: 0=path, 1=filename (no .elf), 2=defined name below
+#define HOTKEY_DISPLAY_NO_CONFIG_DEFAULT 0 // Hotkey display modes when no config is found: 0=off (force LOGO_DISPLAY=2), 1=defined name, 2=filename (no .elf), 3=path
 #define DEFDELAY 5000                      // default ammount of time this program will wait for a key press in ms/
 
 enum
@@ -127,7 +127,7 @@ const char *KEYS_ID[17] = {
     "SQUARE"    // 0x8000
 };
 
-/** default hotkey names used when HOTKEY_DISPLAY_NO_CONFIG_DEFAULT = 2 is set for compiling */
+/** default hotkey names used when HOTKEY_DISPLAY is set to 1 */
 #ifdef PSX
     const char *DEFAULT_KEYNAMES[17] = {
         "wLE ISR exFAT USB",

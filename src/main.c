@@ -31,13 +31,39 @@ typedef struct
     char *KEYARGS[17][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
     int KEYARGC[17][CONFIG_KEY_INDEXES];
     const char *KEYNAMES[17];
-    int HOTKEY_DISPLAY; // 0=path, 1=filename, 2=user-defined name
+    int HOTKEY_DISPLAY; // 0=off (force LOGO_DISPLAY=2), 1=defined name, 2=filename, 3=path
     int DELAY;
     int OSDHISTORY_READ;
     int TRAYEJECT;
     int LOGO_DISP; //0: NO, 1: Only Console info, any other value: YES
 } CONFIG;
 CONFIG GLOBCFG;
+static int g_pre_scanned = 0;
+static int g_usb_modules_loaded = 0;
+static int g_mx4sio_modules_loaded = 0;
+static int g_mmce_modules_loaded = 0;
+static int g_hdd_modules_loaded = 0;
+
+enum {
+    DEV_UNKNOWN = -1,
+    DEV_MC0 = 0,
+    DEV_MC1,
+    DEV_MASS,
+    DEV_MX4SIO,
+    DEV_MMCE0,
+    DEV_MMCE1,
+    DEV_HDD,
+    DEV_XFROM,
+    DEV_COUNT
+};
+
+static int dev_state[DEV_COUNT] = {
+    -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+#ifdef HDD
+static int CheckHDD(void);
+#endif
 
 static const char *get_hotkey_name(int key)
 {
@@ -103,6 +129,105 @@ static int is_command_token(const char *path)
     return (path != NULL && path[0] == '$');
 }
 
+static int device_modules_ready(int dev)
+{
+    switch (dev) {
+        case DEV_MASS:
+            return g_usb_modules_loaded;
+        case DEV_MX4SIO:
+            return g_mx4sio_modules_loaded;
+        case DEV_MMCE0:
+        case DEV_MMCE1:
+            return g_mmce_modules_loaded;
+        case DEV_HDD:
+            return g_hdd_modules_loaded;
+        default:
+            return 1;
+    }
+}
+
+static int device_id_from_path(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return DEV_UNKNOWN;
+    if (!strncmp(path, "mc0:", 4))
+        return DEV_MC0;
+    if (!strncmp(path, "mc1:", 4))
+        return DEV_MC1;
+    if (!strncmp(path, "massX:", 6))
+        return DEV_MX4SIO;
+    if (!strncmp(path, "mass", 4))
+        return DEV_MASS;
+    if (!strncmp(path, "mmce0:", 6))
+        return DEV_MMCE0;
+    if (!strncmp(path, "mmce1:", 6))
+        return DEV_MMCE1;
+    if (!strncmp(path, "hdd0:", 5))
+        return DEV_HDD;
+    if (!strncmp(path, "xfrom:", 6))
+        return DEV_XFROM;
+    return DEV_UNKNOWN;
+}
+
+static int device_root_available(int dev)
+{
+    struct stat st;
+    switch (dev) {
+        case DEV_MC0:
+            return (stat("mc0:/", &st) == 0);
+        case DEV_MC1:
+            return (stat("mc1:/", &st) == 0);
+        case DEV_MASS:
+            return (stat("mass:/", &st) == 0);
+#ifdef MX4SIO
+        case DEV_MX4SIO:
+            return (LookForBDMDevice() >= 0);
+#endif
+#ifdef MMCE
+        case DEV_MMCE0:
+            return (stat("mmce0:/", &st) == 0);
+        case DEV_MMCE1:
+            return (stat("mmce1:/", &st) == 0);
+#endif
+#ifdef HDD
+        case DEV_HDD:
+            return (CheckHDD() >= 0);
+#endif
+        case DEV_XFROM:
+            return 1;
+        default:
+            return 1;
+    }
+}
+
+static int device_available_for_path(const char *path)
+{
+    int dev;
+    if (path == NULL || *path == '\0')
+        return 0;
+    if (!strncmp(path, "mc?:", 4)) {
+        if (!device_modules_ready(DEV_MC0) && !device_modules_ready(DEV_MC1))
+            return 0;
+        if (dev_state[DEV_MC0] < 0)
+            dev_state[DEV_MC0] = device_root_available(DEV_MC0) ? 1 : 0;
+        if (dev_state[DEV_MC1] < 0)
+            dev_state[DEV_MC1] = device_root_available(DEV_MC1) ? 1 : 0;
+        return (dev_state[DEV_MC0] > 0 || dev_state[DEV_MC1] > 0);
+    }
+
+    dev = device_id_from_path(path);
+    if (dev == DEV_UNKNOWN)
+        return 1;
+    if (!device_modules_ready(dev)) {
+        dev_state[dev] = 0;
+        return 0;
+    }
+    if (dev_state[dev] >= 0)
+        return dev_state[dev];
+    dev_state[dev] = device_root_available(dev) ? 1 : 0;
+    return dev_state[dev];
+}
+
 static int is_elf_ext_ci(const char *s, size_t len)
 {
     if (len < 4)
@@ -129,7 +254,7 @@ static const char *path_basename(const char *path)
 
 static int normalize_hotkey_display(int value)
 {
-    return (value >= 0 && value <= 2) ? value : 2;
+    return (value >= 0 && value <= 3) ? value : 1;
 }
 
 // Validate paths, clear invalid entries, and set display names per mode.
@@ -144,20 +269,32 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 
     if (scan_paths) {
         for (i = 0; i < 17; i++) {
+            int found = 0;
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
+                if (found) {
+                    GLOBCFG.KEYPATHS[i][j] = "";
+                    continue;
+                }
                 if (path == NULL || *path == '\0') {
                     GLOBCFG.KEYPATHS[i][j] = "";
                     continue;
                 }
                 if (is_command_token(path)) {
+                    // Command tokens win if encountered before any valid path.
+                    found = 1;
                     continue; // Commands only run on keypress.
+                }
+                if (!device_available_for_path(path)) {
+                    GLOBCFG.KEYPATHS[i][j] = "";
+                    continue;
                 }
                 path = CheckPath(path);
                 if (exist(path)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
                     if (first_valid[i] == NULL)
                         first_valid[i] = path;
+                    found = 1;
                 } else {
                     GLOBCFG.KEYPATHS[i][j] = "";
                 }
@@ -166,11 +303,16 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     }
 
     display_mode = normalize_hotkey_display(display_mode);
-    if (display_mode == 2)
+    if (display_mode == 0) {
+        for (i = 0; i < 17; i++)
+            GLOBCFG.KEYNAMES[i] = "";
+        return;
+    }
+    if (display_mode == 1)
         return; // keep user-defined names
 
     for (i = 0; i < 17; i++) {
-        if (display_mode == 0) {
+        if (display_mode == 3) {
             GLOBCFG.KEYNAMES[i] = (first_valid[i] != NULL) ? first_valid[i] : "";
         } else {
             const char *base = (first_valid[i] != NULL) ? path_basename(first_valid[i]) : "";
@@ -260,6 +402,7 @@ int main(int argc, char *argv[])
 #endif
 
     j = LoadUSBIRX();
+    g_usb_modules_loaded = (j == 0);
     if (j != 0) {
         scr_setfontcolor(0x0000ff);
         scr_printf("ERROR: could not load USB modules (%d)\n", j);
@@ -280,19 +423,25 @@ int main(int argc, char *argv[])
 #ifdef MMCE
     j = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &x);
     DPRINTF(" [MMCEMAN]: ID=%d, ret=%d\n", j, x);
+    g_mmce_modules_loaded = (j >= 0);
 #endif
 
 #ifdef MX4SIO
     j = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &x);
     DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", j, x);
+    g_mx4sio_modules_loaded = (j >= 0);
 #endif
 
 #ifdef HDD
-    else if (LoadHDDIRX() < 0) // only load HDD crap if filexio and iomanx are up and running
-    {
-        scr_setbgcolor(0x0000ff);
-        scr_clear();
-        sleep(4);
+    else {
+        int hdd_ret = LoadHDDIRX(); // only load HDD crap if filexio and iomanx are up and running
+        if (hdd_ret < 0) {
+            scr_setbgcolor(0x0000ff);
+            scr_clear();
+            sleep(4);
+        } else {
+            g_hdd_modules_loaded = 1;
+        }
     }
 #endif
 
@@ -507,13 +656,19 @@ int main(int argc, char *argv[])
                 DPRINTF("ERROR: Could not unmount 'pfs0:'\n");
         }
 #endif
-        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, GLOBCFG.HOTKEY_DISPLAY != 2);
+        if (GLOBCFG.HOTKEY_DISPLAY == 0)
+            GLOBCFG.LOGO_DISP = 2;
+        g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
+        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
-        ValidateKeypathsAndSetNames(HOTKEY_DISPLAY_NO_CONFIG_DEFAULT, 1);
+        g_pre_scanned = (HOTKEY_DISPLAY_NO_CONFIG_DEFAULT == 2 || HOTKEY_DISPLAY_NO_CONFIG_DEFAULT == 3);
+        if (HOTKEY_DISPLAY_NO_CONFIG_DEFAULT == 0)
+            GLOBCFG.LOGO_DISP = 2;
+        ValidateKeypathsAndSetNames(HOTKEY_DISPLAY_NO_CONFIG_DEFAULT, g_pre_scanned);
         sleep(1);
     }
 
@@ -589,6 +744,15 @@ int main(int argc, char *argv[])
                     // Skip empty/unset entries (common when config has blank LK_* values)
                     if (GLOBCFG.KEYPATHS[x + 1][j] == NULL || *GLOBCFG.KEYPATHS[x + 1][j] == '\0')
                         continue;
+                    if (g_pre_scanned && !is_command_token(GLOBCFG.KEYPATHS[x + 1][j])) {
+                        scr_setfontcolor(0x00ff00);
+                        scr_printf("  Loading %s\n", GLOBCFG.KEYPATHS[x + 1][j]);
+                        CleanUp();
+                        RunLoaderElf(GLOBCFG.KEYPATHS[x + 1][j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
+                        continue;
+                    }
+                    if (!device_available_for_path(GLOBCFG.KEYPATHS[x + 1][j]))
+                        continue;
                     EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
                     if (exist(EXECPATHS[j])) {
                         scr_setfontcolor(0x00ff00);
@@ -614,6 +778,15 @@ int main(int argc, char *argv[])
             continue;
         if (is_command_token(GLOBCFG.KEYPATHS[0][j]))
             continue; // Don't execute commands without a key press.
+        if (g_pre_scanned && !is_command_token(GLOBCFG.KEYPATHS[0][j])) {
+            scr_setfontcolor(0x00ff00);
+            scr_printf("  Loading %s\n", GLOBCFG.KEYPATHS[0][j]);
+            CleanUp();
+            RunLoaderElf(GLOBCFG.KEYPATHS[0][j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
+            continue;
+        }
+        if (!device_available_for_path(GLOBCFG.KEYPATHS[0][j]))
+            continue;
         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
         if (exist(EXECPATHS[j])) {
             scr_setfontcolor(0x00ff00);
@@ -739,7 +912,7 @@ void SetDefaultSettings(void)
         }
     for (i = 0; i < 17; i++)
         GLOBCFG.KEYNAMES[i] = DEFAULT_KEYNAMES[i];
-    GLOBCFG.HOTKEY_DISPLAY = 2;
+    GLOBCFG.HOTKEY_DISPLAY = 1;
     GLOBCFG.SKIPLOGO = 0;
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;
