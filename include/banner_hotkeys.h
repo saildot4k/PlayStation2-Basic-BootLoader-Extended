@@ -44,7 +44,7 @@ const char *BANNER_HOTKEYS_NAMES =
     "                   \\/         \\/ SQUARE:   " NAME_SQUARE "\n"
 #endif
     " ____________________._____      UP:       " NAME_UP "\n"
-    "  \\______   \\______   \\    |     DOWN:     " NAME_DOWN "\n"
+    "  \\______   \\______  \\     |     DOWN:     " NAME_DOWN "\n"
     "  |    |  _/|    |  _/     |     LEFT:     " NAME_LEFT "\n"
     "  |    |   \\|    |   \\     |___  RIGHT:    " NAME_RIGHT "\n"
     "  |______  /|______  /________ \\ L1:       " NAME_L1 "\n"
