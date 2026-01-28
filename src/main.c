@@ -793,7 +793,7 @@ int main(int argc, char *argv[])
             snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
         }
 
-        scr_printf("\n  Model: %s | ROMVER: %s | DVD: %s | PS1DRV: %s | Config Source: %s \n",
+        scr_printf("\n  MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s  CFG SRC: %s \n",
                     model,
                     rom_fmt,
                     dvdver,
