@@ -40,7 +40,7 @@ const char *BANNER_HOTKEYS_NAMES =
     "  _________  _________________  \n"
     "  \\______  \\/   _____/\\_____  \\  AUTO:     " NAME_AUTO "\n"
     "  |     ___/\\_____  \\  /  ____/  TRIANGLE: " NAME_TRIANGLE "\n"
-    "  |    |    /        \\ /       \\ CIRCLE:   " NAME_CIRCLE "\n"
+    "  |    |    /        \\ /      \\  CIRCLE:   " NAME_CIRCLE "\n"
     "  |____|   /_______  //_______ \\ CROSS:    " NAME_CROSS "\n"
     "                   \\/         \\/ SQUARE:   " NAME_SQUARE "\n"
 #endif
