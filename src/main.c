@@ -23,6 +23,24 @@ static char *trim_ws_inplace(char *s)
 
     return s;
 }
+
+// Copy into buf and stop at CR/LF (does not trim other whitespace).
+static const char *strip_crlf_copy(const char *s, char *buf, size_t buf_len)
+{
+    size_t i = 0;
+    if (buf_len == 0)
+        return "";
+    if (s == NULL) {
+        buf[0] = '\0';
+        return buf;
+    }
+    while (s[i] != '\0' && s[i] != '\r' && s[i] != '\n' && i + 1 < buf_len) {
+        buf[i] = s[i];
+        i++;
+    }
+    buf[i] = '\0';
+    return buf;
+}
 // --------------- glob stuff --------------- //
 typedef struct
 {
@@ -752,11 +770,35 @@ int main(int argc, char *argv[])
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
-        scr_printf("\n  Model: %s | PS1DRV: %s | DVD: %s  Config Source: %s \n",
-                    ModelNameGet(),
-                    PS1DRVGetVersion(),
-                    DVDPlayerGetVersion(),
-                    SOURCES[config_source]);
+        char model_buf[64];
+        char ps1_buf[64];
+        char dvd_buf[64];
+        char src_buf[32];
+        char rom_raw[ROMVER_MAX_LEN + 1];
+        char rom_buf[32];
+        char rom_fmt[8];
+        const char *model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
+        const char *ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
+        const char *dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
+        const char *source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
+
+        memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
+        rom_raw[ROMVER_MAX_LEN] = '\0';
+        {
+            const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
+            char major = (romver[1] != '\0') ? romver[1] : '?';
+            char minor1 = (romver[2] != '\0') ? romver[2] : '?';
+            char minor2 = (romver[3] != '\0') ? romver[3] : '?';
+            char region = (romver[4] != '\0') ? romver[4] : '?';
+            snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
+        }
+
+        scr_printf("\n  Model: %s | ROMVER: %s | DVD: %s | PS1DRV: %s | Config Source: %s \n",
+                    model,
+                    rom_fmt,
+                    dvdver,
+                    ps1ver,
+                    source);
 #ifndef NO_TEMP_DISP
         PrintTemperature();
 #endif
