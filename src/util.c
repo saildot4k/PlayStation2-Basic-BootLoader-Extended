@@ -2,6 +2,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <tamtypes.h>
 #include <loadfile.h>
 #include <malloc.h>
@@ -13,17 +14,11 @@
 
 int exist(char *filepath)
 {
+    struct stat st;
     if (filepath == NULL)
         return 0;
-    int fdn;
 
-    fdn = open(filepath, O_RDONLY);
-    if (fdn < 0)
-        return 0;
-
-    close(fdn);
-
-    return 1;
+    return (stat(filepath, &st) == 0);
 }
 
 void delay(int count)

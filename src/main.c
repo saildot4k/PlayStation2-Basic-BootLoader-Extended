@@ -61,6 +61,7 @@ static int g_usb_modules_loaded = 0;
 static int g_mx4sio_modules_loaded = 0;
 static int g_mmce_modules_loaded = 0;
 static int g_hdd_modules_loaded = 0;
+static int g_mx4sio_slot = -2;
 
 enum {
     DEV_UNKNOWN = -1,
@@ -164,6 +165,19 @@ static int device_modules_ready(int dev)
     }
 }
 
+#ifdef MX4SIO
+static int get_mx4sio_slot(void)
+{
+    if (g_mx4sio_slot == -2)
+        g_mx4sio_slot = LookForBDMDevice();
+    if (g_mx4sio_slot >= 0) {
+        dev_state[DEV_MC0] = 1;
+        dev_state[DEV_MC1] = 0;
+    }
+    return g_mx4sio_slot;
+}
+#endif
+
 static int device_id_from_path(const char *path)
 {
     if (path == NULL || *path == '\0')
@@ -199,7 +213,7 @@ static int device_root_available(int dev)
             return (stat("mass:/", &st) == 0);
 #ifdef MX4SIO
         case DEV_MX4SIO:
-            return (LookForBDMDevice() >= 0);
+            return (get_mx4sio_slot() >= 0);
 #endif
 #ifdef MMCE
         case DEV_MMCE0:
@@ -218,35 +232,58 @@ static int device_root_available(int dev)
     }
 }
 
-static int device_available_for_path(const char *path)
+static int device_available_for_dev(int dev)
 {
-    int dev;
-    if (path == NULL || *path == '\0')
-        return 0;
-    if (!strncmp(path, "mc?:", 4)) {
-        if (!device_modules_ready(DEV_MC0) && !device_modules_ready(DEV_MC1))
-            return 0;
-        if (dev_state[DEV_MC0] < 0)
-            dev_state[DEV_MC0] = device_root_available(DEV_MC0) ? 1 : 0;
-        if (dev_state[DEV_MC1] < 0)
-            dev_state[DEV_MC1] = device_root_available(DEV_MC1) ? 1 : 0;
-        return (dev_state[DEV_MC0] > 0 || dev_state[DEV_MC1] > 0);
-    }
-
-    dev = device_id_from_path(path);
     if (dev == DEV_UNKNOWN)
         return 1;
     if (!device_modules_ready(dev)) {
         dev_state[dev] = 0;
         return 0;
     }
+#ifdef MMCE
+    if (dev == DEV_MMCE0 || dev == DEV_MMCE1) {
+        int mc_dev = (dev == DEV_MMCE0) ? DEV_MC0 : DEV_MC1;
+        if (dev_state[dev] >= 0)
+            return dev_state[dev];
+        dev_state[dev] = device_root_available(dev) ? 1 : 0;
+        if (dev_state[dev] > 0)
+            dev_state[mc_dev] = 1;
+        return dev_state[dev];
+    }
+#endif
     if (dev_state[dev] >= 0)
         return dev_state[dev];
     dev_state[dev] = device_root_available(dev) ? 1 : 0;
     return dev_state[dev];
 }
 
-static int path_cached_exists(const char *path, const char **cache, int count)
+static void build_device_available_cache(int *dev_ok, int count)
+{
+    int dev;
+    if (dev_ok == NULL || count <= 0)
+        return;
+    for (dev = 0; dev < count; dev++)
+        dev_ok[dev] = device_available_for_dev(dev) ? 1 : 0;
+}
+
+static int device_available_for_path_cached(const char *path, const int *dev_ok)
+{
+    int dev;
+    if (path == NULL || *path == '\0')
+        return 0;
+    if (!strncmp(path, "mc?:", 4))
+        return (dev_ok[DEV_MC0] || dev_ok[DEV_MC1]);
+#ifdef MMCE
+    if (!strncmp(path, "mmce?:", 6))
+        return (dev_ok[DEV_MMCE0] || dev_ok[DEV_MMCE1]);
+#endif
+    dev = device_id_from_path(path);
+    if (dev == DEV_UNKNOWN)
+        return 1;
+    return dev_ok[dev];
+}
+
+static inline int path_cached_exists(const char *path, const char **cache, int count)
 {
     int i;
     if (path == NULL || *path == '\0')
@@ -258,7 +295,7 @@ static int path_cached_exists(const char *path, const char **cache, int count)
     return 0;
 }
 
-static int is_elf_ext_ci(const char *s, size_t len)
+static inline int is_elf_ext_ci(const char *s, size_t len)
 {
     if (len < 4)
         return 0;
@@ -266,6 +303,65 @@ static int is_elf_ext_ci(const char *s, size_t len)
             ((s[len - 3] == 'e' || s[len - 3] == 'E')) &&
             ((s[len - 2] == 'l' || s[len - 2] == 'L')) &&
             ((s[len - 1] == 'f' || s[len - 1] == 'F')));
+}
+
+static char *resolve_pair_path_cached(char *path,
+                                      int slot_index,
+                                      char preferred,
+                                      const char **known_exists,
+                                      int *known_count,
+                                      int known_max,
+                                      const char **known_missing,
+                                      int *missing_count,
+                                      int missing_max)
+{
+    char alternate = (preferred == '0') ? '1' : '0';
+    char slots[2] = {preferred, alternate};
+    int k;
+
+    for (k = 0; k < 2; k++) {
+        path[slot_index] = slots[k];
+        if (path_cached_exists(path, known_exists, *known_count))
+            return path;
+        if (path_cached_exists(path, known_missing, *missing_count))
+            continue;
+        if (exist(path)) {
+            if (*known_count < known_max)
+                known_exists[(*known_count)++] = path;
+            return path;
+        }
+        if (*missing_count < missing_max)
+            known_missing[(*missing_count)++] = path;
+    }
+    return NULL;
+}
+
+static int resolve_pair_path(char *path, int slot_index, char preferred, char **out_path)
+{
+    char alternate = (preferred == '0') ? '1' : '0';
+
+    path[slot_index] = preferred;
+    if (exist(path)) {
+        if (out_path)
+            *out_path = path;
+        return 1;
+    }
+    path[slot_index] = alternate;
+    if (exist(path)) {
+        if (out_path)
+            *out_path = path;
+        return 1;
+    }
+    if (out_path)
+        *out_path = path;
+    return 0;
+}
+
+static char preferred_mmce_slot(void)
+{
+    if (config_source == SOURCE_MMCE1 || config_source == SOURCE_MC1)
+        return '1';
+    return '0';
 }
 
 static const char *path_basename(const char *path)
@@ -295,6 +391,9 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     const char *known_missing[17 * CONFIG_KEY_INDEXES];
     int known_count = 0;
     int missing_count = 0;
+    int known_max = (int)(sizeof(known_exists) / sizeof(known_exists[0]));
+    int missing_max = (int)(sizeof(known_missing) / sizeof(known_missing[0]));
+    int dev_ok[DEV_COUNT];
     const char *first_valid[17];
     int i, j;
 
@@ -302,6 +401,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
         first_valid[i] = NULL;
 
     if (scan_paths) {
+        build_device_available_cache(dev_ok, DEV_COUNT);
         for (i = 0; i < 17; i++) {
             int found = 0;
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
@@ -319,10 +419,44 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     found = 1;
                     continue; // Commands only run on keypress.
                 }
-                if (!device_available_for_path(path)) {
+                if (!device_available_for_path_cached(path, dev_ok)) {
                     GLOBCFG.KEYPATHS[i][j] = "";
                     continue;
                 }
+                if (!strncmp(path, "mc?:", 4)) {
+                    int slot_index = 2;
+                    char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
+                    char *resolved = resolve_pair_path_cached(path, slot_index, preferred,
+                                                             known_exists, &known_count, known_max,
+                                                             known_missing, &missing_count, missing_max);
+                    if (resolved != NULL) {
+                        GLOBCFG.KEYPATHS[i][j] = resolved;
+                        if (first_valid[i] == NULL)
+                            first_valid[i] = resolved;
+                        found = 1;
+                    } else {
+                        GLOBCFG.KEYPATHS[i][j] = "";
+                    }
+                    continue;
+                }
+#ifdef MMCE
+                if (!strncmp(path, "mmce?:", 6)) {
+                    int slot_index = 4;
+                    char preferred = preferred_mmce_slot();
+                    char *resolved = resolve_pair_path_cached(path, slot_index, preferred,
+                                                             known_exists, &known_count, known_max,
+                                                             known_missing, &missing_count, missing_max);
+                    if (resolved != NULL) {
+                        GLOBCFG.KEYPATHS[i][j] = resolved;
+                        if (first_valid[i] == NULL)
+                            first_valid[i] = resolved;
+                        found = 1;
+                    } else {
+                        GLOBCFG.KEYPATHS[i][j] = "";
+                    }
+                    continue;
+                }
+#endif
                 path = CheckPath(path);
                 if (path_cached_exists(path, known_exists, known_count)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
@@ -339,12 +473,12 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     GLOBCFG.KEYPATHS[i][j] = path;
                     if (first_valid[i] == NULL)
                         first_valid[i] = path;
-                    if (known_count < (int)(sizeof(known_exists) / sizeof(known_exists[0])))
+                    if (known_count < known_max)
                         known_exists[known_count++] = path;
                     found = 1;
                 } else {
                     GLOBCFG.KEYPATHS[i][j] = "";
-                    if (missing_count < (int)(sizeof(known_missing) / sizeof(known_missing[0])))
+                    if (missing_count < missing_max)
                         known_missing[missing_count++] = path;
                 }
             }
@@ -806,6 +940,8 @@ int main(int argc, char *argv[])
     DPRINTF("Timer starts!\n");
     TimerInit();
     tstart = Timer();
+    int dev_ok[DEV_COUNT];
+    build_device_available_cache(dev_ok, DEV_COUNT);
     while (Timer() <= (tstart + GLOBCFG.DELAY)) {
         button = pad_button; // reset the value so we can iterate (bit-shift) again
         PAD = ReadCombinedPadStatus_raw();
@@ -824,18 +960,40 @@ int main(int argc, char *argv[])
                         RunLoaderElf(GLOBCFG.KEYPATHS[x + 1][j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         continue;
                     }
-                    if (!device_available_for_path(GLOBCFG.KEYPATHS[x + 1][j]))
+                    if (!device_available_for_path_cached(GLOBCFG.KEYPATHS[x + 1][j], dev_ok))
                         continue;
-                    EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
-                    if (exist(EXECPATHS[j])) {
+                    if (!strncmp(GLOBCFG.KEYPATHS[x + 1][j], "mc?:", 4)) {
+                        char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
+                        if (!resolve_pair_path(GLOBCFG.KEYPATHS[x + 1][j], 2, preferred, &EXECPATHS[j])) {
+                            scr_setfontcolor(0x00ffff);
+                            DPRINTF("%s not found\n", EXECPATHS[j]);
+                            scr_setfontcolor(0xffffff);
+                            continue;
+                        }
+#ifdef MMCE
+                    } else if (!strncmp(GLOBCFG.KEYPATHS[x + 1][j], "mmce?:", 6)) {
+                        char preferred = preferred_mmce_slot();
+                        if (!resolve_pair_path(GLOBCFG.KEYPATHS[x + 1][j], 4, preferred, &EXECPATHS[j])) {
+                            scr_setfontcolor(0x00ffff);
+                            DPRINTF("%s not found\n", EXECPATHS[j]);
+                            scr_setfontcolor(0xffffff);
+                            continue;
+                        }
+#endif
+                    } else {
+                        EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
+                        if (!exist(EXECPATHS[j])) {
+                            scr_setfontcolor(0x00ffff);
+                            DPRINTF("%s not found\n", EXECPATHS[j]);
+                            scr_setfontcolor(0xffffff);
+                            continue;
+                        }
+                    }
+                    if (EXECPATHS[j] != NULL && *EXECPATHS[j] != '\0') {
                         scr_setfontcolor(0x00ff00);
                         scr_printf("  Loading %s\n", EXECPATHS[j]);
                         CleanUp();
                         RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
-                    } else {
-                        scr_setfontcolor(0x00ffff);
-                        DPRINTF("%s not found\n", EXECPATHS[j]);
-                        scr_setfontcolor(0xffffff);
                     }
                 }
                 break;
@@ -845,6 +1003,7 @@ int main(int argc, char *argv[])
     }
     DPRINTF("Wait time consummed. Running AUTO entry\n");
     TimerEnd();
+    build_device_available_cache(dev_ok, DEV_COUNT);
     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
         // Skip empty/unset AUTO entries too
         if (GLOBCFG.KEYPATHS[0][j] == NULL || *GLOBCFG.KEYPATHS[0][j] == '\0')
@@ -858,16 +1017,34 @@ int main(int argc, char *argv[])
             RunLoaderElf(GLOBCFG.KEYPATHS[0][j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
             continue;
         }
-        if (!device_available_for_path(GLOBCFG.KEYPATHS[0][j]))
+        if (!device_available_for_path_cached(GLOBCFG.KEYPATHS[0][j], dev_ok))
             continue;
-        EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
-        if (exist(EXECPATHS[j])) {
+        if (!strncmp(GLOBCFG.KEYPATHS[0][j], "mc?:", 4)) {
+            char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
+            if (!resolve_pair_path(GLOBCFG.KEYPATHS[0][j], 2, preferred, &EXECPATHS[j])) {
+                scr_printf("%s %-15s\r", EXECPATHS[j], "not found");
+                continue;
+            }
+#ifdef MMCE
+        } else if (!strncmp(GLOBCFG.KEYPATHS[0][j], "mmce?:", 6)) {
+            char preferred = preferred_mmce_slot();
+            if (!resolve_pair_path(GLOBCFG.KEYPATHS[0][j], 4, preferred, &EXECPATHS[j])) {
+                scr_printf("%s %-15s\r", EXECPATHS[j], "not found");
+                continue;
+            }
+#endif
+        } else {
+            EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
+            if (!exist(EXECPATHS[j])) {
+                scr_printf("%s %-15s\r", EXECPATHS[j], "not found");
+                continue;
+            }
+        }
+        if (EXECPATHS[j] != NULL && *EXECPATHS[j] != '\0') {
             scr_setfontcolor(0x00ff00);
             scr_printf("  Loading %s\n", EXECPATHS[j]);
             CleanUp();
             RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
-        } else {
-            scr_printf("%s %-15s\r", EXECPATHS[j], "not found");
         }
     }
 
@@ -890,9 +1067,17 @@ void EMERGENCY(void)
     scr_clear();
     scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
     scr_setfontcolor(0xffffff);
+    int dot_count = 0;
     while (1) {
         scr_printf(".");
         sleep(1);
+        dot_count++;
+        if (dot_count >= 3) {
+            scr_clear();
+            scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
+            scr_setfontcolor(0xffffff);
+            dot_count = 0;
+        }
         if (exist("mass:/RESCUE.ELF")) {
             CleanUp();
             RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
@@ -933,24 +1118,14 @@ char *CheckPath(char *path)
         }
     }
     if (!strncmp("mc?", path, 3)) {
-        path[2] = (config_source == SOURCE_MC1) ? '1' : '0';
-        if (exist(path)) {
+        char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
+        if (resolve_pair_path(path, 2, preferred, &path))
             return path;
-        } else {
-            path[2] = (config_source == SOURCE_MC1) ? '0' : '1';
-            if (exist(path))
-                return path;
-        }
 #ifdef MMCE
     } else if (!strncmp("mmce?", path, 5)) {
-        path[4] = (config_source == SOURCE_MMCE1) ? '1' : '0';
-        if (exist(path)) {
+        char preferred = preferred_mmce_slot();
+        if (resolve_pair_path(path, 4, preferred, &path))
             return path;
-        } else {
-            path[4] = (config_source == SOURCE_MMCE1) ? '0' : '1';
-            if (exist(path))
-                return path;
-        }
 #endif
 #ifdef HDD
     } else if (!strncmp("hdd", path, 3)) {
@@ -966,7 +1141,7 @@ char *CheckPath(char *path)
 #endif
 #ifdef MX4SIO
     } else if (!strncmp("massX:", path, 6)) {
-        int x = LookForBDMDevice();
+        int x = get_mx4sio_slot();
         if (x >= 0)
             path[4] = '0' + x;
 #endif
