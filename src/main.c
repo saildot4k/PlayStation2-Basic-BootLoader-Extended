@@ -62,6 +62,7 @@ static int g_mx4sio_modules_loaded = 0;
 static int g_mmce_modules_loaded = 0;
 static int g_hdd_modules_loaded = 0;
 static int g_mx4sio_slot = -2;
+static int config_source = SOURCE_INVALID;
 
 enum {
     DEV_UNKNOWN = -1,
@@ -357,12 +358,14 @@ static int resolve_pair_path(char *path, int slot_index, char preferred, char **
     return 0;
 }
 
+#ifdef MMCE
 static char preferred_mmce_slot(void)
 {
     if (config_source == SOURCE_MMCE1 || config_source == SOURCE_MC1)
         return '1';
     return '0';
 }
+#endif
 
 static const char *path_basename(const char *path)
 {
@@ -514,7 +517,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
 int PAD = 0;
-static int config_source = SOURCE_INVALID;
 unsigned char *config_buf = NULL; // pointer to allocated config file
 
 int main(int argc, char *argv[])
