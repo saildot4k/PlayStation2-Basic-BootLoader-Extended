@@ -1082,7 +1082,7 @@ void EMERGENCY(void)
         memset(dots, '.', dot_count);
         dots[dot_count] = '\0';
         scr_printf("\r\t\t%-*s", dot_width, dots);
-        sleep(50000);
+        sleep(80000);
         if (exist("mass:/RESCUE.ELF")) {
             CleanUp();
             RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
