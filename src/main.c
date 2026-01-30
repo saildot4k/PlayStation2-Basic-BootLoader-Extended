@@ -1067,19 +1067,19 @@ int main(int argc, char *argv[])
 void EMERGENCY(void)
 {
     scr_clear();
-    scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
+    scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n\n\t\t");
     scr_setfontcolor(0xffffff);
+    const int dot_width = 3;
+    char dots[4];
     int dot_count = 0;
+
+    dots[0] = '\0';
     while (1) {
-        scr_printf(".");
+        dot_count = (dot_count % dot_width) + 1;
+        memset(dots, '.', dot_count);
+        dots[dot_count] = '\0';
+        scr_printf("\r\t\t%-*s", dot_width, dots);
         sleep(50000);
-        dot_count++;
-        if (dot_count >= 70) {
-            scr_clear();
-            scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
-            scr_setfontcolor(0xffffff);
-            dot_count = 0;
-        }
         if (exist("mass:/RESCUE.ELF")) {
             CleanUp();
             RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
