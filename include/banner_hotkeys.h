@@ -61,4 +61,28 @@ const char *BANNER_HOTKEYS_NAMES =
 #endif
     "";
 
+const char *BANNER_HOTKEYS_PATHS =
+    "  --Discovered paths based on config file--\n"
+    "  AUTO:     " NAME_AUTO "\n"
+    "  TRIANGLE: " NAME_TRIANGLE "\n"
+    "  CIRCLE:   " NAME_CIRCLE "\n"
+    "  CROSS:    " NAME_CROSS "\n"
+    "  SQUARE:   " NAME_SQUARE "\n"
+    "  UP:       " NAME_UP "\n"
+    "  DOWN:     " NAME_DOWN "\n"
+    "  LEFT:     " NAME_LEFT "\n"
+    "  RIGHT:    " NAME_RIGHT "\n"
+    "  L1:       " NAME_L1 "\n"
+    "  L2:       " NAME_L2 "\n"
+    "  L3:       " NAME_L3 "\n"
+    "  R1:       " NAME_R1 "\n"
+    "  R2:       " NAME_R2 "\n"
+    "  R3:       " NAME_R3 "\n"
+    "  START:    " NAME_START "\n"
+    "  SELECT:   " NAME_SELECT "\n"
+#ifdef DEBUG
+    " - DEBUG"
+#endif
+    "";
+
 #endif

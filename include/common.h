@@ -1,12 +1,12 @@
 #ifndef COMMONDEF
 #define COMMONDEF
 
-#define CONFIG_KEY_INDEXES 10              // number of paths to scan per hotkey, however the list below will need to match this value
-#define MAX_ARGS_PER_ENTRY 8
-#define MAX_LEN     64
-#define CNF_LEN_MAX 20480                  // 20kb should be enough for massive CNF's
-#define HOTKEY_DISPLAY_NO_CONFIG_DEFAULT 1 // Hotkey display modes when no config is found: 0=off (force LOGO_DISPLAY=2), 1=defined name, 2=filename (no .elf), 3=path
-#define DEFDELAY 6000                      // default ammount of time this program will wait for a key press in ms/
+#define CONFIG_KEY_INDEXES 10       // number of paths to scan per hotkey, however the list below will need to match this value
+#define MAX_ARGS_PER_ENTRY 8        // max number of ARG_* entries per LK_* slot
+#define MAX_LEN     64              // max length for hotkey display names (after formatting)
+#define CNF_LEN_MAX 20480           // 20kb should be enough for massive CNF's
+#define LOGO_DISPLAY_DEFAULT 5      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=banner+NAME, 4=banner+filename, 5=banner+path
+#define DEFDELAY 6000               // default ammount of time this program will wait for a key press in ms/
 
 enum
 {

@@ -49,11 +49,11 @@ typedef struct
     char *KEYARGS[17][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
     int KEYARGC[17][CONFIG_KEY_INDEXES];
     const char *KEYNAMES[17];
-    int HOTKEY_DISPLAY; // 0=off (force LOGO_DISPLAY=2), 1=defined name, 2=filename, 3=path
+    int HOTKEY_DISPLAY; // derived from LOGO_DISP (0=off, 1=defined name, 2=filename, 3=path)
     int DELAY;
     int OSDHISTORY_READ;
     int TRAYEJECT;
-    int LOGO_DISP; //0: NO, 1: Only Console info, any other value: YES
+    int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names, 4=banner+filename, 5=banner+full path
 } CONFIG;
 CONFIG GLOBCFG;
 static int g_pre_scanned = 0;
@@ -338,9 +338,23 @@ static const char *path_basename(const char *path)
     return base;
 }
 
-static int normalize_hotkey_display(int value)
+static int normalize_logo_display(int value)
 {
-    return (value >= 0 && value <= 3) ? value : 1;
+    return (value >= 0 && value <= 5) ? value : 2;
+}
+
+static int logo_to_hotkey_display(int logo_disp)
+{
+    switch (logo_disp) {
+        case 3:
+            return 1;
+        case 4:
+            return 2;
+        case 5:
+            return 3;
+        default:
+            return 0;
+    }
 }
 
 // Validate paths, clear invalid entries, and set display names per mode.
@@ -418,7 +432,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
         }
     }
 
-    display_mode = normalize_hotkey_display(display_mode);
+    if (display_mode < 0 || display_mode > 3)
+        display_mode = 0;
     if (display_mode == 0) {
         for (i = 0; i < 17; i++)
             GLOBCFG.KEYNAMES[i] = "";
@@ -680,10 +695,6 @@ int main(int argc, char *argv[])
                         GLOBCFG.SKIPLOGO = atoi(value);
                         continue;
                     }
-                    if (!strcmp("HOTKEY_DISPLAY", name)) {
-                        GLOBCFG.HOTKEY_DISPLAY = atoi(value);
-                        continue;
-                    }
                     if (!strcmp("KEY_READ_WAIT_TIME", name)) {
                         GLOBCFG.DELAY = atoi(value);
                         continue;
@@ -771,8 +782,8 @@ int main(int argc, char *argv[])
                 DPRINTF("ERROR: Could not unmount 'pfs0:'\n");
         }
 #endif
-        if (GLOBCFG.HOTKEY_DISPLAY == 0)
-            GLOBCFG.LOGO_DISP = 2;
+        GLOBCFG.LOGO_DISP = normalize_logo_display(GLOBCFG.LOGO_DISP);
+        GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
@@ -780,10 +791,10 @@ int main(int argc, char *argv[])
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
-        g_pre_scanned = (HOTKEY_DISPLAY_NO_CONFIG_DEFAULT == 2 || HOTKEY_DISPLAY_NO_CONFIG_DEFAULT == 3);
-        if (HOTKEY_DISPLAY_NO_CONFIG_DEFAULT == 0)
-            GLOBCFG.LOGO_DISP = 2;
-        ValidateKeypathsAndSetNames(HOTKEY_DISPLAY_NO_CONFIG_DEFAULT, g_pre_scanned);
+        GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
+        GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
+        g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
+        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
         sleep(1);
     }
 
@@ -823,17 +834,17 @@ int main(int argc, char *argv[])
     }
     // Stores last key during DELAY msec
     scr_clear();
-    if (GLOBCFG.LOGO_DISP == 3) {
+    if (GLOBCFG.LOGO_DISP >= 3) {
         scr_setfontcolor(banner_color);
         scr_printf("\n%s", BANNER_HOTKEYS);
         scr_setfontcolor(0xffffff);
-        PrintHotkeyNamesTemplate(BANNER_HOTKEYS_NAMES);
+        PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : BANNER_HOTKEYS_NAMES);
     } else if (GLOBCFG.LOGO_DISP > 1) {
         scr_setfontcolor(banner_color);
         scr_printf("\n\n\n\n%s", BANNER);
     }
     scr_setfontcolor(0xffffff);
-    if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP != 3)
+    if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP < 3)
         scr_printf(BANNER_FOOTER);
     if (GLOBCFG.LOGO_DISP > 0) {
         char model_buf[64];
@@ -1095,12 +1106,12 @@ void SetDefaultSettings(void)
         }
     for (i = 0; i < 17; i++)
         GLOBCFG.KEYNAMES[i] = DEFAULT_KEYNAMES[i];
-    GLOBCFG.HOTKEY_DISPLAY = 1;
     GLOBCFG.SKIPLOGO = 0;
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;
     GLOBCFG.TRAYEJECT = 0;
     GLOBCFG.LOGO_DISP = 3;
+    GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
 }
 
 int LoadUSBIRX(void)
