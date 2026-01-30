@@ -1067,13 +1067,13 @@ int main(int argc, char *argv[])
 void EMERGENCY(void)
 {
     scr_clear();
-    scr_setfontcolor(0xff0000);
+    scr_setfontcolor(0x0000ff);
     scr_printf("\n\n\n\t\tUSB EMERGENCY MODE!\n\n");
-    scr_setfontcolor(0xffff00);
-    scr_printf("\t\tSearching for mass:/RESCUE.ELF\n\t\tTIP: Download uLaunchELF/wLaunchELF and rename to RESCUE.ELF\n\t\tWaiting");
+    scr_setfontcolor(0x00ffff);
+    scr_printf("\t\tSearching for mass:/RESCUE.ELF\n\n\t\tTIP: Download uLaunchELF/wLaunchELF\n\t\tand rename to RESCUE.ELF\n");
     scr_setfontcolor(0xffffff);
-    const int dot_width = 3;
-    char dots[4];
+    const int dot_width = 40;
+    char dots[41];
     int dot_count = 0;
 
     dots[0] = '\0';
