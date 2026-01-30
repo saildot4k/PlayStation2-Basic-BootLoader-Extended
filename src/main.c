@@ -1072,7 +1072,7 @@ void EMERGENCY(void)
     int dot_count = 0;
     while (1) {
         scr_printf(".");
-        sleep(1000);
+        sleep(10000);
         dot_count++;
         if (dot_count >= 3) {
             scr_clear();
