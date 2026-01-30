@@ -317,22 +317,39 @@ static char *resolve_pair_path_cached(char *path,
                                       int missing_max)
 {
     char alternate = (preferred == '0') ? '1' : '0';
-    char slots[2] = {preferred, alternate};
-    int k;
+    int missing_pref = 0;
+    int missing_alt = 0;
 
-    for (k = 0; k < 2; k++) {
-        path[slot_index] = slots[k];
-        if (path_cached_exists(path, known_exists, *known_count))
-            return path;
-        if (path_cached_exists(path, known_missing, *missing_count))
-            continue;
-        if (exist(path)) {
-            if (*known_count < known_max)
-                known_exists[(*known_count)++] = path;
-            return path;
-        }
-        if (*missing_count < missing_max)
-            known_missing[(*missing_count)++] = path;
+    path[slot_index] = preferred;
+    if (path_cached_exists(path, known_exists, *known_count))
+        return path;
+    if (path_cached_exists(path, known_missing, *missing_count)) {
+        missing_pref = 1;
+    } else if (exist(path)) {
+        if (*known_count < known_max)
+            known_exists[(*known_count)++] = path;
+        return path;
+    } else {
+        missing_pref = 1;
+    }
+
+    path[slot_index] = alternate;
+    if (path_cached_exists(path, known_exists, *known_count))
+        return path;
+    if (path_cached_exists(path, known_missing, *missing_count)) {
+        missing_alt = 1;
+    } else if (exist(path)) {
+        if (*known_count < known_max)
+            known_exists[(*known_count)++] = path;
+        return path;
+    } else {
+        missing_alt = 1;
+    }
+
+    if ((missing_pref || missing_alt) && *missing_count < missing_max) {
+        // Cache only one missing variant to avoid poisoning the alternate slot check.
+        path[slot_index] = missing_pref ? preferred : alternate;
+        known_missing[(*missing_count)++] = path;
     }
     return NULL;
 }
