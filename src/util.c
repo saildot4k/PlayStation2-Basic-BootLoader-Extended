@@ -14,11 +14,15 @@
 
 int exist(char *filepath)
 {
-    struct stat st;
+    int fd;
     if (filepath == NULL)
         return 0;
 
-    return (stat(filepath, &st) == 0);
+    fd = open(filepath, O_RDONLY);
+    if (fd < 0)
+        return 0;
+    close(fd);
+    return 1;
 }
 
 void delay(int count)
