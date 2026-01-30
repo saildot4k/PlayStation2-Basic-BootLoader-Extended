@@ -1072,9 +1072,9 @@ void EMERGENCY(void)
     int dot_count = 0;
     while (1) {
         scr_printf(".");
-        sleep(10000);
+        sleep(50000);
         dot_count++;
-        if (dot_count >= 3) {
+        if (dot_count >= 70) {
             scr_clear();
             scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
             scr_setfontcolor(0xffffff);
