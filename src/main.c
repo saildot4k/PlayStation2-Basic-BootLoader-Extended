@@ -284,18 +284,6 @@ static int device_available_for_path_cached(const char *path, const int *dev_ok)
     return dev_ok[dev];
 }
 
-static inline int path_cached_exists(const char *path, const char **cache, int count)
-{
-    int i;
-    if (path == NULL || *path == '\0')
-        return 0;
-    for (i = 0; i < count; i++) {
-        if (cache[i] != NULL && strcmp(cache[i], path) == 0)
-            return 1;
-    }
-    return 0;
-}
-
 static inline int is_elf_ext_ci(const char *s, size_t len)
 {
     if (len < 4)
@@ -304,54 +292,6 @@ static inline int is_elf_ext_ci(const char *s, size_t len)
             ((s[len - 3] == 'e' || s[len - 3] == 'E')) &&
             ((s[len - 2] == 'l' || s[len - 2] == 'L')) &&
             ((s[len - 1] == 'f' || s[len - 1] == 'F')));
-}
-
-static char *resolve_pair_path_cached(char *path,
-                                      int slot_index,
-                                      char preferred,
-                                      const char **known_exists,
-                                      int *known_count,
-                                      int known_max,
-                                      const char **known_missing,
-                                      int *missing_count,
-                                      int missing_max)
-{
-    char alternate = (preferred == '0') ? '1' : '0';
-    int missing_pref = 0;
-    int missing_alt = 0;
-
-    path[slot_index] = preferred;
-    if (path_cached_exists(path, known_exists, *known_count))
-        return path;
-    if (path_cached_exists(path, known_missing, *missing_count)) {
-        missing_pref = 1;
-    } else if (exist(path)) {
-        if (*known_count < known_max)
-            known_exists[(*known_count)++] = path;
-        return path;
-    } else {
-        missing_pref = 1;
-    }
-
-    path[slot_index] = alternate;
-    if (path_cached_exists(path, known_exists, *known_count))
-        return path;
-    if (path_cached_exists(path, known_missing, *missing_count)) {
-        missing_alt = 1;
-    } else if (exist(path)) {
-        if (*known_count < known_max)
-            known_exists[(*known_count)++] = path;
-        return path;
-    } else {
-        missing_alt = 1;
-    }
-
-    if ((missing_pref || missing_alt) && *missing_count < missing_max) {
-        // Cache only one missing variant to avoid poisoning the alternate slot check.
-        path[slot_index] = missing_pref ? preferred : alternate;
-        known_missing[(*missing_count)++] = path;
-    }
-    return NULL;
 }
 
 static int resolve_pair_path(char *path, int slot_index, char preferred, char **out_path)
@@ -407,12 +347,6 @@ static int normalize_hotkey_display(int value)
 static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 {
     static char name_buf[17][MAX_LEN];
-    const char *known_exists[17 * CONFIG_KEY_INDEXES];
-    const char *known_missing[17 * CONFIG_KEY_INDEXES];
-    int known_count = 0;
-    int missing_count = 0;
-    int known_max = (int)(sizeof(known_exists) / sizeof(known_exists[0]));
-    int missing_max = (int)(sizeof(known_missing) / sizeof(known_missing[0]));
     int dev_ok[DEV_COUNT];
     const char *first_valid[17];
     int i, j;
@@ -446,13 +380,10 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 if (!strncmp(path, "mc?:", 4)) {
                     int slot_index = 2;
                     char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
-                    char *resolved = resolve_pair_path_cached(path, slot_index, preferred,
-                                                             known_exists, &known_count, known_max,
-                                                             known_missing, &missing_count, missing_max);
-                    if (resolved != NULL) {
-                        GLOBCFG.KEYPATHS[i][j] = resolved;
+                    if (resolve_pair_path(path, slot_index, preferred, &path)) {
+                        GLOBCFG.KEYPATHS[i][j] = path;
                         if (first_valid[i] == NULL)
-                            first_valid[i] = resolved;
+                            first_valid[i] = path;
                         found = 1;
                     } else {
                         GLOBCFG.KEYPATHS[i][j] = "";
@@ -463,13 +394,10 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 if (!strncmp(path, "mmce?:", 6)) {
                     int slot_index = 4;
                     char preferred = preferred_mmce_slot();
-                    char *resolved = resolve_pair_path_cached(path, slot_index, preferred,
-                                                             known_exists, &known_count, known_max,
-                                                             known_missing, &missing_count, missing_max);
-                    if (resolved != NULL) {
-                        GLOBCFG.KEYPATHS[i][j] = resolved;
+                    if (resolve_pair_path(path, slot_index, preferred, &path)) {
+                        GLOBCFG.KEYPATHS[i][j] = path;
                         if (first_valid[i] == NULL)
-                            first_valid[i] = resolved;
+                            first_valid[i] = path;
                         found = 1;
                     } else {
                         GLOBCFG.KEYPATHS[i][j] = "";
@@ -478,28 +406,13 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 }
 #endif
                 path = CheckPath(path);
-                if (path_cached_exists(path, known_exists, known_count)) {
-                    GLOBCFG.KEYPATHS[i][j] = path;
-                    if (first_valid[i] == NULL)
-                        first_valid[i] = path;
-                    found = 1;
-                    continue;
-                }
-                if (path_cached_exists(path, known_missing, missing_count)) {
-                    GLOBCFG.KEYPATHS[i][j] = "";
-                    continue;
-                }
                 if (exist(path)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
                     if (first_valid[i] == NULL)
                         first_valid[i] = path;
-                    if (known_count < known_max)
-                        known_exists[known_count++] = path;
                     found = 1;
                 } else {
                     GLOBCFG.KEYPATHS[i][j] = "";
-                    if (missing_count < missing_max)
-                        known_missing[missing_count++] = path;
                 }
             }
         }
