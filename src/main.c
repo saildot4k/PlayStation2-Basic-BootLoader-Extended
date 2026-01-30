@@ -1070,7 +1070,7 @@ void EMERGENCY(void)
     scr_setfontcolor(0x0000ff);
     scr_printf("\n\n\n\t\tUSB EMERGENCY MODE!\n\n");
     scr_setfontcolor(0x00ffff);
-    scr_printf("\t\tSearching for mass:/RESCUE.ELF\n\n\t\tTIP: Download uLaunchELF/wLaunchELF\n\t\tand rename to RESCUE.ELF\n");
+    scr_printf("\t\tSearching for mass:/RESCUE.ELF\n\n\t\tTIP: Download uLaunchELF/wLaunchELF\n\t\t\tand rename to RESCUE.ELF\n");
     scr_setfontcolor(0xffffff);
     const int dot_width = 40;
     char dots[41];
@@ -1082,7 +1082,7 @@ void EMERGENCY(void)
         memset(dots, '.', dot_count);
         dots[dot_count] = '\0';
         scr_printf("\r\t\t%-*s", dot_width, dots);
-        sleep(80000);
+        sleep(100000);
         if (exist("mass:/RESCUE.ELF")) {
             CleanUp();
             RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
