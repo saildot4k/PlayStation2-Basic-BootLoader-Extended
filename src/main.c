@@ -1064,22 +1064,20 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-static void emergency_banner(void)
+void EMERGENCY(void)
 {
     scr_clear();
     scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
     scr_setfontcolor(0xffffff);
-}
-
-void EMERGENCY(void)
-{
-    emergency_banner();
     int dot_count = 0;
     while (1) {
         scr_printf(".");
-        DelayThread(1000000); // 1s in microseconds for stable timing on hardware
-        if (++dot_count >= 300) {
-            emergency_banner();
+        sleep(1);
+        dot_count++;
+        if (dot_count >= 3) {
+            scr_clear();
+            scr_printf("\n\n\n\t\tEmergency mode\n\n\t\t Doing infinite attempts to boot:\n\t\tmass:/RESCUE.ELF\n");
+            scr_setfontcolor(0xffffff);
             dot_count = 0;
         }
         if (exist("mass:/RESCUE.ELF")) {
