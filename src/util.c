@@ -2,7 +2,6 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/stat.h>
 #include <tamtypes.h>
 #include <loadfile.h>
 #include <malloc.h>

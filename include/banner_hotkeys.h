@@ -61,8 +61,13 @@ const char *BANNER_HOTKEYS_NAMES =
 #endif
     "";
 
+const char *BANNER_HOTKEYS_PATHS_HEADER =
+    "  --Discovered paths based on config file--\n";
+
+const char *BANNER_HOTKEYS_PATHS_HEADER_NOCONFIG =
+    "  -NO CONFIG FOUND! Listing default paths that are found.\n";
+
 const char *BANNER_HOTKEYS_PATHS =
-    "  --Discovered paths based on config file--\n"
     "  AUTO:     " NAME_AUTO "\n"
     "  TRIANGLE: " NAME_TRIANGLE "\n"
     "  CIRCLE:   " NAME_CIRCLE "\n"

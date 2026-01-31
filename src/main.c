@@ -284,6 +284,48 @@ static int device_available_for_path_cached(const char *path, const int *dev_ok)
     return dev_ok[dev];
 }
 
+static int command_display_path(char *path, const int *dev_ok, const char **out_display)
+{
+    const char *runkelf_prefix = "$RUNKELF:";
+    if (path == NULL || *path == '\0' || !is_command_token(path))
+        return 0;
+
+#ifndef HDD
+    if (!strcmp(path, "$HDDCHECKER"))
+        return 0;
+#endif
+
+    if (!strncmp(path, runkelf_prefix, strlen(runkelf_prefix))) {
+        char *kelf_path = path + strlen(runkelf_prefix);
+        if (kelf_path == NULL || *kelf_path == '\0')
+            return 0;
+        if (strncmp(kelf_path, "mc", 2) != 0 && strncmp(kelf_path, "hdd", 3) != 0)
+            return 0;
+        if (!device_available_for_path_cached(kelf_path, dev_ok))
+            return 0;
+        if (!strncmp(kelf_path, "mc?:", 4)) {
+            char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
+            if (resolve_pair_path(kelf_path, 2, preferred, &kelf_path)) {
+                if (out_display)
+                    *out_display = kelf_path;
+                return 1;
+            }
+            return 0;
+        }
+        kelf_path = CheckPath(kelf_path);
+        if (exist(kelf_path)) {
+            if (out_display)
+                *out_display = kelf_path;
+            return 1;
+        }
+        return 0;
+    }
+
+    if (out_display)
+        *out_display = path + 1;
+    return 1;
+}
+
 static inline int is_elf_ext_ci(const char *s, size_t len)
 {
     if (len < 4)
@@ -383,8 +425,12 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     continue;
                 }
                 if (is_command_token(path)) {
-                    // Command tokens win if encountered before any valid path.
-                    found = 1;
+                    const char *cmd_display = NULL;
+                    if (command_display_path(path, dev_ok, &cmd_display)) {
+                        if (first_valid[i] == NULL)
+                            first_valid[i] = (cmd_display != NULL) ? cmd_display : path;
+                        found = 1;
+                    }
                     continue; // Commands only run on keypress.
                 }
                 if (!device_available_for_path_cached(path, dev_ok)) {
@@ -787,7 +833,7 @@ int main(int argc, char *argv[])
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
-        scr_printf("Can't find config, loading hardcoded paths\n");
+        scr_printf(""Can't" find config, loading hardcoded paths\n");
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
@@ -838,6 +884,15 @@ int main(int argc, char *argv[])
         scr_setfontcolor(banner_color);
         scr_printf("\n%s", BANNER_HOTKEYS);
         scr_setfontcolor(0xffffff);
+        if (GLOBCFG.HOTKEY_DISPLAY == 3) {
+            if (config_source == SOURCE_INVALID) {
+                scr_setfontcolor(0x00ffff);
+                scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER_NOCONFIG);
+                scr_setfontcolor(0xffffff);
+            } else {
+                scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER);
+            }
+        }
         PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : BANNER_HOTKEYS_NAMES);
     } else if (GLOBCFG.LOGO_DISP > 1) {
         scr_setfontcolor(banner_color);

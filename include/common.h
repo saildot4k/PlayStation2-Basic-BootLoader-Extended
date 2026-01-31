@@ -127,7 +127,7 @@ const char *KEYS_ID[17] = {
     "SQUARE"    // 0x8000
 };
 
-/** default hotkey names used when HOTKEY_DISPLAY is set to 1 */
+/** default hotkey names used when LOGO_DISPLAY = 3 */
 #ifdef PSX
     const char *DEFAULT_KEYNAMES[17] = {
         "wLE ISR (MMCE -> MX -> exFAT",
