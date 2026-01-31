@@ -24,6 +24,7 @@ XCDVD_READKEY ?= 0 # Enable the newer sceCdReadKey checks, which are only suppor
 UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
+EMBED_PS1VN ?= 1
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -138,6 +139,12 @@ else
   EE_CFLAGS += -Os
   EE_LDFLAGS += -s
   EE_LIBS += -lelf-loader-nocolour
+endif
+
+ifeq ($(EMBED_PS1VN), 1)
+  $(info --- embedding PS1VN)
+  EE_CFLAGS += -DEMBED_PS1VN
+  EE_OBJS += ps1vn_elf.o
 endif
 
 ifeq ($(USE_ROM_PADMAN), 1)

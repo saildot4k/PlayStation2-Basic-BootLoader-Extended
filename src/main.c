@@ -99,6 +99,9 @@ typedef struct
     int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names, 4=banner+filename, 5=banner+full path
     int CDROM_DISABLE_GAMEID;
     int APP_GAMEID;
+    int PS1DRV_ENABLE_FAST;
+    int PS1DRV_ENABLE_SMOOTH;
+    int PS1DRV_USE_PS1VN;
 } CONFIG;
 CONFIG GLOBCFG;
 static int g_pre_scanned = 0;
@@ -106,7 +109,9 @@ static int g_usb_modules_loaded = 0;
 static int g_mx4sio_modules_loaded = 0;
 static int g_mmce_modules_loaded = 0;
 static int g_hdd_modules_loaded = 0;
+#ifdef MX4SIO
 static int g_mx4sio_slot = -2;
+#endif
 static int config_source = SOURCE_INVALID;
 
 enum {
@@ -808,6 +813,18 @@ int main(int argc, char *argv[])
                         GLOBCFG.APP_GAMEID = atoi(value);
                         continue;
                     }
+                    if (ci_eq(name, "PS1DRV_ENABLE_FAST")) {
+                        GLOBCFG.PS1DRV_ENABLE_FAST = atoi(value);
+                        continue;
+                    }
+                    if (ci_eq(name, "PS1DRV_ENABLE_SMOOTH")) {
+                        GLOBCFG.PS1DRV_ENABLE_SMOOTH = atoi(value);
+                        continue;
+                    }
+                    if (ci_eq(name, "PS1DRV_USE_PS1VN")) {
+                        GLOBCFG.PS1DRV_USE_PS1VN = atoi(value);
+                        continue;
+                    }
                     if (ci_starts_with(name, "NAME_")) {
                         for (x = 0; x < 17; x++) {
                             sprintf(TMP, "NAME_%s", KEYS_ID[x]);
@@ -900,6 +917,7 @@ int main(int argc, char *argv[])
     }
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
+    PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
 
     int R = 0x80, G = 0x80, B = 0x80;
     u32 banner_color = 0xffffff;
@@ -1224,8 +1242,11 @@ void SetDefaultSettings(void)
     GLOBCFG.TRAYEJECT = 0;
     GLOBCFG.LOGO_DISP = 3;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
-    GLOBCFG.CDROM_DISABLE_GAMEID = 0;
-    GLOBCFG.APP_GAMEID = 1;
+    GLOBCFG.CDROM_DISABLE_GAMEID = CDROM_DISABLE_GAMEID_DEFAULT;
+    GLOBCFG.APP_GAMEID = APP_GAMEID_DEFAULT;
+    GLOBCFG.PS1DRV_ENABLE_FAST = PS1DRV_ENABLE_FAST_DEFAULT;
+    GLOBCFG.PS1DRV_ENABLE_SMOOTH = PS1DRV_ENABLE_SMOOTH_DEFAULT;
+    GLOBCFG.PS1DRV_USE_PS1VN = PS1DRV_USE_PS1VN_DEFAULT;
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
 }
 
