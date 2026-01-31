@@ -284,6 +284,8 @@ static int device_available_for_path_cached(const char *path, const int *dev_ok)
     return dev_ok[dev];
 }
 
+static int resolve_pair_path(char *path, int slot_index, char preferred, char **out_path);
+
 static int command_display_path(char *path, const int *dev_ok, const char **out_display)
 {
     const char *runkelf_prefix = "$RUNKELF:";
@@ -833,7 +835,7 @@ int main(int argc, char *argv[])
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
-        scr_printf(""Can't" find config, loading hardcoded paths\n");
+        scr_printf("Can't find config, loading hardcoded paths\n");
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
