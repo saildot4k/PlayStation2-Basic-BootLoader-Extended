@@ -1013,7 +1013,7 @@ int main(int argc, char *argv[])
                         scr_printf("  Loading %s\n", GLOBCFG.KEYPATHS[x + 1][j]);
                         CleanUp();
                         RunLoaderElf(GLOBCFG.KEYPATHS[x + 1][j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
-                        continue;
+                        break;
                     }
                     if (!device_available_for_path_cached(GLOBCFG.KEYPATHS[x + 1][j], dev_ok))
                         continue;
@@ -1070,7 +1070,7 @@ int main(int argc, char *argv[])
             scr_printf("  Loading %s\n", GLOBCFG.KEYPATHS[0][j]);
             CleanUp();
             RunLoaderElf(GLOBCFG.KEYPATHS[0][j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
-            continue;
+            break;
         }
         if (!device_available_for_path_cached(GLOBCFG.KEYPATHS[0][j], dev_ok))
             continue;
@@ -1225,7 +1225,7 @@ void SetDefaultSettings(void)
     GLOBCFG.LOGO_DISP = 3;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
     GLOBCFG.CDROM_DISABLE_GAMEID = 0;
-    GLOBCFG.APP_GAMEID = 0;
+    GLOBCFG.APP_GAMEID = 1;
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
 }
 
