@@ -1,4 +1,5 @@
 #include "main.h"
+#include "game_id.h"
 
 // Whitespace/CRLF trimming for config values (in-place)
 // Returns a pointer to the first non-whitespace character (may be inside the original buffer).
@@ -41,6 +42,48 @@ static const char *strip_crlf_copy(const char *s, char *buf, size_t buf_len)
     buf[i] = '\0';
     return buf;
 }
+
+static int ci_eq(const char *a, const char *b)
+{
+    unsigned char ca, cb;
+    if (a == NULL || b == NULL)
+        return 0;
+    while (*a != '\0' && *b != '\0') {
+        ca = (unsigned char)*a;
+        cb = (unsigned char)*b;
+        if (ca >= 'a' && ca <= 'z')
+            ca -= ('a' - 'A');
+        if (cb >= 'a' && cb <= 'z')
+            cb -= ('a' - 'A');
+        if (ca != cb)
+            return 0;
+        a++;
+        b++;
+    }
+    return (*a == '\0' && *b == '\0');
+}
+
+static int ci_starts_with(const char *s, const char *prefix)
+{
+    unsigned char cs, cp;
+    if (s == NULL || prefix == NULL)
+        return 0;
+    while (*prefix != '\0') {
+        cs = (unsigned char)*s;
+        cp = (unsigned char)*prefix;
+        if (cs == '\0')
+            return 0;
+        if (cs >= 'a' && cs <= 'z')
+            cs -= ('a' - 'A');
+        if (cp >= 'a' && cp <= 'z')
+            cp -= ('a' - 'A');
+        if (cs != cp)
+            return 0;
+        s++;
+        prefix++;
+    }
+    return 1;
+}
 // --------------- glob stuff --------------- //
 typedef struct
 {
@@ -54,6 +97,8 @@ typedef struct
     int OSDHISTORY_READ;
     int TRAYEJECT;
     int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names, 4=banner+filename, 5=banner+full path
+    int CDROM_DISABLE_GAMEID;
+    int APP_GAMEID;
 } CONFIG;
 CONFIG GLOBCFG;
 static int g_pre_scanned = 0;
@@ -726,11 +771,11 @@ int main(int argc, char *argv[])
                         continue;
 
                     // DPRINTF("reading entry %d", var_cnt);
-                    if (!strcmp("OSDHISTORY_READ", name)) {
+                    if (ci_eq(name, "OSDHISTORY_READ")) {
                         GLOBCFG.OSDHISTORY_READ = atoi(value);
                         continue;
                     }
-                    if (!strncmp("LOAD_IRX_E", name, 10)) {
+                    if (ci_starts_with(name, "LOAD_IRX_E")) {
                         if (value == NULL || *value == '\0') {
                             DPRINTF("# Skipping empty IRX path for config entry [%s]\n", name);
                             continue;
@@ -739,26 +784,34 @@ int main(int argc, char *argv[])
                         DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n", name, value, j, x);
                         continue;
                     }
-                    if (!strcmp("SKIP_PS2LOGO", name)) {
+                    if (ci_eq(name, "SKIP_PS2LOGO")) {
                         GLOBCFG.SKIPLOGO = atoi(value);
                         continue;
                     }
-                    if (!strcmp("KEY_READ_WAIT_TIME", name)) {
+                    if (ci_eq(name, "KEY_READ_WAIT_TIME")) {
                         GLOBCFG.DELAY = atoi(value);
                         continue;
                     }
-                    if (!strcmp("EJECT_TRAY", name)) {
+                    if (ci_eq(name, "EJECT_TRAY")) {
                         GLOBCFG.TRAYEJECT = atoi(value);
                         continue;
                     }
-                    if (!strcmp("LOGO_DISPLAY", name)) {
+                    if (ci_eq(name, "LOGO_DISPLAY")) {
                         GLOBCFG.LOGO_DISP = atoi(value);
                         continue;
                     }
-                    if (strncmp(name, "NAME_", 5) == 0) {
+                    if (ci_eq(name, "CDROM_DISABLE_GAMEID")) {
+                        GLOBCFG.CDROM_DISABLE_GAMEID = atoi(value);
+                        continue;
+                    }
+                    if (ci_eq(name, "APP_GAMEID")) {
+                        GLOBCFG.APP_GAMEID = atoi(value);
+                        continue;
+                    }
+                    if (ci_starts_with(name, "NAME_")) {
                         for (x = 0; x < 17; x++) {
                             sprintf(TMP, "NAME_%s", KEYS_ID[x]);
-                            if (!strcmp(name, TMP)) {
+                            if (ci_eq(name, TMP)) {
                                 if (value == NULL || *value == '\0')
                                     GLOBCFG.KEYNAMES[x] = NULL;
                                 else
@@ -768,11 +821,11 @@ int main(int argc, char *argv[])
                         }
                         continue;
                     }
-                    if (strncmp(name, "ARG_", 4) == 0) {
+                    if (ci_starts_with(name, "ARG_")) {
                         for (x = 0; x < 17; x++) {
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                                 sprintf(TMP, "ARG_%s_E%d", KEYS_ID[x], j + 1);
-                                if (!strcmp(name, TMP)) {
+                                if (ci_eq(name, TMP)) {
                                     if (value == NULL || *value == '\0')
                                         break;
                                     if (GLOBCFG.KEYARGC[x][j] < MAX_ARGS_PER_ENTRY) {
@@ -787,11 +840,11 @@ int main(int argc, char *argv[])
                         }
                         continue;
                     }
-                    if (strncmp(name, "LK_", 3) == 0) {
+                    if (ci_starts_with(name, "LK_")) {
                         for (x = 0; x < 17; x++) {
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                                 sprintf(TMP, "LK_%s_E%d", KEYS_ID[x], j + 1);
-                                if (!strcmp(name, TMP)) {
+                                if (ci_eq(name, TMP)) {
                                     // Empty string means: skip this slot (try next E# when executing)
                                     if (value == NULL || *value == '\0')
                                         GLOBCFG.KEYPATHS[x][j] = NULL;
@@ -845,6 +898,8 @@ int main(int argc, char *argv[])
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
         sleep(1);
     }
+
+    GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
 
     int R = 0x80, G = 0x80, B = 0x80;
     u32 banner_color = 0xffffff;
@@ -1169,6 +1224,9 @@ void SetDefaultSettings(void)
     GLOBCFG.TRAYEJECT = 0;
     GLOBCFG.LOGO_DISP = 3;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
+    GLOBCFG.CDROM_DISABLE_GAMEID = 0;
+    GLOBCFG.APP_GAMEID = 0;
+    GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
 }
 
 int LoadUSBIRX(void)

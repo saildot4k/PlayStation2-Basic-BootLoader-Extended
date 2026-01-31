@@ -13,6 +13,7 @@
 #include "ps1.h"
 #include "OSDInit.h"
 #include "OSDHistory.h"
+#include "game_id.h"
 
 void CleanUp(void);
 
@@ -240,11 +241,19 @@ int PS1DRVBoot(void)
     if (ParseBootCNF() == 0)
         return 4;
 
+    if (!strncmp(ps1drv_boot, "???", 3)) {
+        const char *gid = getPS1GenericTitleID();
+        if (gid) {
+            strncpy(ps1drv_boot, gid, sizeof(ps1drv_boot) - 1);
+            ps1drv_boot[sizeof(ps1drv_boot) - 1] = '\0';
+        }
+    }
+
     args[0] = ps1drv_boot;
     args[1] = ps1drv_ver;
 
+    GameIDHandleDisc(ps1drv_boot, GameIDDiscEnabled());
     CleanUp();
-    UpdatePlayHistory(ps1drv_boot);
 
     SifExitCmd();
 
