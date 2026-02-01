@@ -2,7 +2,7 @@
 <br />
 <p align="center">
   <a href="https://israpps.github.io/PlayStation2-Basic-BootLoader/">
-    <img src="https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended/assets/ps2bble-logo.png" alt="Logo" width="100%" height="auto">
+    <img src="https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended/blob/main/assets/ps2bble-logo.png" alt="Logo" width="100%" height="auto">
   </a>
 
   <p align="center">
@@ -65,6 +65,7 @@ you tell me ;)
 - From saildot4k
   - Thanks to @pcm720 for his Retrogem gameid and PS1 Video Negator code from [OSDMenu](https://github.com/pcm720/OSDMenu)
   - Thanks to @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
+  - Thanks to @nathanneurotic for PS2BBLE 10path, ideas and logo
 
 - From [El Isra](https://israpps.github.io/) (PS2BBL Developer): 
   - Thanks to @SP193 for the OSD initialization libraries, wich serve as the foundation for this project
