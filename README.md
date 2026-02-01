@@ -2,7 +2,7 @@
 <br />
 <p align="center">
   <a href="https://israpps.github.io/PlayStation2-Basic-BootLoader/">
-    <img src="https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended/assets/ps2bble-logo.png" alt="Logo" width="100%" height="auto">
+    <img src="https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended/blob/main/assets/ps2bble-logo.png" alt="Logo" width="100%" height="auto">
   </a>
 
   <p align="center">
@@ -60,14 +60,16 @@ NAME_SQUARE = POPSLOADER
 
 you tell me ;)
 
-## Credits
+## Credits & Thanks
 
 - From saildot4k
-  - Thanks to @pcm720 for his Retrogem gameid and PS1 Video Negator code from [OSDMenu](https://github.com/pcm720/OSDMenu)
-  - Thanks to @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
+  - @pcm720 for his Retrogem gameid and PS1 Video Negator code from [OSDMenu](https://github.com/pcm720/OSDMenu)
+  - @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
+  - @nathanneurotic for PS2BBLE 10path, ideas and logo
+  - @israpps for [PS2BBL](https://github.com/israpps/PlayStation2-Basic-BootLoader/)
 
 - From [El Isra](https://israpps.github.io/) (PS2BBL Developer): 
-  - Thanks to @SP193 for the OSD initialization libraries, wich serve as the foundation for this project
-  - Thanks @asmblur, for encouraging me to make this monster on latest sdk
-  - Thanks to @uyjulian and @fjtrujy for always helping me
+  - @SP193 for the OSD initialization libraries, wich serve as the foundation for this project
+  - @asmblur, for encouraging me to make this monster on latest sdk
+  - @uyjulian and @fjtrujy for always helping me
 
