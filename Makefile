@@ -16,7 +16,7 @@ DEBUG ?= 0
 CHAINLOAD ?= 0 # Only inits the system and boots CHAINLOAD_PATH from the memory card. If specified file doesn't exist, attempts to boot RESCUE.ELF from USB
 CHAINLOAD_PATH ?= "mc?:BOOT/PAYLOAD.ELF"
 PSX ?= 0 # PSX DESR support
-HDD ?= 0 #wether to add internal HDD support
+HDD ?= 0 # Internal HDD support
 MMCE ?= 0
 MX4SIO ?= 0
 PROHBIT_DVD_0100 ?= 0 # prohibit the DVD Players v1.00 and v1.01 from being booted.
@@ -24,6 +24,7 @@ XCDVD_READKEY ?= 0 # Enable the newer sceCdReadKey checks, which are only suppor
 UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
+EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -37,7 +38,7 @@ DUMMY_TIMEZONE = 1
 # ---{ VERSIONING }--- #
 
 VERSION = 1
-SUBVERSION = 2
+SUBVERSION = 3
 PATCHLEVEL = 0
 STATUS = Beta
 
@@ -59,7 +60,7 @@ EE_ASM_DIR = asm/
 
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
-          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o \
+          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o \
           $(EMBEDDED_STUFF) \
 		      $(IOP_OBJS)
 
@@ -67,10 +68,10 @@ EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o
 
 EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
-EE_LDFLAGS += -L$(PS2SDK)/ports/lib
+EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib
 EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
-EE_LIBS += -ldebug -lmc -lpatches
-EE_INCS += -Iinclude -I$(PS2SDK)/ports/include
+EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
+EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
 
 # ---{ CONDITIONS }--- #
@@ -139,6 +140,13 @@ else
   EE_LDFLAGS += -s
   EE_LIBS += -lelf-loader-nocolour
 endif
+
+ifeq ($(EMBED_PS1VN), 1)
+  $(info --- embedding PS1VN)
+  EE_CFLAGS += -DEMBED_PS1VN
+  EE_OBJS += ps1vn_elf.o
+endif
+
 
 ifeq ($(USE_ROM_PADMAN), 1)
   EE_CFLAGS += -DUSE_ROM_PADMAN

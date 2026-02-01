@@ -30,6 +30,17 @@ embed/iop/mmceman.irx:
 	$(info - - Downloading MMCEMAN Driver)
 	wget -q https://github.com/israpps/wLaunchELF_ISR/raw/refs/heads/master/iop/__precompiled/mmceman.irx -O $@
 
+ifeq ($(EMBED_PS1VN), 1)
+PS1VN_DIR := thirdparty/ps1vn
+PS1VN_ELF := $(PS1VN_DIR)/ps1vn.elf
+
+$(PS1VN_ELF):
+	$(MAKE) -C $(PS1VN_DIR)
+
+$(EE_ASM_DIR)ps1vn_elf.c: $(PS1VN_ELF) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps1vn_elf
+endif
+
 # ---{ EMBEDDED RESOURCES }--- #
 $(EE_ASM_DIR)icon_sys_A.c: embed/icons/icon_A.sys | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ icon_sys_A

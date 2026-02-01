@@ -13,6 +13,7 @@
 #include "ps2.h"
 #include "OSDInit.h"
 #include "OSDHistory.h"
+#include "game_id.h"
 #include "debugprintf.h"
 
 void CleanUp(void);
@@ -302,7 +303,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
     DPRINTF("%s updating play history\n", __func__);
     DPRINTF("%s:\n\tline:[%s]\n\tps2discboot:[%s]\n", __func__, line, ps2disc_boot);
-    UpdatePlayHistory(ps2disc_boot);
+    GameIDHandleDisc(ps2disc_boot, GameIDDiscEnabled());
 
     CleanUp();
     SifExitCmd();

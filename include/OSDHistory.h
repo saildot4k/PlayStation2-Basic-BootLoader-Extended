@@ -1,5 +1,6 @@
 #ifndef OSDHISTORY_H
 #define OSDHISTORY_H
+#include <tamtypes.h>
 #define MAX_HISTORY_ENTRIES 21
 
 /*  If the record is valid, the launch count will be >0.
