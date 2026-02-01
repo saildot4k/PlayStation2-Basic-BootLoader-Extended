@@ -23,6 +23,36 @@ A simple PS2 (and PSX-DESR) bootloader that handles system init and ELF programs
 
 It is hosted on [github pages](https://israpps.github.io/PlayStation2-Basic-BootLoader/)
 
+## Config and arguments
+
+Edit `release/SYS-CONF/PS2BBL.INI` (PS2) or `release/SYS-CONF/PSXBBL.INI` (PSX) and set values to `0` or `1`.
+
+### Visual game ID
+- `APP_GAMEID = 1` enables visual game ID for apps/homebrew.
+- `CDROM_DISABLE_GAMEID = 1` disables visual game ID for discs launched via `$CDVD`.
+
+### PS1DRV options (PS1 discs only)
+These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_LOGO`.
+- `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.
+- `PS1DRV_ENABLE_SMOOTH = 1` enables texture smoothing.
+- `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator.
+
+### App arguments
+Use `ARG_<BUTTON>_E? =` lines to pass args to an ELF (see INI examples).
+- `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
+- `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
+You can pass up to 8 args per entry.
+
+### Hotkey names
+Use `NAME_<BUTTON> =` to set the label displayed for a hotkey when `LOGO_DISPLAY = 3` (banner + names).
+Example:
+```
+NAME_SQUARE = POPSLOADER
+```
+
+### Build flag
+- `EMBED_PS1VN=1` (default) embeds PS1VModeNegator; set `0` to load external PS1VN.ELF.
+
 ## Known bugs/issues
 
 you tell me ;)
