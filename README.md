@@ -21,7 +21,7 @@ It is hosted on [github pages](https://israpps.github.io/PlayStation2-Basic-Boot
 
 ## Config and arguments
 
-Edit `release/SYS-CONF/PS2BBL.INI` (PS2) or `release/SYS-CONF/PSXBBL.INI` (PSX) and set values to `0` or `1`.
+Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths are alredy pre-set to align with downloads from [PS2 Homebrw Store](https://ps2homebrewstore.com) This means you should only need to edit your Auto choice and best to set args for NHDDL as needed for the device you are loading ISOS from.
 
 ### Retrogem Visual game ID
 - `APP_GAMEID = 1` enables visual game ID for apps/homebrew up to 11 characters derived from filename or PS1/2 Disc
