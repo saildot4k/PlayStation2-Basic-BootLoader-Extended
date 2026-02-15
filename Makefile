@@ -29,20 +29,7 @@ EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load ex
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
 DEV9_NEED ?= 0    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
-POWERSHELL ?= pwsh
-ifeq ($(shell command -v $(POWERSHELL) 2>/dev/null),)
-  POWERSHELL := powershell
-endif
-SPLASH_FONT_FILE ?= assets/Emotion Engine.otf
-empty :=
-space := $(empty) $(empty)
-SPLASH_FONT_FILE_ESC := $(subst $(space),\$(space),$(SPLASH_FONT_FILE))
-SPLASH_LAYOUT_FILE ?= assets/splash_layout.ini
-SPLASH_FONT_SIZE_PX ?= 18
-SPLASH_FONT_STYLE ?= 0
-SPLASH_FONT_ATLAS_WIDTH ?= 512
 SPLASH_TEXT_MAX_CHARS ?= 40
-SPLASH_FONT_STAMP ?= build/splash_font.stamp
 
 # Related to binary size reduction (it disables some features, please be sure you won't disable something you need)
 KERNEL_NOPATCH = 0
@@ -373,14 +360,15 @@ SPLASH_FONT_C = src/splash_font.c
 SPLASH_FONT_H = include/splash_font.h
 SPLASH_LAYOUT_C = src/splash_layout.c
 
-$(SPLASH_FONT_C) $(SPLASH_FONT_H): FORCE $(SPLASH_FONT_FILE_ESC) tools/gen_splash_font.ps1
-	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File tools/gen_splash_font.ps1 -FontPath "$(SPLASH_FONT_FILE)" -Size $(SPLASH_FONT_SIZE_PX) -Style $(SPLASH_FONT_STYLE) -AtlasWidth $(SPLASH_FONT_ATLAS_WIDTH) -OutC $(SPLASH_FONT_C) -OutH $(SPLASH_FONT_H) -Stamp "$(SPLASH_FONT_STAMP)"
-
-$(SPLASH_LAYOUT_C): $(SPLASH_LAYOUT_FILE) tools/gen_splash_layout.ps1
-	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File tools/gen_splash_layout.ps1 -LayoutPath "$(SPLASH_LAYOUT_FILE)" -OutC $(SPLASH_LAYOUT_C)
-
-.PHONY: FORCE
-FORCE:
+ifeq ($(wildcard $(SPLASH_FONT_C)),)
+$(error Missing $(SPLASH_FONT_C). These files are pre-generated and must be committed.)
+endif
+ifeq ($(wildcard $(SPLASH_FONT_H)),)
+$(error Missing $(SPLASH_FONT_H). These files are pre-generated and must be committed.)
+endif
+ifeq ($(wildcard $(SPLASH_LAYOUT_C)),)
+$(error Missing $(SPLASH_LAYOUT_C). These files are pre-generated and must be committed.)
+endif
 
 # Include makefiles
 include $(PS2SDK)/samples/Makefile.pref
