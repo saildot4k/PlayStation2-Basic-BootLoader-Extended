@@ -229,6 +229,7 @@ int SplashBegin(SplashContext *ctx)
     ctx->img_scale = 1.0f;
     ctx->img_off_x = 0;
     ctx->img_off_y = 0;
+    ctx->needs_present = 0;
     return 0;
 }
 
@@ -236,14 +237,26 @@ void SplashEnd(SplashContext *ctx)
 {
     if (!ctx || !ctx->gs)
         return;
+    if (ctx->needs_present)
+        SplashPresent(ctx);
     GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
-    gsKit_queue_exec(gs);
-    gsKit_finish();
-    gsKit_sync_flip(gs);
     gsKit_deinit_global(gs);
     ctx->gs = NULL;
     splash_font_ready = 0;
     splash_font_tex.Vram = 0;
+}
+
+void SplashPresent(SplashContext *ctx)
+{
+    if (!ctx || !ctx->gs)
+        return;
+    if (!ctx->needs_present)
+        return;
+    GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
+    gsKit_queue_exec(gs);
+    gsKit_finish();
+    gsKit_sync_flip(gs);
+    ctx->needs_present = 0;
 }
 
 void SplashGetScreenSize(const SplashContext *ctx, int *out_w, int *out_h)
@@ -370,15 +383,12 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
                               0,
                               GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
 
-    gsKit_queue_exec(gs);
-    gsKit_finish();
-    gsKit_sync_flip(gs);
-
     ctx->img_w = (int)w;
     ctx->img_h = (int)h;
     ctx->img_scale = scale;
     ctx->img_off_x = x;
     ctx->img_off_y = y;
+    ctx->needs_present = 1;
 
     free(decoded);
     return 0;
@@ -409,6 +419,7 @@ void SplashDrawText(SplashContext *ctx, const char *text, const SplashTextConfig
     int line_chars = 0;
 
     const char *p = text;
+    int drew = 0;
     while (*p) {
         char c = *p++;
         if (c == '\r')
@@ -438,8 +449,11 @@ void SplashDrawText(SplashContext *ctx, const char *text, const SplashTextConfig
                                       glyph->y + glyph->h,
                                       0,
                                       color);
+            drew = 1;
         }
         cursor_x += glyph->xadv;
         line_chars++;
     }
+    if (drew)
+        ctx->needs_present = 1;
 }

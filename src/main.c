@@ -1025,7 +1025,7 @@ int main(int argc, char *argv[])
                         continue;
                     text_cfg.start_x = splash_hotkey_positions[k].x;
                     text_cfg.start_y = splash_hotkey_positions[k].y;
-                    SplashDrawText(&splash_ctx, name, &text_cfg, banner_color);
+                    SplashDrawText(&splash_ctx, name, &text_cfg, 0xffffff);
                 }
             }
             if (splash_active && GLOBCFG.LOGO_DISP > 0) {
@@ -1053,6 +1053,8 @@ int main(int argc, char *argv[])
                 }
 #endif
             }
+            if (splash_active)
+                SplashPresent(&splash_ctx);
             if (!splash_active)
                 SplashEnd(&splash_ctx);
         }

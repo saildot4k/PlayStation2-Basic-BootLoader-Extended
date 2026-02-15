@@ -27,10 +27,12 @@ typedef struct
     float img_scale;
     int img_off_x;
     int img_off_y;
+    int needs_present;
 } SplashContext;
 
 int SplashBegin(SplashContext *ctx);
 void SplashEnd(SplashContext *ctx);
+void SplashPresent(SplashContext *ctx);
 int SplashGetImageForLogoDisplay(int logo_disp, SplashImage *out);
 int SplashDrawImage(SplashContext *ctx, const SplashImage *image);
 void SplashDrawText(SplashContext *ctx, const char *text, const SplashTextConfig *cfg, uint32_t rgb);
