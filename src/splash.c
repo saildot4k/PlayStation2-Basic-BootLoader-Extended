@@ -19,7 +19,7 @@ static uint32_t read_be32(const unsigned char *p)
 
 static int decode_png_rgba(const unsigned char *data,
                            size_t size,
-                           uint32_t **out_rgba,
+                           u32 **out_rgba,
                            unsigned int *out_w,
                            unsigned int *out_h)
 {
@@ -156,7 +156,7 @@ static int decode_png_rgba(const unsigned char *data,
     free(raw);
     free(idat);
 
-    *out_rgba = (uint32_t *)out;
+    *out_rgba = (u32 *)out;
     *out_w = width;
     *out_h = height;
     return 0;
@@ -310,7 +310,7 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
     if (!ctx || !ctx->gs || !image || !image->data || image->size == 0)
         return -1;
 
-    uint32_t *decoded = NULL;
+    u32 *decoded = NULL;
     unsigned int w = 0, h = 0;
     if (decode_png_rgba(image->data, image->size, &decoded, &w, &h) != 0)
         return -1;
