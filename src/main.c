@@ -144,6 +144,8 @@ static const char *get_hotkey_name(int key)
     return "";
 }
 
+extern u8 ROMVER[ROMVER_MAX_LEN];
+
 static void build_console_info_line(char *out, size_t out_size)
 {
     char model_buf[64];
