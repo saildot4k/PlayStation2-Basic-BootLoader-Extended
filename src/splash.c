@@ -208,6 +208,8 @@ int SplashBegin(SplashContext *ctx)
         return -1;
 
     gs->DoubleBuffering = GS_SETTING_ON;
+    gs->ZBuffering = GS_SETTING_OFF;
+    gs->PrimAlphaEnable = GS_SETTING_ON;
     dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
     if (dmaKit_chan_init(DMA_CHANNEL_GIF)) {
         gsKit_deinit_global(gs);
