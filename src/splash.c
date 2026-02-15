@@ -3,6 +3,7 @@
 #include "splash_font.h"
 #include <dmaKit.h>
 #include <gsKit.h>
+#include <kernel.h>
 #include <zlib.h>
 
 #include <stdint.h>
@@ -203,6 +204,7 @@ int SplashBegin(SplashContext *ctx)
     ctx->img_off_y = 0;
     ctx->needs_present = 0;
     ctx->img_pixels = NULL;
+    ctx->img_vram = 0;
     return 0;
 }
 
@@ -219,6 +221,7 @@ void SplashEnd(SplashContext *ctx)
         free(ctx->img_pixels);
         ctx->img_pixels = NULL;
     }
+    ctx->img_vram = 0;
 }
 
 void SplashPresent(SplashContext *ctx)
@@ -228,7 +231,7 @@ void SplashPresent(SplashContext *ctx)
     if (!ctx->needs_present)
         return;
     GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
-    if (ctx->img_pixels) {
+    if (ctx->img_pixels && ctx->img_vram != 0) {
         GSTEXTURE tex;
         memset(&tex, 0, sizeof(tex));
         tex.Width = ctx->img_w;
@@ -236,27 +239,26 @@ void SplashPresent(SplashContext *ctx)
         tex.PSM = GS_PSM_CT32;
         tex.Mem = ctx->img_pixels;
         tex.Filter = GS_FILTER_LINEAR;
-        tex.Vram = gsKit_vram_alloc(gs, gsKit_texture_size(tex.Width, tex.Height, tex.PSM), GSKIT_ALLOC_USERBUFFER);
-        if (tex.Vram != 0) {
-            gsKit_texture_upload(gs, &tex);
-            int draw_w = (int)(ctx->img_w * ctx->img_scale);
-            int draw_h = (int)(ctx->img_h * ctx->img_scale);
-            int x = ctx->img_off_x;
-            int y = ctx->img_off_y;
-            tex.Filter = (ctx->img_scale < 1.0f) ? GS_FILTER_LINEAR : GS_FILTER_NEAREST;
-            gsKit_prim_sprite_texture(gs,
-                                      &tex,
-                                      x,
-                                      y,
-                                      0.0f,
-                                      0.0f,
-                                      x + draw_w,
-                                      y + draw_h,
-                                      ctx->img_w,
-                                      ctx->img_h,
-                                      0,
-                                      GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
-        }
+        tex.Vram = ctx->img_vram;
+        FlushCache(0);
+        gsKit_texture_upload(gs, &tex);
+        int draw_w = (int)(ctx->img_w * ctx->img_scale);
+        int draw_h = (int)(ctx->img_h * ctx->img_scale);
+        int x = ctx->img_off_x;
+        int y = ctx->img_off_y;
+        tex.Filter = (ctx->img_scale < 1.0f) ? GS_FILTER_LINEAR : GS_FILTER_NEAREST;
+        gsKit_prim_sprite_texture(gs,
+                                  &tex,
+                                  x,
+                                  y,
+                                  0.0f,
+                                  0.0f,
+                                  x + draw_w,
+                                  y + draw_h,
+                                  ctx->img_w,
+                                  ctx->img_h,
+                                  0,
+                                  GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
     }
     gsKit_queue_exec(gs);
     gsKit_finish();
@@ -354,8 +356,9 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
         }
     }
 
-    int screen_w = ((GSGLOBAL *)ctx->gs)->Width;
-    int screen_h = ((GSGLOBAL *)ctx->gs)->Height;
+    GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
+    int screen_w = gs->Width;
+    int screen_h = gs->Height;
     float scale_w = (float)screen_w / (float)w;
     float scale_h = (float)screen_h / (float)h;
     float scale = 1.0f;
@@ -374,6 +377,12 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
     ctx->img_off_x = x;
     ctx->img_off_y = y;
     ctx->img_pixels = decoded;
+    ctx->img_vram = gsKit_vram_alloc(gs, gsKit_texture_size((int)w, (int)h, GS_PSM_CT32), GSKIT_ALLOC_USERBUFFER);
+    if (ctx->img_vram == 0) {
+        free(decoded);
+        ctx->img_pixels = NULL;
+        return -1;
+    }
     ctx->needs_present = 1;
 
     return 0;

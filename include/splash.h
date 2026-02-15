@@ -30,6 +30,7 @@ typedef struct
     int img_off_y;
     int needs_present;
     u32 *img_pixels;
+    u32 img_vram;
 } SplashContext;
 
 int SplashBegin(SplashContext *ctx);
