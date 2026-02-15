@@ -335,7 +335,6 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
     gsKit_queue_exec(gs);
     gsKit_finish();
     gsKit_sync_flip(gs);
-    gsKit_queue_reset(gs);
 
     ctx->img_w = (int)w;
     ctx->img_h = (int)h;
