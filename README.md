@@ -60,11 +60,9 @@ NAME_SQUARE = POPSLOADER
 `LOGO_DISPLAY >= 3` shows a full-screen splash template (`PS2BBLE_Splash_Template.png` or `PSXBBLE_Splash_Template.png`)
 and overlays hotkey names/paths.
 
-  Overlay text is build-time only (not in the INI).
-  Font atlas and layout are pre-generated and committed so builds don't require PowerShell.
-  `SPLASH_TEXT_MAX_CHARS` controls per-line truncation.
-  Layout: edit `assets/splash_layout.ini`, then regenerate `src/splash_layout.c` (see `tools/gen_splash_layout.py`).
-  Font changes require regenerating `include/splash_font.h` and `src/splash_font.c` with your preferred tooling.
+  Overlay text is currently disabled while validating splash image rendering.
+  Layout data lives in `assets/splash_layout.ini` and is pre-generated into `src/splash_layout.c` (see `tools/gen_splash_layout.py`).
+  `SPLASH_TEXT_MAX_CHARS` controls per-line truncation when text rendering is re-enabled.
 Use `HOTKEY_<KEY> = X,Y` or `HOTKEY_<KEY>_X` / `HOTKEY_<KEY>_Y`.
 Use `CONSOLE_INFO` and `CONSOLE_TEMP` for console lines.
 Coordinates are in splash image pixel space (640x480 for the template, 300x62 for the transparent logo).

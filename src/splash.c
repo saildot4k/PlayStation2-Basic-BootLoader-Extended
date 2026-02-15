@@ -1,7 +1,5 @@
 #include "splash.h"
 #include "splash_assets.h"
-#include "splash_font.h"
-
 #include <dmaKit.h>
 #include <gsKit.h>
 #include <zlib.h>
@@ -162,41 +160,6 @@ static int decode_png_rgba(const unsigned char *data,
     return 0;
 }
 
-static int splash_font_ready = 0;
-static GSTEXTURE splash_font_tex;
-
-static const SplashGlyph *get_splash_glyph(char c)
-{
-    if (c < SPLASH_FONT_FIRST || c > SPLASH_FONT_LAST)
-        c = '?';
-    return &splash_font_glyphs[(int)(c - SPLASH_FONT_FIRST)];
-}
-
-static int ensure_splash_font(SplashContext *ctx)
-{
-    if (splash_font_ready)
-        return 0;
-    if (!ctx || !ctx->gs)
-        return -1;
-
-    GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
-    memset(&splash_font_tex, 0, sizeof(splash_font_tex));
-    splash_font_tex.Width = splash_font_atlas_w;
-    splash_font_tex.Height = splash_font_atlas_h;
-    splash_font_tex.PSM = GS_PSM_CT32;
-    splash_font_tex.Mem = (void *)splash_font_rgba;
-    splash_font_tex.Filter = GS_FILTER_NEAREST;
-    splash_font_tex.Vram = gsKit_vram_alloc(gs,
-                                            gsKit_texture_size(splash_font_tex.Width, splash_font_tex.Height, splash_font_tex.PSM),
-                                            GSKIT_ALLOC_USERBUFFER);
-    if (splash_font_tex.Vram == 0)
-        return -1;
-
-    gsKit_texture_upload(gs, &splash_font_tex);
-    splash_font_ready = 1;
-    return 0;
-}
-
 int SplashBegin(SplashContext *ctx)
 {
     if (!ctx)
@@ -242,8 +205,6 @@ void SplashEnd(SplashContext *ctx)
     gsKit_sync_flip(gs);
     gsKit_deinit_global(gs);
     ctx->gs = NULL;
-    splash_font_ready = 0;
-    splash_font_tex.Vram = 0;
 }
 
 void SplashGetScreenSize(const SplashContext *ctx, int *out_w, int *out_h)
@@ -372,60 +333,8 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
 
 void SplashDrawText(SplashContext *ctx, const char *text, const SplashTextConfig *cfg, uint32_t rgb)
 {
-    if (!ctx || !ctx->gs || !text || !cfg)
-        return;
-
-    int max_chars = cfg->max_chars;
-    int line_height = splash_font_line_height;
-
-    if (ensure_splash_font(ctx) != 0)
-        return;
-
-    uint8_t r = (rgb >> 16) & 0xFF;
-    uint8_t g = (rgb >> 8) & 0xFF;
-    uint8_t b = rgb & 0xFF;
-    uint32_t color = GS_SETREG_RGBA(r, g, b, 0xFF);
-
-    int start_x = cfg->start_x;
-    int start_y = cfg->start_y;
-    SplashTransformPoint(ctx, start_x, start_y, &start_x, &start_y, cfg->coords_are_image);
-
-    int cursor_x = start_x;
-    int cursor_y = start_y + splash_font_baseline;
-    int line_chars = 0;
-
-    const char *p = text;
-    while (*p) {
-        char c = *p++;
-        if (c == '\r')
-            continue;
-        if (c == '\n') {
-            cursor_x = start_x;
-            cursor_y += line_height;
-            line_chars = 0;
-            continue;
-        }
-        if (max_chars > 0 && line_chars >= max_chars)
-            continue;
-
-        const SplashGlyph *glyph = get_splash_glyph(c);
-        if (glyph->w > 0 && glyph->h > 0) {
-            int gx = cursor_x + glyph->xoff;
-            int gy = cursor_y + glyph->yoff;
-            gsKit_prim_sprite_texture((GSGLOBAL *)ctx->gs,
-                                      &splash_font_tex,
-                                      gx,
-                                      gy,
-                                      glyph->x,
-                                      glyph->y,
-                                      gx + glyph->w,
-                                      gy + glyph->h,
-                                      glyph->x + glyph->w,
-                                      glyph->y + glyph->h,
-                                      0,
-                                      color);
-        }
-        cursor_x += glyph->xadv;
-        line_chars++;
-    }
+    (void)ctx;
+    (void)text;
+    (void)cfg;
+    (void)rgb;
 }
