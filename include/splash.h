@@ -2,6 +2,7 @@
 #define SPLASH_H
 
 #include <stdint.h>
+#include <tamtypes.h>
 
 typedef struct
 {
@@ -28,6 +29,7 @@ typedef struct
     int img_off_x;
     int img_off_y;
     int needs_present;
+    u32 *img_pixels;
 } SplashContext;
 
 int SplashBegin(SplashContext *ctx);

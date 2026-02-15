@@ -161,39 +161,11 @@ static int decode_png_rgba(const unsigned char *data,
     return 0;
 }
 
-static int splash_font_ready = 0;
-static GSTEXTURE splash_font_tex;
-
 static const SplashGlyph *get_splash_glyph(char c)
 {
     if (c < SPLASH_FONT_FIRST || c > SPLASH_FONT_LAST)
         c = '?';
     return &splash_font_glyphs[(int)(c - SPLASH_FONT_FIRST)];
-}
-
-static int ensure_splash_font(SplashContext *ctx)
-{
-    if (splash_font_ready)
-        return 0;
-    if (!ctx || !ctx->gs)
-        return -1;
-
-    GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
-    memset(&splash_font_tex, 0, sizeof(splash_font_tex));
-    splash_font_tex.Width = splash_font_atlas_w;
-    splash_font_tex.Height = splash_font_atlas_h;
-    splash_font_tex.PSM = GS_PSM_CT32;
-    splash_font_tex.Mem = (void *)splash_font_rgba;
-    splash_font_tex.Filter = GS_FILTER_NEAREST;
-    splash_font_tex.Vram = gsKit_vram_alloc(gs,
-                                            gsKit_texture_size(splash_font_tex.Width, splash_font_tex.Height, splash_font_tex.PSM),
-                                            GSKIT_ALLOC_USERBUFFER);
-    if (splash_font_tex.Vram == 0)
-        return -1;
-
-    gsKit_texture_upload(gs, &splash_font_tex);
-    splash_font_ready = 1;
-    return 0;
 }
 
 int SplashBegin(SplashContext *ctx)
@@ -230,6 +202,7 @@ int SplashBegin(SplashContext *ctx)
     ctx->img_off_x = 0;
     ctx->img_off_y = 0;
     ctx->needs_present = 0;
+    ctx->img_pixels = NULL;
     return 0;
 }
 
@@ -242,8 +215,10 @@ void SplashEnd(SplashContext *ctx)
     GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
     gsKit_deinit_global(gs);
     ctx->gs = NULL;
-    splash_font_ready = 0;
-    splash_font_tex.Vram = 0;
+    if (ctx->img_pixels) {
+        free(ctx->img_pixels);
+        ctx->img_pixels = NULL;
+    }
 }
 
 void SplashPresent(SplashContext *ctx)
@@ -253,6 +228,38 @@ void SplashPresent(SplashContext *ctx)
     if (!ctx->needs_present)
         return;
     GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
+    if (ctx->img_pixels) {
+        GSTEXTURE tex;
+        memset(&tex, 0, sizeof(tex));
+        tex.Width = ctx->img_w;
+        tex.Height = ctx->img_h;
+        tex.PSM = GS_PSM_CT32;
+        tex.Mem = ctx->img_pixels;
+        tex.Filter = GS_FILTER_LINEAR;
+        tex.Vram = gsKit_vram_alloc(gs, gsKit_texture_size(tex.Width, tex.Height, tex.PSM), GSKIT_ALLOC_USERBUFFER);
+        if (tex.Vram != 0) {
+            gsKit_texture_upload(gs, &tex);
+            int draw_w = (int)(ctx->img_w * ctx->img_scale);
+            int draw_h = (int)(ctx->img_h * ctx->img_scale);
+            int x = ctx->img_off_x;
+            int y = ctx->img_off_y;
+            tex.Filter = (ctx->img_scale < 1.0f) ? GS_FILTER_LINEAR : GS_FILTER_NEAREST;
+            gsKit_prim_sprite_texture(gs,
+                                      &tex,
+                                      x,
+                                      y,
+                                      0.0f,
+                                      0.0f,
+                                      x + draw_w,
+                                      y + draw_h,
+                                      ctx->img_w,
+                                      ctx->img_h,
+                                      0,
+                                      GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
+        }
+        free(ctx->img_pixels);
+        ctx->img_pixels = NULL;
+    }
     gsKit_queue_exec(gs);
     gsKit_finish();
     gsKit_sync_flip(gs);
@@ -325,6 +332,11 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
     if (!ctx || !ctx->gs || !image || !image->data || image->size == 0)
         return -1;
 
+    if (ctx->img_pixels) {
+        free(ctx->img_pixels);
+        ctx->img_pixels = NULL;
+    }
+
     u32 *decoded = NULL;
     unsigned int w = 0, h = 0;
     if (decode_png_rgba(image->data, image->size, &decoded, &w, &h) != 0)
@@ -340,23 +352,8 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
         }
     }
 
-    GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
-    GSTEXTURE tex;
-    memset(&tex, 0, sizeof(tex));
-    tex.Width = w;
-    tex.Height = h;
-    tex.PSM = GS_PSM_CT32;
-    tex.Mem = decoded;
-    tex.Filter = GS_FILTER_LINEAR;
-    tex.Vram = gsKit_vram_alloc(gs, gsKit_texture_size(w, h, tex.PSM), GSKIT_ALLOC_USERBUFFER);
-    if (tex.Vram == 0) {
-        free(decoded);
-        return -1;
-    }
-    gsKit_texture_upload(gs, &tex);
-
-    int screen_w = gs->Width;
-    int screen_h = gs->Height;
+    int screen_w = ((GSGLOBAL *)ctx->gs)->Width;
+    int screen_h = ((GSGLOBAL *)ctx->gs)->Height;
     float scale_w = (float)screen_w / (float)w;
     float scale_h = (float)screen_h / (float)h;
     float scale = 1.0f;
@@ -369,28 +366,14 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
     int x = (screen_w - draw_w) / 2;
     int y = (screen_h - draw_h) / 2;
 
-    tex.Filter = (scale < 1.0f) ? GS_FILTER_LINEAR : GS_FILTER_NEAREST;
-    gsKit_prim_sprite_texture(gs,
-                              &tex,
-                              x,
-                              y,
-                              0.0f,
-                              0.0f,
-                              x + draw_w,
-                              y + draw_h,
-                              w,
-                              h,
-                              0,
-                              GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
-
     ctx->img_w = (int)w;
     ctx->img_h = (int)h;
     ctx->img_scale = scale;
     ctx->img_off_x = x;
     ctx->img_off_y = y;
+    ctx->img_pixels = decoded;
     ctx->needs_present = 1;
 
-    free(decoded);
     return 0;
 }
 
@@ -399,27 +382,30 @@ void SplashDrawText(SplashContext *ctx, const char *text, const SplashTextConfig
     if (!ctx || !ctx->gs || !text || !cfg)
         return;
 
+    if (!ctx->img_pixels)
+        return;
+
     int max_chars = cfg->max_chars;
     int line_height = splash_font_line_height;
-
-    if (ensure_splash_font(ctx) != 0)
-        return;
 
     uint8_t r = (rgb >> 16) & 0xFF;
     uint8_t g = (rgb >> 8) & 0xFF;
     uint8_t b = rgb & 0xFF;
-    uint32_t color = GS_SETREG_RGBA(r, g, b, 0xFF);
 
     int start_x = cfg->start_x;
     int start_y = cfg->start_y;
-    SplashTransformPoint(ctx, start_x, start_y, &start_x, &start_y, cfg->coords_are_image);
+    if (cfg->coords_are_image) {
+        // Already in image space.
+    } else if (ctx->img_scale > 0.0f) {
+        start_x = (int)((start_x - ctx->img_off_x) / ctx->img_scale);
+        start_y = (int)((start_y - ctx->img_off_y) / ctx->img_scale);
+    }
 
     int cursor_x = start_x;
     int cursor_y = start_y + splash_font_baseline;
     int line_chars = 0;
 
     const char *p = text;
-    int drew = 0;
     while (*p) {
         char c = *p++;
         if (c == '\r')
@@ -437,23 +423,40 @@ void SplashDrawText(SplashContext *ctx, const char *text, const SplashTextConfig
         if (glyph->w > 0 && glyph->h > 0) {
             int gx = cursor_x + glyph->xoff;
             int gy = cursor_y + glyph->yoff;
-            gsKit_prim_sprite_texture((GSGLOBAL *)ctx->gs,
-                                      &splash_font_tex,
-                                      gx,
-                                      gy,
-                                      glyph->x,
-                                      glyph->y,
-                                      gx + glyph->w,
-                                      gy + glyph->h,
-                                      glyph->x + glyph->w,
-                                      glyph->y + glyph->h,
-                                      0,
-                                      color);
-            drew = 1;
+            int px, py;
+            for (py = 0; py < glyph->h; py++) {
+                int dy = gy + py;
+                if (dy < 0 || dy >= ctx->img_h)
+                    continue;
+                for (px = 0; px < glyph->w; px++) {
+                    int dx = gx + px;
+                    if (dx < 0 || dx >= ctx->img_w)
+                        continue;
+                    int atlas_x = glyph->x + px;
+                    int atlas_y = glyph->y + py;
+                    size_t atlas_idx = ((size_t)atlas_y * (size_t)splash_font_atlas_w + (size_t)atlas_x) * 4;
+                    uint8_t a = splash_font_rgba[atlas_idx + 3];
+                    if (a == 0)
+                        continue;
+                    size_t dst_idx = ((size_t)dy * (size_t)ctx->img_w + (size_t)dx) * 4;
+                    uint8_t *dst = (uint8_t *)ctx->img_pixels + dst_idx;
+                    if (a == 255) {
+                        dst[0] = r;
+                        dst[1] = g;
+                        dst[2] = b;
+                        dst[3] = 0xFF;
+                    } else {
+                        uint8_t inv = (uint8_t)(255 - a);
+                        dst[0] = (uint8_t)((r * a + dst[0] * inv + 127) / 255);
+                        dst[1] = (uint8_t)((g * a + dst[1] * inv + 127) / 255);
+                        dst[2] = (uint8_t)((b * a + dst[2] * inv + 127) / 255);
+                        dst[3] = 0xFF;
+                    }
+                }
+            }
         }
         cursor_x += glyph->xadv;
         line_chars++;
     }
-    if (drew)
-        ctx->needs_present = 1;
+    ctx->needs_present = 1;
 }
