@@ -173,7 +173,7 @@ int SplashBegin(SplashContext *ctx)
     // Single buffer to maximize VRAM for full-screen textures.
     gs->DoubleBuffering = GS_SETTING_OFF;
     gs->ZBuffering = GS_SETTING_OFF;
-    gs->PrimAlphaEnable = GS_SETTING_ON;
+    gs->PrimAlphaEnable = GS_SETTING_OFF;
     dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
     if (dmaKit_chan_init(DMA_CHANNEL_GIF)) {
         gsKit_deinit_global(gs);
@@ -278,6 +278,16 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
     unsigned int w = 0, h = 0;
     if (decode_png_rgba(image->data, image->size, &decoded, &w, &h) != 0)
         return -1;
+
+    // Force opaque since splash images don't need alpha.
+    {
+        size_t pixels = (size_t)w * (size_t)h;
+        unsigned char *rgba = (unsigned char *)decoded;
+        size_t i;
+        for (i = 0; i < pixels; i++) {
+            rgba[i * 4 + 3] = 0xFF;
+        }
+    }
 
     GSGLOBAL *gs = (GSGLOBAL *)ctx->gs;
     GSTEXTURE tex;
