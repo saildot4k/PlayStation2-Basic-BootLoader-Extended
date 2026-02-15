@@ -5,7 +5,10 @@
 #define MAX_ARGS_PER_ENTRY 8        // max number of ARG_* entries per LK_* slot
 #define MAX_LEN     64              // max length for hotkey display names (after formatting)
 #define CNF_LEN_MAX 20480           // 20kb should be enough for massive CNF's
-#define LOGO_DISPLAY_DEFAULT 5      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=banner+NAME, 4=banner+filename, 5=banner+path
+#define LOGO_DISPLAY_DEFAULT 5      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=splash+NAME, 4=splash+filename, 5=splash+path
+#ifndef SPLASH_TEXT_MAX_CHARS
+#define SPLASH_TEXT_MAX_CHARS 40
+#endif
 #define DEFDELAY 6000               // default ammount of time this program will wait for a key press in ms/
 #define CDROM_DISABLE_GAMEID_DEFAULT 0
 #define PS1DRV_ENABLE_FAST_DEFAULT 0

@@ -55,6 +55,23 @@ Example:
 NAME_SQUARE = POPSLOADER
 ```
 
+### Splash images
+`LOGO_DISPLAY = 2` shows a transparent logo image (`transparent_ps2bble 300x62.png` or `transparent_psxbble 300x62.png`).
+`LOGO_DISPLAY >= 3` shows a full-screen splash template (`PS2BBLE_Splash_Template.png` or `PSXBBLE_Splash_Template.png`)
+and overlays hotkey names/paths.
+
+Overlay text is build-time only (not in the INI).
+Font is rasterized from `assets/Emotion Engine.otf` at build time.
+Make variables:
+- `SPLASH_FONT_SIZE_PX` (pixel height)
+- `SPLASH_FONT_STYLE` (`0` = normal, `1` = bold)
+- `SPLASH_FONT_ATLAS_WIDTH`
+- `SPLASH_TEXT_MAX_CHARS`
+Layout: edit `assets/splash_layout.ini` to place each hotkey and the console info.
+Use `HOTKEY_<KEY> = X,Y` or `HOTKEY_<KEY>_X` / `HOTKEY_<KEY>_Y`.
+Use `CONSOLE_INFO` and `CONSOLE_TEMP` for console lines.
+Coordinates are in splash image pixel space (640x480 for the template, 300x62 for the transparent logo).
+
 
 ## Known bugs/issues
 

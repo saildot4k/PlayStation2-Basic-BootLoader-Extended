@@ -1,5 +1,6 @@
 #include "main.h"
 #include "game_id.h"
+#include "splash_layout.h"
 
 // Whitespace/CRLF trimming for config values (in-place)
 // Returns a pointer to the first non-whitespace character (may be inside the original buffer).
@@ -96,7 +97,7 @@ typedef struct
     int DELAY;
     int OSDHISTORY_READ;
     int TRAYEJECT;
-    int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names, 4=banner+filename, 5=banner+full path
+    int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=splash+names, 4=splash+filename, 5=splash+full path
     int CDROM_DISABLE_GAMEID;
     int APP_GAMEID;
     int PS1DRV_ENABLE_FAST;
@@ -142,6 +143,48 @@ static const char *get_hotkey_name(int key)
         return name;
     return "";
 }
+
+static void build_console_info_line(char *out, size_t out_size)
+{
+    char model_buf[64];
+    char ps1_buf[64];
+    char dvd_buf[64];
+    char src_buf[32];
+    char rom_raw[ROMVER_MAX_LEN + 1];
+    char rom_buf[32];
+    char rom_fmt[8];
+    const char *model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
+    const char *ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
+    const char *dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
+    const char *source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
+
+    if (!out || out_size == 0)
+        return;
+
+    memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
+    rom_raw[ROMVER_MAX_LEN] = '\0';
+    {
+        const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
+        char major = (romver[1] != '\0') ? romver[1] : '?';
+        char minor1 = (romver[2] != '\0') ? romver[2] : '?';
+        char minor2 = (romver[3] != '\0') ? romver[3] : '?';
+        char region = (romver[4] != '\0') ? romver[4] : '?';
+        snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
+    }
+
+    snprintf(out,
+             out_size,
+             "  MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s  CFG SRC: %s",
+             model,
+             rom_fmt,
+             dvdver,
+             ps1ver,
+             source);
+}
+
+#ifndef NO_TEMP_DISP
+static int build_temperature_line(char *buf, size_t len);
+#endif
 
 static void PrintHotkeyNamesTemplate(const char *tmpl)
 {
@@ -955,60 +998,93 @@ int main(int argc, char *argv[])
     }
     // Stores last key during DELAY msec
     scr_clear();
-    if (GLOBCFG.LOGO_DISP >= 3) {
-        scr_setfontcolor(banner_color);
-        scr_printf("\n%s", BANNER_HOTKEYS);
-        scr_setfontcolor(0xffffff);
-        if (GLOBCFG.HOTKEY_DISPLAY == 3) {
-            if (config_source == SOURCE_INVALID) {
-                scr_setfontcolor(0x00ffff);
-                scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER_NOCONFIG);
-                scr_setfontcolor(0xffffff);
-            } else {
-                scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER);
+    int splash_ok = 0;
+    if (GLOBCFG.LOGO_DISP > 1) {
+        SplashContext splash_ctx;
+        SplashImage splash_img;
+        if (SplashBegin(&splash_ctx) == 0) {
+            if (SplashGetImageForLogoDisplay(GLOBCFG.LOGO_DISP, &splash_img) == 0 &&
+                SplashDrawImage(&splash_ctx, &splash_img) == 0) {
+                splash_ok = 1;
             }
-        }
-        PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : BANNER_HOTKEYS_NAMES);
-    } else if (GLOBCFG.LOGO_DISP > 1) {
-        scr_setfontcolor(banner_color);
-        scr_printf("\n\n\n\n%s", BANNER);
-    }
-    scr_setfontcolor(0xffffff);
-    if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP < 3)
-        scr_printf(BANNER_FOOTER);
-    if (GLOBCFG.LOGO_DISP > 0) {
-        char model_buf[64];
-        char ps1_buf[64];
-        char dvd_buf[64];
-        char src_buf[32];
-        char rom_raw[ROMVER_MAX_LEN + 1];
-        char rom_buf[32];
-        char rom_fmt[8];
-        const char *model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
-        const char *ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
-        const char *dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
-        const char *source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
-
-        memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
-        rom_raw[ROMVER_MAX_LEN] = '\0';
-        {
-            const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
-            char major = (romver[1] != '\0') ? romver[1] : '?';
-            char minor1 = (romver[2] != '\0') ? romver[2] : '?';
-            char minor2 = (romver[3] != '\0') ? romver[3] : '?';
-            char region = (romver[4] != '\0') ? romver[4] : '?';
-            snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
-        }
-
-        scr_printf("\n  MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s  CFG SRC: %s \n",
-                    model,
-                    rom_fmt,
-                    dvdver,
-                    ps1ver,
-                    source);
+            if (splash_ok && GLOBCFG.LOGO_DISP >= 3) {
+                int k;
+                SplashTextConfig text_cfg = {
+                    .start_x = 0,
+                    .start_y = 0,
+                    .max_chars = SPLASH_TEXT_MAX_CHARS,
+                    .coords_are_image = 1,
+                };
+                for (k = 0; k < 17; k++) {
+                    const char *name = get_hotkey_name(k);
+                    if (name == NULL || *name == '\0')
+                        continue;
+                    if (splash_hotkey_positions[k].x < 0 || splash_hotkey_positions[k].y < 0)
+                        continue;
+                    text_cfg.start_x = splash_hotkey_positions[k].x;
+                    text_cfg.start_y = splash_hotkey_positions[k].y;
+                    SplashDrawText(&splash_ctx, name, &text_cfg, banner_color);
+                }
+            }
+            if (splash_ok && GLOBCFG.LOGO_DISP > 0) {
+                char info_text[256];
+                char temp_text[32];
+                build_console_info_line(info_text, sizeof(info_text));
+                SplashTextConfig info_cfg = {
+                    .start_x = splash_console_info_pos.x,
+                    .start_y = splash_console_info_pos.y,
+                    .max_chars = 0,
+                    .coords_are_image = 1,
+                };
+                if (info_cfg.start_x >= 0 && info_cfg.start_y >= 0)
+                    SplashDrawText(&splash_ctx, info_text, &info_cfg, 0xffffff);
 #ifndef NO_TEMP_DISP
-        PrintTemperature();
+                if (build_temperature_line(temp_text, sizeof(temp_text))) {
+                    SplashTextConfig temp_cfg = {
+                        .start_x = splash_console_temp_pos.x,
+                        .start_y = splash_console_temp_pos.y,
+                        .max_chars = 0,
+                        .coords_are_image = 1,
+                    };
+                    if (temp_cfg.start_x >= 0 && temp_cfg.start_y >= 0)
+                        SplashDrawText(&splash_ctx, temp_text, &temp_cfg, 0xffffff);
+                }
 #endif
+            }
+            SplashEnd(&splash_ctx);
+        }
+    }
+
+    if (!splash_ok) {
+        if (GLOBCFG.LOGO_DISP >= 3) {
+            scr_setfontcolor(banner_color);
+            scr_printf("\n%s", BANNER_HOTKEYS);
+            scr_setfontcolor(0xffffff);
+            if (GLOBCFG.HOTKEY_DISPLAY == 3) {
+                if (config_source == SOURCE_INVALID) {
+                    scr_setfontcolor(0x00ffff);
+                    scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER_NOCONFIG);
+                    scr_setfontcolor(0xffffff);
+                } else {
+                    scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER);
+                }
+            }
+            PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : BANNER_HOTKEYS_NAMES);
+        } else if (GLOBCFG.LOGO_DISP > 1) {
+            scr_setfontcolor(banner_color);
+            scr_printf("\n\n\n\n%s", BANNER);
+        }
+        scr_setfontcolor(0xffffff);
+        if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP < 3)
+            scr_printf(BANNER_FOOTER);
+        if (GLOBCFG.LOGO_DISP > 0) {
+            char info_line[256];
+            build_console_info_line(info_line, sizeof(info_line));
+            scr_printf("\n%s\n", info_line);
+#ifndef NO_TEMP_DISP
+            PrintTemperature();
+#endif
+        }
     }
     DPRINTF("Timer starts!\n");
     TimerInit();
@@ -1789,11 +1865,14 @@ void runOSDNoUpdate(void)
 }
 
 #ifndef NO_TEMP_DISP
-void PrintTemperature()
+static int build_temperature_line(char *buf, size_t len)
 {
     // Based on PS2Ident libxcdvd from SP193
     unsigned char in_buffer[1], out_buffer[16];
     int stat = 0;
+
+    if (!buf || len == 0)
+        return 0;
 
     memset(&out_buffer, 0, 16);
 
@@ -1804,10 +1883,18 @@ void PrintTemperature()
 
     if (!stat) {
         unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
-        scr_printf("  Temp: %02d.%02dC\n", (temp - (temp % 128)) / 128, (temp % 128));
-    } else {
-        DPRINTF("Failed 0x03 0xEF command. stat=%x \n", stat);
+        snprintf(buf, len, "  Temp: %02d.%02dC", (temp - (temp % 128)) / 128, (temp % 128));
+        return 1;
     }
+    DPRINTF("Failed 0x03 0xEF command. stat=%x \n", stat);
+    return 0;
+}
+
+void PrintTemperature()
+{
+    char line[32];
+    if (build_temperature_line(line, sizeof(line)))
+        scr_printf("%s\n", line);
 }
 #endif
 

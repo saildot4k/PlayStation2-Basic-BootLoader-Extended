@@ -50,3 +50,18 @@ $(EE_ASM_DIR)icon_sys_J.c: embed/icons/icon_J.sys | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)icon_sys_C.c: embed/icons/icon_C.sys | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ icon_sys_C
+
+$(EE_ASM_DIR)ps2bble_splash_template_png.c: assets/PS2BBLE_Splash_Template.png | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps2bble_splash_template_png
+
+$(EE_ASM_DIR)psxbble_splash_template_png.c: assets/PSXBBLE_Splash_Template.png | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ psxbble_splash_template_png
+
+TRANSPARENT_PS2_SRC = assets/transparent_ps2bble\ 300x62.png
+TRANSPARENT_PSX_SRC = assets/transparent_psxbble\ 300x62.png
+
+$(EE_ASM_DIR)transparent_ps2bble_png.c: $(TRANSPARENT_PS2_SRC) | $(EE_ASM_DIR)
+	$(BIN2S) "$<" $@ transparent_ps2bble_png
+
+$(EE_ASM_DIR)transparent_psxbble_png.c: $(TRANSPARENT_PSX_SRC) | $(EE_ASM_DIR)
+	$(BIN2S) "$<" $@ transparent_psxbble_png

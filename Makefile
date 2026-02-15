@@ -29,6 +29,15 @@ EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load ex
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
 DEV9_NEED ?= 0    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
+POWERSHELL ?= pwsh
+SPLASH_FONT_FILE ?= assets/Emotion Engine.otf
+SPLASH_FONT_FILE_ESC := $(subst  ,\ ,$(SPLASH_FONT_FILE))
+SPLASH_LAYOUT_FILE ?= assets/splash_layout.ini
+SPLASH_FONT_SIZE_PX ?= 18
+SPLASH_FONT_STYLE ?= 0
+SPLASH_FONT_ATLAS_WIDTH ?= 512
+SPLASH_TEXT_MAX_CHARS ?= 40
+SPLASH_FONT_STAMP ?= build/splash_font.stamp
 
 # Related to binary size reduction (it disables some features, please be sure you won't disable something you need)
 KERNEL_NOPATCH = 0
@@ -60,17 +69,20 @@ EE_ASM_DIR = asm/
 
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
-          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o \
+          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash.o splash_font.o splash_layout.o \
           $(EMBEDDED_STUFF) \
+          $(SPLASH_ASSETS) \
 		      $(IOP_OBJS)
 
 EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o
+SPLASH_ASSETS = ps2bble_splash_template_png.o psxbble_splash_template_png.o transparent_ps2bble_png.o transparent_psxbble_png.o
 
 EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
+EE_CFLAGS += -DSPLASH_TEXT_MAX_CHARS=$(SPLASH_TEXT_MAX_CHARS)
 EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib
 EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
-EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
+EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit -lz
 EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
 
@@ -326,6 +338,8 @@ ifneq ($(VERBOSE),1)
 endif
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
+$(EE_OBJS_DIR)splash.o: $(SPLASH_FONT_H)
+
 $(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.c | $(EE_OBJS_DIR)
 ifneq ($(VERBOSE),1)
 	@echo "  - $@"
@@ -348,6 +362,20 @@ kelf: $(EE_BIN_ENCRYPTED) # alias of KELF creation
 
 banner:
 	@echo "$$HEADER"
+
+# ---{ SPLASH ASSETS }--- #
+SPLASH_FONT_C = src/splash_font.c
+SPLASH_FONT_H = include/splash_font.h
+SPLASH_LAYOUT_C = src/splash_layout.c
+
+$(SPLASH_FONT_C) $(SPLASH_FONT_H): FORCE $(SPLASH_FONT_FILE_ESC) tools/gen_splash_font.ps1
+	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File tools/gen_splash_font.ps1 -FontPath "$(SPLASH_FONT_FILE)" -Size $(SPLASH_FONT_SIZE_PX) -Style $(SPLASH_FONT_STYLE) -AtlasWidth $(SPLASH_FONT_ATLAS_WIDTH) -OutC $(SPLASH_FONT_C) -OutH $(SPLASH_FONT_H) -Stamp "$(SPLASH_FONT_STAMP)"
+
+$(SPLASH_LAYOUT_C): $(SPLASH_LAYOUT_FILE) tools/gen_splash_layout.ps1
+	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File tools/gen_splash_layout.ps1 -LayoutPath "$(SPLASH_LAYOUT_FILE)" -OutC $(SPLASH_LAYOUT_C)
+
+.PHONY: FORCE
+FORCE:
 
 # Include makefiles
 include $(PS2SDK)/samples/Makefile.pref

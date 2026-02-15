@@ -49,6 +49,10 @@ jobs:
             echo "OUT_ROOT=RETROGEM/" >> $GITHUB_ENV
             echo "ARTIFACT_DIR=RETROGEM" >> $GITHUB_ENV
             echo "USE_RELEASE=0" >> $GITHUB_ENV
+          elif [ "${GITHUB_REF_NAME}" = "add-advanced-osdmenu-launcher-args" ]; then
+            echo "OUT_ROOT=release/" >> $GITHUB_ENV
+            echo "ARTIFACT_DIR=release" >> $GITHUB_ENV
+            echo "USE_RELEASE=0" >> $GITHUB_ENV
           else
             echo "OUT_ROOT=" >> $GITHUB_ENV
             echo "ARTIFACT_DIR=release" >> $GITHUB_ENV

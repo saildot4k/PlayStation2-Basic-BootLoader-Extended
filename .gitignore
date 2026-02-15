@@ -16,6 +16,7 @@
 
 # folders where object files and embedded stuff is dumped
 asm/
+build/
 
 #other non desired files
 *.7z
