@@ -1000,16 +1000,16 @@ int main(int argc, char *argv[])
     }
     // Stores last key during DELAY msec
     scr_clear();
-    int splash_ok = 0;
+    int splash_active = 0;
+    SplashContext splash_ctx;
     if (GLOBCFG.LOGO_DISP > 1) {
-        SplashContext splash_ctx;
         SplashImage splash_img;
         if (SplashBegin(&splash_ctx) == 0) {
             if (SplashGetImageForLogoDisplay(GLOBCFG.LOGO_DISP, &splash_img) == 0 &&
                 SplashDrawImage(&splash_ctx, &splash_img) == 0) {
-                splash_ok = 1;
+                splash_active = 1;
             }
-            if (splash_ok && GLOBCFG.LOGO_DISP >= 3) {
+            if (splash_active && GLOBCFG.LOGO_DISP >= 3) {
                 int k;
                 SplashTextConfig text_cfg = {
                     .start_x = 0,
@@ -1028,7 +1028,7 @@ int main(int argc, char *argv[])
                     SplashDrawText(&splash_ctx, name, &text_cfg, banner_color);
                 }
             }
-            if (splash_ok && GLOBCFG.LOGO_DISP > 0) {
+            if (splash_active && GLOBCFG.LOGO_DISP > 0) {
                 char info_text[256];
                 char temp_text[32];
                 build_console_info_line(info_text, sizeof(info_text));
@@ -1053,11 +1053,12 @@ int main(int argc, char *argv[])
                 }
 #endif
             }
-            SplashEnd(&splash_ctx);
+            if (!splash_active)
+                SplashEnd(&splash_ctx);
         }
     }
 
-    if (!splash_ok) {
+    if (!splash_active) {
         if (GLOBCFG.LOGO_DISP >= 3) {
             scr_setfontcolor(banner_color);
             scr_printf("\n%s", BANNER_HOTKEYS);
@@ -1098,6 +1099,10 @@ int main(int argc, char *argv[])
         PAD = ReadCombinedPadStatus_raw();
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
             if (PAD & button) {
+                if (splash_active) {
+                    SplashEnd(&splash_ctx);
+                    splash_active = 0;
+                }
                 DPRINTF("PAD detected\n");
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
@@ -1151,6 +1156,10 @@ int main(int argc, char *argv[])
             }
             button = button << 1; // sll of 1 cleared bit to move to next pad button
         }
+    }
+    if (splash_active) {
+        SplashEnd(&splash_ctx);
+        splash_active = 0;
     }
     DPRINTF("Wait time consummed. Running AUTO entry\n");
     TimerEnd();
