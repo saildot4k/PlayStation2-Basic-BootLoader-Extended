@@ -319,7 +319,12 @@ int SplashDrawImage(SplashContext *ctx, const SplashImage *image)
                               w,
                               h,
                               0,
-                              GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0x80));
+                              GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
+
+    gsKit_queue_exec(gs);
+    gsKit_finish();
+    gsKit_sync_flip(gs);
+    gsKit_queue_reset(gs);
 
     ctx->img_w = (int)w;
     ctx->img_h = (int)h;
