@@ -30,6 +30,9 @@ HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
 DEV9_NEED ?= 0    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
 POWERSHELL ?= pwsh
+ifeq ($(shell command -v $(POWERSHELL) 2>/dev/null),)
+  POWERSHELL := powershell
+endif
 SPLASH_FONT_FILE ?= assets/Emotion Engine.otf
 empty :=
 space := $(empty) $(empty)
