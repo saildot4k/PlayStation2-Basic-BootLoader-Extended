@@ -61,7 +61,7 @@ EE_ASM_DIR = asm/
 
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
-          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash.o splash_layout.o \
+          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash.o splash_font.o splash_layout.o \
           $(EMBEDDED_STUFF) \
           $(SPLASH_ASSETS) \
 		      $(IOP_OBJS)
@@ -330,6 +330,8 @@ ifneq ($(VERBOSE),1)
 endif
 	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 
+$(EE_OBJS_DIR)splash.o: $(SPLASH_FONT_H)
+
 $(EE_OBJS_DIR)%.o: $(EE_ASM_DIR)%.c | $(EE_OBJS_DIR)
 ifneq ($(VERBOSE),1)
 	@echo "  - $@"
@@ -354,8 +356,16 @@ banner:
 	@echo "$$HEADER"
 
 # ---{ SPLASH ASSETS }--- #
+SPLASH_FONT_C = src/splash_font.c
+SPLASH_FONT_H = include/splash_font.h
 SPLASH_LAYOUT_C = src/splash_layout.c
 
+ifeq ($(wildcard $(SPLASH_FONT_C)),)
+$(error Missing $(SPLASH_FONT_C). This file is pre-generated and must be committed.)
+endif
+ifeq ($(wildcard $(SPLASH_FONT_H)),)
+$(error Missing $(SPLASH_FONT_H). This file is pre-generated and must be committed.)
+endif
 ifeq ($(wildcard $(SPLASH_LAYOUT_C)),)
 $(error Missing $(SPLASH_LAYOUT_C). This file is pre-generated and must be committed.)
 endif
