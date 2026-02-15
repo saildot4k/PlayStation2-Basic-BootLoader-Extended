@@ -257,12 +257,14 @@ void SplashPresent(SplashContext *ctx)
                                       0,
                                       GS_SETREG_RGBA(0xFF, 0xFF, 0xFF, 0xFF));
         }
-        free(ctx->img_pixels);
-        ctx->img_pixels = NULL;
     }
     gsKit_queue_exec(gs);
     gsKit_finish();
     gsKit_sync_flip(gs);
+    if (ctx->img_pixels) {
+        free(ctx->img_pixels);
+        ctx->img_pixels = NULL;
+    }
     ctx->needs_present = 0;
 }
 
