@@ -89,14 +89,6 @@ jobs:
         run: |
           make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MX4SIO/ PSX=1 MX4SIO=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
 
-      - name: Compile PS2 chainload build
-        run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} CHAINLOAD=1 BINDIR=${{ env.OUT_ROOT }}PS2_CHAINLOAD/ ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
-
-      - name: Compile PSX chainload build
-        run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} CHAINLOAD=1Z BINDIR=${{ env.OUT_ROOT }}PSX_CHAINLOAD/ PSX=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
-
       - name: list
         run: |
           git ls-files -i --exclude-standard -c
@@ -114,8 +106,6 @@ jobs:
           mv "${{ env.OUT_ROOT }}PS2_MMCE/" "${{ env.REL_DIR }}/PS2_MMCE/"
           mv "${{ env.OUT_ROOT }}PSX_MMCE/" "${{ env.REL_DIR }}/PSX_MMCE/"
           mv "${{ env.OUT_ROOT }}PSX_MX4SIO/" "${{ env.REL_DIR }}/PSX_MX4SIO/"
-          mv "${{ env.OUT_ROOT }}PS2_CHAINLOAD/" "${{ env.REL_DIR }}/PS2_CHAINLOAD/"
-          mv "${{ env.OUT_ROOT }}PSX_CHAINLOAD/" "${{ env.REL_DIR }}/PSX_CHAINLOAD/"
 
       - name: pack release
         if: env.USE_RELEASE == '1'
@@ -144,78 +134,3 @@ jobs:
           title: "Latest development build"
           files: |
             PS2BBL.7z
-
-  osdmenu:
-    runs-on: ubuntu-latest
-    needs: [build]
-    container: ps2dev/ps2dev:latest
-    steps:
-      - name: Install dependencies
-        run: |
-          apk add build-base git p7zip
-
-      - uses: actions/checkout@v4
-      - run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git fetch --prune --unshallow
-
-      - name: Set output folders
-        run: |
-          if [ "${GITHUB_REF_NAME}" = "Retrogem-GAMEID" ]; then
-            echo "OUT_ROOT=RETROGEM/" >> $GITHUB_ENV
-            echo "ARTIFACT_DIR=RETROGEM" >> $GITHUB_ENV
-            echo "USE_RELEASE=0" >> $GITHUB_ENV
-          else
-            echo "OUT_ROOT=" >> $GITHUB_ENV
-            echo "ARTIFACT_DIR=release" >> $GITHUB_ENV
-            echo "REL_DIR=release" >> $GITHUB_ENV
-            echo "USE_RELEASE=1" >> $GITHUB_ENV
-          fi
-
-      - name: Compile OSDMenu chainloader build
-        run: |
-          make release CHAINLOAD=1 CHAINLOAD_PATH="mc?:/BOOT/osdmenu.elf" COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}OSDMENU/
-
-      - name: Compile OSDMenu SAS chainloader build
-        run: |
-          make release CHAINLOAD=1 CHAINLOAD_PATH="mc?:/OSDMENU/osdmenu.elf" COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}OSDMENU_SAS/
-
-      - name: list
-        run: |
-          git ls-files -i --exclude-standard -c
-
-      - name: prepare release folder
-        if: env.USE_RELEASE == '1'
-        run: |
-          mkdir -p "${{ env.REL_DIR }}"
-          cp LICENSE "${{ env.REL_DIR }}/LICENSE.TXT"
-          mv "${{ env.OUT_ROOT }}OSDMENU/" "${{ env.REL_DIR }}/OSDMENU/"
-          mv "${{ env.OUT_ROOT }}OSDMENU_SAS/" "${{ env.REL_DIR }}/OSDMENU_SAS/"
-
-      - name: pack release
-        if: env.USE_RELEASE == '1'
-        run: |
-          CSH=${GITHUB_SHA::7}
-          DATE=$(date "+%d-%m-%Y")
-          TARGET="PS2BBL[$DATE]-[$CSH]"
-          cp -r release/ $TARGET/
-          7z a -t7z PS2BBL_OSDMENU.7z $TARGET/*
-
-      - name: Upload artifacts
-        if: ${{ success() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: PS2BBL_OSDMENU
-          path: |
-            ${{ env.ARTIFACT_DIR }}/**
-
-      - name: Create prerelease
-        if: github.ref == 'refs/heads/main' && env.USE_RELEASE == '1'
-        uses: mathieucarbou/marvinpinto-action-automatic-releases@latest
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          automatic_release_tag: "osdmenu"
-          title: "PS2BBL for OSDMenu"
-          files: |
-            PS2BBL_OSDMENU.7z
