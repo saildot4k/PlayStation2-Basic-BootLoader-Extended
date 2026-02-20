@@ -85,6 +85,10 @@ jobs:
         run: |
           make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MMCE/ PSX=1 MMCE=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
 
+      - name: Compile PSX MX4SIO build
+        run: |
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MX4SIO/ PSX=1 MX4SIO=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+
       - name: Compile PS2 chainload build
         run: |
           make release COMMIT_HASH=${GITHUB_SHA::7} CHAINLOAD=1 BINDIR=${{ env.OUT_ROOT }}PS2_CHAINLOAD/ ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
@@ -109,6 +113,7 @@ jobs:
           mv "${{ env.OUT_ROOT }}PS2_MX4SIO/" "${{ env.REL_DIR }}/PS2_MX4SIO/"
           mv "${{ env.OUT_ROOT }}PS2_MMCE/" "${{ env.REL_DIR }}/PS2_MMCE/"
           mv "${{ env.OUT_ROOT }}PSX_MMCE/" "${{ env.REL_DIR }}/PSX_MMCE/"
+          mv "${{ env.OUT_ROOT }}PSX_MX4SIO/" "${{ env.REL_DIR }}/PSX_MX4SIO/"
           mv "${{ env.OUT_ROOT }}PS2_CHAINLOAD/" "${{ env.REL_DIR }}/PS2_CHAINLOAD/"
           mv "${{ env.OUT_ROOT }}PSX_CHAINLOAD/" "${{ env.REL_DIR }}/PSX_CHAINLOAD/"
 
