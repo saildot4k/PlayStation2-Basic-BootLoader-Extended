@@ -20,29 +20,45 @@
 #define NAME_CROSS "{NAME_CROSS}"
 #define NAME_SQUARE "{NAME_SQUARE}"
 
-const char *BANNER_HOTKEYS =
-#ifdef PSX
+#if defined(PSX)
+const char *BANNER_HOTKEYS_PSX =
     "  PSX Basic BootLoader v" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS "- By Matias Israelson AKA: EL_isra \n"
-#else
-    "  PS2 Basic BootLoader v" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS "- By Matias Israelson AKA: EL_isra \n"
-#endif
     "\n\n";
-const char *BANNER_HOTKEYS_NAMES =
-#ifdef PSX
+const char *BANNER_HOTKEYS_NAMES_PSX =
     "  __________  ____________  ___ \n"
     "  \\______   \\/   _____/\\  \\/  / AUTO:     " NAME_AUTO "\n"
     "  |     ___/\\_____  \\  \\     /   TRIANGLE: " NAME_TRIANGLE "\n"
     "  |    |    /        \\ /     \\   CIRCLE:   " NAME_CIRCLE "\n"
     "  |____|   /_______  //___/\\  \\  CROSS:    " NAME_CROSS "\n"
     "                   \\/       \\_/  SQUARE:   " NAME_SQUARE "\n"
-#else
+    " ____________________._____      UP:       " NAME_UP "\n"
+    "  \\______   \\______  \\     |     DOWN:     " NAME_DOWN "\n"
+    "  |    |  _/|    |  _/     |     LEFT:     " NAME_LEFT "\n"
+    "  |    |   \\|    |   \\     |___  RIGHT:    " NAME_RIGHT "\n"
+    "  |______  /|______  /________ \\ L1:       " NAME_L1 "\n"
+    "         \\/        \\/         \\/ L2:       " NAME_L2 "\n"
+    "                                 L3:       " NAME_L3 "\n"
+    "                                 R1:       " NAME_R1 "\n"
+    "                                 R2:       " NAME_R2 "\n"
+    "                                 R3:       " NAME_R3 "\n"
+    "                                 START:    " NAME_START "\n"
+    "                                 SELECT:   " NAME_SELECT "\n"
+#ifdef DEBUG
+    " - DEBUG"
+#endif
+    "";
+#endif
+
+const char *BANNER_HOTKEYS_PS2 =
+    "  PS2 Basic BootLoader v" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS "- By Matias Israelson AKA: EL_isra \n"
+    "\n\n";
+const char *BANNER_HOTKEYS_NAMES_PS2 =
     "  _________  _________________  \n"
     "  \\______  \\/   _____/\\_____  \\  AUTO:     " NAME_AUTO "\n"
     "  |     ___/\\_____  \\  /  ____/  TRIANGLE: " NAME_TRIANGLE "\n"
     "  |    |    /        \\/       \\  CIRCLE:   " NAME_CIRCLE "\n"
     "  |____|   /_______  /\\_______ \\ CROSS:    " NAME_CROSS "\n"
     "                   \\/         \\/ SQUARE:   " NAME_SQUARE "\n"
-#endif
     " ____________________._____      UP:       " NAME_UP "\n"
     "  \\______   \\______  \\     |     DOWN:     " NAME_DOWN "\n"
     "  |    |  _/|    |  _/     |     LEFT:     " NAME_LEFT "\n"
@@ -60,6 +76,14 @@ const char *BANNER_HOTKEYS_NAMES =
     " - DEBUG"
 #endif
     "";
+
+#if defined(PSX)
+#define BANNER_HOTKEYS BANNER_HOTKEYS_PSX
+#define BANNER_HOTKEYS_NAMES BANNER_HOTKEYS_NAMES_PSX
+#else
+#define BANNER_HOTKEYS BANNER_HOTKEYS_PS2
+#define BANNER_HOTKEYS_NAMES BANNER_HOTKEYS_NAMES_PS2
+#endif
 
 const char *BANNER_HOTKEYS_PATHS_HEADER =
     "  --Discovered paths based on config file--\n";

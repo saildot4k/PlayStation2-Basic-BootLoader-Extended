@@ -138,7 +138,7 @@ const char *KEYS_ID[17] = {
 
 /** default hotkey names used when LOGO_DISPLAY = 3 */
 #ifdef PSX
-    const char *DEFAULT_KEYNAMES[17] = {
+    const char *DEFAULT_KEYNAMES_PSX[17] = {
         "wLE ISR (MMCE -> MX -> exFAT",
         "DISC NO LOGO",
         "L3",
@@ -157,8 +157,8 @@ const char *KEYS_ID[17] = {
         "DKWDRV",
         "POPSLOADER",
     };
-#else
-    const char *DEFAULT_KEYNAMES[17] = {
+#endif
+    const char *DEFAULT_KEYNAMES_PS2[17] = {
         "HACKED OSDSYS",
         "DISC NO LOGO",
         "L3",
@@ -177,11 +177,16 @@ const char *KEYS_ID[17] = {
         "DKWDRV",
         "POPSLOADER",
     };
+
+#if defined(PSX)
+#define DEFAULT_KEYNAMES DEFAULT_KEYNAMES_PSX
+#else
+#define DEFAULT_KEYNAMES DEFAULT_KEYNAMES_PS2
 #endif
 
 /** default paths used if config file can't be loaded */
 #ifdef PSX
-    char *DEFPATH[] = {
+    char *DEFPATH_PSX[] = {
         "mass:/RESCUE.ELF", // AUTO [0]
         "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
@@ -353,8 +358,8 @@ const char *KEYS_ID[17] = {
         "",
         "",
     };
-#else
-    char *DEFPATH[] = {
+#endif
+    char *DEFPATH_PS2[] = {
         "mc?:/SYS_OSDMENU/osdmenu.elf", // AUTO [0]
         "mc?:/SYS_FMCBD-1966/FMDBD-1966.ELF",
         "mc?:/SYS_FMCBD-1965/FMCBD-1965.ELF",
@@ -526,6 +531,11 @@ const char *KEYS_ID[17] = {
         "",
         "",
     };
+
+#if defined(PSX)
+#define DEFPATH DEFPATH_PSX
+#else
+#define DEFPATH DEFPATH_PS2
 #endif
 
 #ifndef COMMIT_HASH
