@@ -559,17 +559,112 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 
 char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
+static int g_is_psx_desr = 0;
+#define ROMVER_MODEL_PREFIX_LEN 5
+static const char *const g_psx_desr_rom_prefixes[] = {
+    "0180J",
+    "0210J",
+};
 int PAD = 0;
 unsigned char *config_buf = NULL; // pointer to allocated config file
+
+static int ROMVERMatchesAnyPrefix(const u8 romver[16], const char *const *prefixes, size_t prefix_count)
+{
+    size_t i;
+
+    if (romver == NULL || prefixes == NULL)
+        return 0;
+
+    for (i = 0; i < prefix_count; i++) {
+        if (!strncmp((const char *)romver, prefixes[i], ROMVER_MODEL_PREFIX_LEN))
+            return 1;
+    }
+
+    return 0;
+}
+
+static int IsPSXDESRROMVER(const u8 romver[16])
+{
+    return ROMVERMatchesAnyPrefix(romver,
+                                  g_psx_desr_rom_prefixes,
+                                  sizeof(g_psx_desr_rom_prefixes) / sizeof(g_psx_desr_rom_prefixes[0]));
+}
+
+static void ReadROMVEROnce(void)
+{
+    int fd;
+
+    memset(ROMVER, 0, sizeof(ROMVER));
+    if ((fd = open("rom0:ROMVER", O_RDONLY)) >= 0) {
+        read(fd, ROMVER, sizeof(ROMVER));
+        close(fd);
+    }
+
+    g_is_psx_desr = IsPSXDESRROMVER(ROMVER);
+}
+
+static const char *GetRuntimePlatformName(void)
+{
+#if defined(PSX)
+    return g_is_psx_desr ? "PSX-DESR" : "PS2";
+#else
+    return "PS2";
+#endif
+}
+
+static const char *GetRuntimeBanner(void)
+{
+#if defined(PSX)
+    return g_is_psx_desr ? BANNER_PSX : BANNER_PS2;
+#else
+    return BANNER_PS2;
+#endif
+}
+
+static const char *GetRuntimeHotkeysBanner(void)
+{
+#if defined(PSX)
+    return g_is_psx_desr ? BANNER_HOTKEYS_PSX : BANNER_HOTKEYS_PS2;
+#else
+    return BANNER_HOTKEYS_PS2;
+#endif
+}
+
+static const char *GetRuntimeHotkeyNamesTemplate(void)
+{
+#if defined(PSX)
+    return g_is_psx_desr ? BANNER_HOTKEYS_NAMES_PSX : BANNER_HOTKEYS_NAMES_PS2;
+#else
+    return BANNER_HOTKEYS_NAMES_PS2;
+#endif
+}
+
+static void LogDetectedPlatform(void)
+{
+    char rom_prefix[ROMVER_MODEL_PREFIX_LEN + 1];
+
+    if (ROMVER[0] != '\0') {
+        memcpy(rom_prefix, ROMVER, ROMVER_MODEL_PREFIX_LEN);
+        rom_prefix[ROMVER_MODEL_PREFIX_LEN] = '\0';
+    } else {
+        strcpy(rom_prefix, "N/A");
+    }
+
+    DPRINTF("Detected platform: %s (ROMVER prefix: %s)\n", GetRuntimePlatformName(), rom_prefix);
+}
 
 int main(int argc, char *argv[])
 {
     u32 STAT;
     u64 tstart;
-    int button, x, j, cnf_size, fd, result;
+    int button, x, j, cnf_size, result;
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
+    const char *active_banner;
+    const char *active_hotkeys_banner;
+    const char *active_hotkeys_names;
 
+    ReadROMVEROnce();
     ResetIOP();
     SifInitIopHeap(); // Initialize SIF services for loading modules and files.
     SifLoadFileInit();
@@ -582,6 +677,7 @@ int main(int argc, char *argv[])
     for (x = 0; x < argc; x++)
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
+    LogDetectedPlatform();
     scr_setfontcolor(0x101010);
     scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
     scr_setfontcolor(0xffffff);
@@ -673,10 +769,6 @@ int main(int argc, char *argv[])
     }
 #endif
 
-    if ((fd = open("rom0:ROMVER", O_RDONLY)) >= 0) {
-        read(fd, ROMVER, sizeof(ROMVER));
-        close(fd);
-    }
     j = SifLoadModule("rom0:ADDDRV", 0, NULL); // Load ADDDRV. The OSD has it listed in rom0:OSDCNF/IOPBTCONF, but it is otherwise not loaded automatically.
     DPRINTF(" [ADDDRV]: %d\n", j);
 
@@ -687,7 +779,12 @@ int main(int argc, char *argv[])
     DPRINTF("init OSD system paths\n");
     OSDInitSystemPaths();
 
-#ifndef PSX
+#if defined(PSX)
+    if (!g_is_psx_desr) {
+        DPRINTF("Certifying CDVD Boot\n");
+        CDVDBootCertify(ROMVER); /* Not needed on PSX-DESR, but required on standard PS2 ROMs. */
+    }
+#else
     DPRINTF("Certifying CDVD Boot\n");
     CDVDBootCertify(ROMVER); /* This is not required for the PSX, as its OSDSYS will do it before booting the update. */
 #endif
@@ -741,6 +838,10 @@ int main(int argc, char *argv[])
     SetDefaultSettings();
     FILE *fp;
     for (x = SOURCE_CWD; x >= SOURCE_MC0; x--) {
+#if defined(PSX)
+        if (!g_is_psx_desr && x == SOURCE_XCONFIG)
+            continue;
+#endif
         char *T = CheckPath(CONFIG_PATHS[x]);
         fp = fopen(T, "r");
         if (fp != NULL) {
@@ -906,9 +1007,14 @@ int main(int argc, char *argv[])
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
+        char **default_paths = DEFPATH;
+#if defined(PSX)
+        if (!g_is_psx_desr)
+            default_paths = DEFPATH_PS2;
+#endif
         for (x = 0; x < 17; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
-                GLOBCFG.KEYPATHS[x][j] = DEFPATH[CONFIG_KEY_INDEXES * x + j];
+                GLOBCFG.KEYPATHS[x][j] = default_paths[CONFIG_KEY_INDEXES * x + j];
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
@@ -954,10 +1060,13 @@ int main(int argc, char *argv[])
         }
     }
     // Stores last key during DELAY msec
+    active_banner = GetRuntimeBanner();
+    active_hotkeys_banner = GetRuntimeHotkeysBanner();
+    active_hotkeys_names = GetRuntimeHotkeyNamesTemplate();
     scr_clear();
     if (GLOBCFG.LOGO_DISP >= 3) {
         scr_setfontcolor(banner_color);
-        scr_printf("\n%s", BANNER_HOTKEYS);
+        scr_printf("\n%s", active_hotkeys_banner);
         scr_setfontcolor(0xffffff);
         if (GLOBCFG.HOTKEY_DISPLAY == 3) {
             if (config_source == SOURCE_INVALID) {
@@ -968,10 +1077,10 @@ int main(int argc, char *argv[])
                 scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER);
             }
         }
-        PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : BANNER_HOTKEYS_NAMES);
+        PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : active_hotkeys_names);
     } else if (GLOBCFG.LOGO_DISP > 1) {
         scr_setfontcolor(banner_color);
-        scr_printf("\n\n\n\n%s", BANNER);
+        scr_printf("\n\n\n\n%s", active_banner);
     }
     scr_setfontcolor(0xffffff);
     if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP < 3)
@@ -1228,6 +1337,11 @@ char *CheckPath(char *path)
 void SetDefaultSettings(void)
 {
     int i, j;
+#if defined(PSX)
+    const char **default_keynames = g_is_psx_desr ? DEFAULT_KEYNAMES_PSX : DEFAULT_KEYNAMES_PS2;
+#else
+    const char **default_keynames = DEFAULT_KEYNAMES;
+#endif
     for (i = 0; i < 17; i++)
         for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             GLOBCFG.KEYPATHS[i][j] = "isra:/";
@@ -1235,7 +1349,7 @@ void SetDefaultSettings(void)
             memset(GLOBCFG.KEYARGS[i][j], 0, sizeof(GLOBCFG.KEYARGS[i][j]));
         }
     for (i = 0; i < 17; i++)
-        GLOBCFG.KEYNAMES[i] = DEFAULT_KEYNAMES[i];
+        GLOBCFG.KEYNAMES[i] = default_keynames[i];
     GLOBCFG.SKIPLOGO = 0;
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;
@@ -1243,7 +1357,11 @@ void SetDefaultSettings(void)
     GLOBCFG.LOGO_DISP = 3;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
     GLOBCFG.CDROM_DISABLE_GAMEID = CDROM_DISABLE_GAMEID_DEFAULT;
+#if defined(PSX)
+    GLOBCFG.APP_GAMEID = g_is_psx_desr ? 0 : 1;
+#else
     GLOBCFG.APP_GAMEID = APP_GAMEID_DEFAULT;
+#endif
     GLOBCFG.PS1DRV_ENABLE_FAST = PS1DRV_ENABLE_FAST_DEFAULT;
     GLOBCFG.PS1DRV_ENABLE_SMOOTH = PS1DRV_ENABLE_SMOOTH_DEFAULT;
     GLOBCFG.PS1DRV_USE_PS1VN = PS1DRV_USE_PS1VN_DEFAULT;
@@ -1662,19 +1780,23 @@ int dischandler()
 void ResetIOP(void)
 {
     SifInitRpc(0); // Initialize SIFCMD & SIFRPC
-#ifndef PSX
-    while (!SifIopReset("", 0)) {};
-#else
-    /* sp193: We need some of the PSX's CDVDMAN facilities, but we do not want to use its (too-)new FILEIO module.
-       This special IOPRP image contains a IOPBTCONF list that lists PCDVDMAN instead of CDVDMAN.
-       PCDVDMAN is the board-specific CDVDMAN module on all PSX, which can be used to switch the CD/DVD drive operating mode.
-       Usually, I would discourage people from using board-specific modules, but I do not have a proper replacement for this. */
-    while (!SifIopRebootBuffer(psx_ioprp, size_psx_ioprp)) {};
+#if defined(PSX)
+    if (g_is_psx_desr) {
+        /* sp193: We need some of the PSX's CDVDMAN facilities, but we do not want to use its (too-)new FILEIO module.
+           This special IOPRP image contains a IOPBTCONF list that lists PCDVDMAN instead of CDVDMAN.
+           PCDVDMAN is the board-specific CDVDMAN module on all PSX, which can be used to switch the CD/DVD drive operating mode.
+           Usually, I would discourage people from using board-specific modules, but I do not have a proper replacement for this. */
+        while (!SifIopRebootBuffer(psx_ioprp, size_psx_ioprp)) {};
+    } else
 #endif
+    {
+        while (!SifIopReset("", 0)) {};
+    }
     while (!SifIopSync()) {};
 
-#ifdef PSX
-    InitPSX();
+#if defined(PSX)
+    if (g_is_psx_desr)
+        InitPSX();
 #endif
 }
 
@@ -1710,7 +1832,6 @@ static void InitPSX()
 }
 #endif
 
-#ifndef PSX
 void CDVDBootCertify(u8 romver[16])
 {
     u8 RomName[4];
@@ -1741,7 +1862,6 @@ void CDVDBootCertify(u8 romver[16])
          sceCdForbidDVDP(&STAT);
      } while (STAT & 0x08); */
 }
-#endif
 
 static void AlarmCallback(s32 alarm_id, u16 time, void *common)
 {
@@ -1759,7 +1879,7 @@ void credits(void)
 {
     scr_clear();
     scr_printf("\n\n");
-    scr_printf("%s%s", BANNER, BANNER_FOOTER);
+    scr_printf("%s%s", GetRuntimeBanner(), BANNER_FOOTER);
     scr_printf("\n"
                "\n"
                "\tBased on SP193 OSD Init samples.\n"
