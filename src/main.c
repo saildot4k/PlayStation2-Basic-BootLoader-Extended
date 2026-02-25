@@ -84,10 +84,10 @@ static int ci_starts_with(const char *s, const char *prefix)
     }
     return 1;
 }
+
 // --------------- glob stuff --------------- //
 typedef struct
 {
-    int SKIPLOGO;
     char *KEYPATHS[17][CONFIG_KEY_INDEXES];
     char *KEYARGS[17][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
     int KEYARGC[17][CONFIG_KEY_INDEXES];
@@ -890,10 +890,6 @@ int main(int argc, char *argv[])
                         DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n", name, value, j, x);
                         continue;
                     }
-                    if (ci_eq(name, "SKIP_PS2LOGO")) {
-                        GLOBCFG.SKIPLOGO = atoi(value);
-                        continue;
-                    }
                     if (ci_eq(name, "KEY_READ_WAIT_TIME")) {
                         GLOBCFG.DELAY = atoi(value);
                         continue;
@@ -1285,11 +1281,9 @@ char *CheckPath(char *path)
     if (path[0] == '$') // we found a program command
     {
         if (!strcmp("$CDVD", path))
-            dischandler();
-        if (!strcmp("$CDVD_NO_PS2LOGO", path)) {
-            GLOBCFG.SKIPLOGO = 1;
-            dischandler();
-        }
+            dischandler(0);
+        if (!strcmp("$CDVD_NO_PS2LOGO", path))
+            dischandler(1);
 #ifdef HDD
         if (!strcmp("$HDDCHECKER", path))
             HDDChecker();
@@ -1350,7 +1344,6 @@ void SetDefaultSettings(void)
         }
     for (i = 0; i < 17; i++)
         GLOBCFG.KEYNAMES[i] = default_keynames[i];
-    GLOBCFG.SKIPLOGO = 0;
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;
     GLOBCFG.TRAYEJECT = 0;
@@ -1660,7 +1653,7 @@ void poweroffCallback(void *arg)
 }
 
 #endif
-int dischandler()
+int dischandler(int skip_ps2logo)
 {
     int OldDiscType, DiscType, ValidDiscInserted, result, first_run = 1;
     u32 STAT;
@@ -1758,7 +1751,7 @@ int dischandler()
         case SCECdPS2CDDA:
         case SCECdPS2DVD:
             // Boot PlayStation 2 disc
-            PS2DiscBoot(GLOBCFG.SKIPLOGO);
+            PS2DiscBoot(skip_ps2logo);
             break;
 
         case SCECdDVDV:

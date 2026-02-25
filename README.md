@@ -27,8 +27,12 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 - `APP_GAMEID = 1` enables visual game ID for apps/homebrew up to 11 characters derived from filename or PS1/2 Disc
 - `CDROM_DISABLE_GAMEID = 1` disables visual game ID for discs launched via `$CDVD`.
 
+### PS2LOGO patching (PS2 discs only)
+- `$CDVD` boots via the boot ROM `rom0:PS2LOGO`, but PS2BBL patches it at runtime so logo behavior follows the disc region (not the console region) and bypasses the logo checksum reject path.
+- `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
+
 ### PS1DRV options (PS1 discs only)
-These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_LOGO`.
+These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 - `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.
 - `PS1DRV_ENABLE_SMOOTH = 1` enables texture smoothing.
 - `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator.

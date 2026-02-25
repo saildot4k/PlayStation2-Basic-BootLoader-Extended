@@ -1,14 +1,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <kernel.h>
 #include <sifcmd.h>
+#include <sifrpc.h>
+#include <iopcontrol.h>
 #include <libcdvd.h>
 #include "libcdvd_add.h"
 #include <fcntl.h>
 #include <debug.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <loadfile.h>
 //#include "main.h"
 #include "ps2.h"
 #include "OSDInit.h"
@@ -25,6 +29,86 @@ void BootError(void)
     CleanUp();
     SifExitCmd();
     ExecOSD(1, args);
+}
+
+static int g_ps2logo_is_pal = 0;
+
+static int PS2LOGOGetDiscRegion(void)
+{
+    return g_ps2logo_is_pal ? 2 : 0;
+}
+
+static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t checksum_loc)
+{
+    if ((_lw(get_region_loc) != 0x27bdfff0) || ((_lw(get_region_loc + 8) & 0xff000000) != 0x0c000000))
+        return -1;
+    if ((_lw(checksum_loc) & 0xffff0000) != 0x8f820000)
+        return -1;
+
+    // Patch region getter call to force the disc region and bypass checksum validation.
+    _sw((0x0c000000 | ((uint32_t)PS2LOGOGetDiscRegion >> 2)), get_region_loc + 8);
+    _sw(0x24020000, checksum_loc);
+
+    FlushCache(0);
+    FlushCache(2);
+    return 0;
+}
+
+static void ApplyPS2LOGOPatch(void)
+{
+    // ROM 1.10
+    if (!PS2LOGOPatchWithOffsets(0x100178, 0x100278))
+        return;
+    // ROM 1.20-1.70
+    if (!PS2LOGOPatchWithOffsets(0x102078, 0x102178))
+        return;
+    // ROM 1.80-2.10
+    if (!PS2LOGOPatchWithOffsets(0x102018, 0x102118))
+        return;
+    // ROM 2.20+
+    PS2LOGOPatchWithOffsets(0x102018, 0x102264);
+}
+
+static void PatchedExecPS2(void *entry, void *gp, int argc, char *argv[])
+{
+    ApplyPS2LOGOPatch();
+    ExecPS2(entry, gp, argc, argv);
+}
+
+static void PatchPS2LOGO(uint32_t epc, int is_pal)
+{
+    g_ps2logo_is_pal = (is_pal != 0);
+
+    if (epc > 0x1000000) {
+        // Packed PS2LOGO.
+        if ((_lw(0x1000200) & 0xff000000) == 0x08000000) {
+            // ROM 2.20+: replace unpacker jump target with our patch routine.
+            _sw((0x08000000 | ((uint32_t)ApplyPS2LOGOPatch >> 2)), (uint32_t)0x1000200);
+        } else if ((_lw(0x100011c) & 0xff000000) == 0x0c000000) {
+            // ROM 2.00: hijack unpacker's ExecPS2 call.
+            _sw((0x0c000000 | ((uint32_t)PatchedExecPS2 >> 2)), (uint32_t)0x100011c);
+        }
+
+        FlushCache(0);
+        FlushCache(2);
+        return;
+    }
+
+    // Ignore protokernels.
+    if (epc > 0x200000)
+        return;
+
+    // Unpacked PS2LOGO.
+    ApplyPS2LOGOPatch();
+}
+
+static void ResetIOPForExec(void)
+{
+    while (!SifIopReset("", 0)) {
+    };
+    while (!SifIopSync()) {
+    };
+    SifInitRpc(0);
 }
 
 #define CNF_PATH_LEN_MAX 64
@@ -108,6 +192,34 @@ static int CNFCheckBootFile(const char *value, const char *key)
     }
 
     return 1;
+}
+
+static void CNFExtractDiscIDFromBootPath(const char *boot_path, char *title_id, size_t title_id_len)
+{
+    const char *p;
+    size_t i;
+
+    if (title_id == NULL || title_id_len == 0)
+        return;
+    title_id[0] = '\0';
+
+    if (boot_path == NULL)
+        return;
+
+    p = strchr(boot_path, ':');
+    if (p != NULL)
+        boot_path = p + 1;
+
+    while (*boot_path == '\\' || *boot_path == '/')
+        boot_path++;
+
+    for (i = 0; i + 1 < title_id_len; i++) {
+        unsigned char c = (unsigned char)boot_path[i];
+        if (c == '\0' || c == ';' || isspace(c))
+            break;
+        title_id[i] = (char)c;
+    }
+    title_id[i] = '\0';
 }
 
 // The TRUE way (but not the only way!) to get the boot file. Read the comment above PS2DiscBoot().
@@ -229,20 +341,20 @@ int PS2DiscBoot(int skip_PS2LOGO)
     DPRINTF("%s: start\n skip_ps2_logo=%d\n", __func__, skip_PS2LOGO);
     char ps2disc_boot[CNF_PATH_LEN_MAX] = "";             // This was originally static/global.
     char system_cnf[CNF_LEN_MAX], line[CNF_PATH_LEN_MAX]; // These were originally globals/static.
+    int is_pal_vmode = 0;
+    int bootfile_status = 0;
     char *args[1];
     const unsigned char *pChar;
     const char *cnf_start, *cnf_end;
     int fd, size, size_remaining, size_read;
 
-    switch (PS2GetBootFile(ps2disc_boot)) {
-        case 2:
-            DPRINTF("%s: PS2GetBootFile returned 2\n", __func__);
-            return 2;
-        case 3:
-            DPRINTF("%s: PS2GetBootFile returned 3\n", __func__);
-            return 3;
+    bootfile_status = PS2GetBootFile(ps2disc_boot);
+    if (bootfile_status != 0) {
+        DPRINTF("%s: PS2GetBootFile returned %d. Continuing with BOOT2 from SYSTEM.CNF\n", __func__, bootfile_status);
+        ps2disc_boot[0] = '\0';
+    } else {
+        DPRINTF("%s: PS2GetBootFile returned %s\n", __func__, ps2disc_boot);
     }
-    DPRINTF("%s: PS2GetBootFile returned %s\n", __func__, ps2disc_boot);
 
     // The browser uses open mode 5 when a specific thread is created, otherwise mode 4.
     if ((fd = open("cdrom0:\\SYSTEM.CNF;1", O_RDONLY)) < 0) {
@@ -272,6 +384,11 @@ int PS2DiscBoot(int skip_PS2LOGO)
     DPRINTF("%s: readed SYSTEM.CNF. size was %d\n", __func__, size);
 
     system_cnf[size] = '\0';
+    {
+        char *vmode = strstr(system_cnf, "VMODE");
+        if (vmode != NULL && strstr(vmode, "PAL") != NULL)
+            is_pal_vmode = 1;
+    }
     cnf_end = &system_cnf[size];
 
     // Parse SYSTEM.CNF
@@ -289,14 +406,15 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
     CNFGetKey(pChar, line);
     DPRINTF("%s line: [%s]\n", __func__, line);
-    DPRINTF("%s ELF:  [%s]\n", __func__, ps2disc_boot);
-    if (CNFCheckBootFile(ps2disc_boot, line) == 0) { // Parse error
-        scr_setfontcolor(0x0000ff);
-        scr_printf("%s: parsing SYSTEM.CNF failed! (CNFCheckBootFile == 0)\n", __func__);
-        sleep(3);
-        scr_clear();
-        BootError();
+    if (ps2disc_boot[0] != '\0') {
+        DPRINTF("%s ELF:  [%s]\n", __func__, ps2disc_boot);
+        if (CNFCheckBootFile(ps2disc_boot, line) == 0) {
+            DPRINTF("%s: CNFCheckBootFile mismatch. Continuing with BOOT2 from SYSTEM.CNF\n", __func__);
+            ps2disc_boot[0] = '\0';
+        }
     }
+    if (ps2disc_boot[0] == '\0')
+        CNFExtractDiscIDFromBootPath(line, ps2disc_boot, sizeof(ps2disc_boot));
 
     args[0] = line;
 
@@ -306,11 +424,35 @@ int PS2DiscBoot(int skip_PS2LOGO)
     GameIDHandleDisc(ps2disc_boot, GameIDDiscEnabled());
 
     CleanUp();
-    SifExitCmd();
     if (skip_PS2LOGO) {
+        SifExitCmd();
         LoadExecPS2(line, 0, NULL);
     } else {
-        LoadExecPS2("rom0:PS2LOGO", 1, args);
+        int ret;
+        t_ExecData elfdata = {0};
+
+        SifLoadFileInit();
+        ret = SifLoadElf("rom0:PS2LOGO", &elfdata);
+        if (ret && (ret = SifLoadElfEncrypted("rom0:PS2LOGO", &elfdata))) {
+            SifLoadFileExit();
+            DPRINTF("%s: failed to load rom0:PS2LOGO for patching (%d); falling back to LoadExecPS2\n", __func__, ret);
+            SifExitCmd();
+            LoadExecPS2("rom0:PS2LOGO", 1, args);
+            return 0;
+        }
+        SifLoadFileExit();
+
+        if (elfdata.epc == 0) {
+            DPRINTF("%s: PS2LOGO load returned empty entrypoint; falling back to LoadExecPS2\n", __func__);
+            SifExitCmd();
+            LoadExecPS2("rom0:PS2LOGO", 1, args);
+            return 0;
+        }
+
+        PatchPS2LOGO(elfdata.epc, is_pal_vmode);
+        ResetIOPForExec();
+        SifExitCmd();
+        ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 1, args);
     }
     return 0;
 }
