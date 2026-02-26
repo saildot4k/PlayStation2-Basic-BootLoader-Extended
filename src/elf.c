@@ -1,3 +1,4 @@
+#define NEWLIB_PORT_AWARE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
