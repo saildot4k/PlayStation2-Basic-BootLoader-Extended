@@ -26,7 +26,7 @@ const char *BANNER_HOTKEYS_PSX =
     "\n\n";
 const char *BANNER_HOTKEYS_NAMES_PSX =
     "  __________  ____________  ___ \n"
-    "  \\______   \\/   _____/\\  \\/  / AUTO:     " NAME_AUTO "\n"
+    "  \\______   \\/   _____/\\  \\/  /  AUTO:     " NAME_AUTO "\n"
     "  |     ___/\\_____  \\  \\     /   TRIANGLE: " NAME_TRIANGLE "\n"
     "  |    |    /        \\ /     \\   CIRCLE:   " NAME_CIRCLE "\n"
     "  |____|   /_______  //___/\\  \\  CROSS:    " NAME_CROSS "\n"
@@ -60,7 +60,7 @@ const char *BANNER_HOTKEYS_NAMES_PS2 =
     "  |____|   /_______  /\\_______ \\ CROSS:    " NAME_CROSS "\n"
     "                   \\/         \\/ SQUARE:   " NAME_SQUARE "\n"
     " ____________________._____      UP:       " NAME_UP "\n"
-    "  \\______   \\______  \\     |     DOWN:     " NAME_DOWN "\n"
+    "  \\______  \\_______  \\     |     DOWN:     " NAME_DOWN "\n"
     "  |    |  _/|    |  _/     |     LEFT:     " NAME_LEFT "\n"
     "  |    |   \\|    |   \\     |___  RIGHT:    " NAME_RIGHT "\n"
     "  |______  /|______  /________ \\ L1:       " NAME_L1 "\n"
