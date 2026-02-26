@@ -35,21 +35,43 @@ void BootError(void)
 static int g_ps2logo_is_pal = 0;
 static int g_ps2disc_cfg_hint = PS2_DISC_HINT_MC0;
 
-static int PS2LOGOGetDiscRegion(void)
+// Manual descramble handler used instead of the DSP XOR path.
+static int PS2LOGOUnscrambleLogo(char *unused_arg, void *logo_buffer, int buf_size)
 {
-    return g_ps2logo_is_pal ? 2 : 0;
+    uint8_t *logo = NULL;
+    int i;
+    uint8_t key;
+
+    (void)unused_arg;
+    (void)logo_buffer;
+    (void)buf_size;
+
+    asm volatile("move %0, $s1" : "=r"(logo)::);
+    if (logo == NULL)
+        return -1;
+
+    key = logo[0];
+    for (i = 0; i < 0x6000; i++) {
+        logo[i] ^= key;
+        logo[i] = (uint8_t)((logo[i] << 3) | (logo[i] >> 5));
+    }
+
+    return 0;
 }
 
-static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t checksum_loc)
+static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t cd_dec_loc)
 {
     if ((_lw(get_region_loc) != 0x27bdfff0) || ((_lw(get_region_loc + 8) & 0xff000000) != 0x0c000000))
         return -1;
-    if ((_lw(checksum_loc) & 0xffff0000) != 0x8f820000)
+    if (((_lw(cd_dec_loc) & 0xff000000) != 0x0c000000) || (_lw(cd_dec_loc) != _lw(cd_dec_loc + 0x90)))
         return -1;
 
-    // Patch region getter call to force the disc region and bypass checksum validation.
-    _sw((0x0c000000 | ((uint32_t)PS2LOGOGetDiscRegion >> 2)), get_region_loc + 8);
-    _sw(0x24020000, checksum_loc);
+    // Force logo region from disc VMODE (PAL/NTSC) directly.
+    _sw((0x24020000 | (g_ps2logo_is_pal ? 2 : 0)), get_region_loc + 8);
+
+    // Disable DSP XORing call and replace post-read reset call with software descramble.
+    _sw(0x00000000, cd_dec_loc);
+    _sw((0x0c000000 | ((uint32_t)PS2LOGOUnscrambleLogo >> 2)), cd_dec_loc + 0x90);
 
     FlushCache(0);
     FlushCache(2);
@@ -59,22 +81,30 @@ static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t checksum_lo
 static void ApplyPS2LOGOPatch(void)
 {
     // ROM 1.10
-    if (!PS2LOGOPatchWithOffsets(0x100178, 0x100278))
+    if (!PS2LOGOPatchWithOffsets(0x100178, 0x1069e8))
         return;
     // ROM 1.20-1.70
-    if (!PS2LOGOPatchWithOffsets(0x102078, 0x102178))
+    if (!PS2LOGOPatchWithOffsets(0x102078, 0x1015b0))
         return;
-    // ROM 1.80-2.10
-    if (!PS2LOGOPatchWithOffsets(0x102018, 0x102118))
-        return;
-    // ROM 2.20+
-    PS2LOGOPatchWithOffsets(0x102018, 0x102264);
+    // ROM 1.80+
+    PS2LOGOPatchWithOffsets(0x102018, 0x101578);
 }
 
 static void PatchedExecPS2(void *entry, void *gp, int argc, char *argv[])
 {
     ApplyPS2LOGOPatch();
     ExecPS2(entry, gp, argc, argv);
+}
+
+static void PatchedPS2LOGOJump(void *entry, void *gp, int argc, char *argv[])
+{
+    (void)entry;
+    (void)gp;
+    (void)argc;
+    (void)argv;
+
+    ApplyPS2LOGOPatch();
+    asm volatile("j 0x100000");
 }
 
 static void PatchPS2LOGO(uint32_t epc, int is_pal)
@@ -84,8 +114,8 @@ static void PatchPS2LOGO(uint32_t epc, int is_pal)
     if (epc > 0x1000000) {
         // Packed PS2LOGO.
         if ((_lw(0x1000200) & 0xff000000) == 0x08000000) {
-            // ROM 2.20+: replace unpacker jump target with our patch routine.
-            _sw((0x08000000 | ((uint32_t)ApplyPS2LOGOPatch >> 2)), (uint32_t)0x1000200);
+            // ROM 2.20+: replace unpacker jump target with patch+jump wrapper.
+            _sw((0x08000000 | ((uint32_t)PatchedPS2LOGOJump >> 2)), (uint32_t)0x1000200);
         } else if ((_lw(0x100011c) & 0xff000000) == 0x0c000000) {
             // ROM 2.00: hijack unpacker's ExecPS2 call.
             _sw((0x0c000000 | ((uint32_t)PatchedExecPS2 >> 2)), (uint32_t)0x100011c);
