@@ -662,28 +662,7 @@ static int ROMVERMatchesAnyPrefix(const u8 romver[16], const char *const *prefix
         return 0;
 
     for (i = 0; i < prefix_count; i++) {
-        size_t j;
-        int match = 1;
-
-        for (j = 0; j < ROMVER_MODEL_PREFIX_LEN; j++) {
-            unsigned char a = romver[j];
-            unsigned char b = (unsigned char)prefixes[i][j];
-
-            if (a == '\0' || b == '\0') {
-                match = 0;
-                break;
-            }
-            if (a >= 'a' && a <= 'z')
-                a -= ('a' - 'A');
-            if (b >= 'a' && b <= 'z')
-                b -= ('a' - 'A');
-            if (a != b) {
-                match = 0;
-                break;
-            }
-        }
-
-        if (match)
+        if (!strncmp((const char *)romver, prefixes[i], ROMVER_MODEL_PREFIX_LEN))
             return 1;
     }
 
