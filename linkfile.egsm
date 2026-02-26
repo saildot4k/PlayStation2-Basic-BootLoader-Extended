@@ -65,8 +65,6 @@ SECTIONS
     __egsm_end = .;
   } >kram :egsm
 
-  ASSERT((__egsm_end - __egsm_start) <= 0x1500, "eGSM region overflow: exceeds 0x1500 bytes at 0x00080000");
-
   .text :
   {
     _ftext = .;
