@@ -42,7 +42,8 @@ These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
-- `-gsm=fp1|fp2|1080ix1|1080ix2|1080ix3[:1|:2|:3]` enables eGSM for ELF launch (ignored for `rom?:` paths).
+- `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
+- eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
 - `-dev9=NIC|NICHDD` sets DEV9/HDD policy before ELF launch.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
   This is mainly for HDD builds.
@@ -55,6 +56,27 @@ ARG_R1_E1 = -video=480p
 ARG_R1_E1 = -mode=mmce
 ARG_R1_E1 = -mode=ata
 ```
+
+eGSM format (OSDMenu-style):
+- `v` = video mode:
+- empty = do not force (default)
+- `fp1` = force progressive scan (240p/288p)
+- `fp2` = force progressive scan (480p/576p)
+- `1080ix1` = force 1080i, width/height x1
+- `1080ix2` = force 1080i, width/height x2
+- `1080ix3` = force 1080i, width/height x3
+- `c` = compatibility mode:
+- empty = none (default)
+- `1` = field flipping type 1
+- `2` = field flipping type 2
+- `3` = field flipping type 3
+
+eGSM examples:
+- `-gsm=fp2`
+- `-gsm=fp2:1`
+- `-gsm=1080ix2`
+
+For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required).
 PATINFO example:
 ```
 LK_AUTO_E1 = hdd0:+OSDMENU:PATINFO
