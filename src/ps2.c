@@ -18,6 +18,7 @@
 #include "OSDInit.h"
 #include "OSDHistory.h"
 #include "game_id.h"
+#include "egsm_api.h"
 #include "debugprintf.h"
 
 void CleanUp(void);
@@ -32,6 +33,7 @@ void BootError(void)
 }
 
 static int g_ps2logo_is_pal = 0;
+static int g_ps2disc_cfg_hint = PS2_DISC_HINT_MC0;
 
 static int PS2LOGOGetDiscRegion(void)
 {
@@ -109,6 +111,261 @@ static void ResetIOPForExec(void)
     while (!SifIopSync()) {
     };
     SifInitRpc(0);
+}
+
+void PS2DiscSetConfigHint(int hint)
+{
+    switch (hint) {
+        case PS2_DISC_HINT_MC0:
+        case PS2_DISC_HINT_MC1:
+        case PS2_DISC_HINT_HDD:
+            g_ps2disc_cfg_hint = hint;
+            break;
+        default:
+            g_ps2disc_cfg_hint = PS2_DISC_HINT_MC0;
+    }
+}
+
+#define OSDGSM_MC_PATH       "mc0:/SYS-CONF/OSDGSM.CNF"
+#define OSDGSM_HDD_PFS_PATH  "pfs0:/osdmenu/OSDGSM.CNF"
+
+static char *PS2TrimLeft(char *s)
+{
+    while (s != NULL && isspace((unsigned char)*s))
+        s++;
+    return s;
+}
+
+static void PS2TrimRight(char *s)
+{
+    size_t len;
+    if (s == NULL)
+        return;
+    len = strlen(s);
+    while (len > 0 && isspace((unsigned char)s[len - 1])) {
+        s[len - 1] = '\0';
+        len--;
+    }
+}
+
+static char *PS2DupString(const char *s)
+{
+    size_t len;
+    char *out;
+
+    if (s == NULL)
+        return NULL;
+
+    len = strlen(s) + 1;
+    out = malloc(len);
+    if (out == NULL)
+        return NULL;
+
+    memcpy(out, s, len);
+    return out;
+}
+
+static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
+{
+    uint32_t flags = 0;
+    const char *p = gsm_arg;
+    int fd;
+    char romver[4] = {0};
+
+    if (p == NULL || *p == '\0')
+        return 0;
+
+    /*
+     * Match OSDMenu loader format:
+     *   fp1
+     *   fp2
+     *   1080ix1|2|3
+     * optional:
+     *   :1|2|3
+     */
+    if (!strncmp(p, "fp", 2)) {
+        switch (p[2]) {
+            case '1':
+                flags |= EGSM_FLAG_VMODE_FP1;
+                break;
+            case '2':
+                flags |= EGSM_FLAG_VMODE_FP2;
+                break;
+            default:
+                return 0;
+        }
+        p += 3;
+    } else if (!strncmp(p, "1080ix", 6)) {
+        switch (p[6]) {
+            case '1':
+                flags |= EGSM_FLAG_VMODE_1080I_X1;
+                break;
+            case '2':
+                flags |= EGSM_FLAG_VMODE_1080I_X2;
+                break;
+            case '3':
+                flags |= EGSM_FLAG_VMODE_1080I_X3;
+                break;
+            default:
+                return 0;
+        }
+        p += 7;
+    } else {
+        return 0;
+    }
+
+    if (*p == ':') {
+        p++;
+        switch (*p) {
+            case '1':
+                flags |= EGSM_FLAG_COMP_1;
+                break;
+            case '2':
+                flags |= EGSM_FLAG_COMP_2;
+                break;
+            case '3':
+                flags |= EGSM_FLAG_COMP_3;
+                break;
+            default:
+                break;
+        }
+        p++;
+    }
+
+    if (flags == 0)
+        return 0;
+
+    /*
+     * Keep PS2BBL behavior:
+     * disable 576p on ROMs older than 2.20 or when ROMVER cannot be read.
+     */
+    fd = open("rom0:ROMVER", O_RDONLY);
+    if (fd < 0) {
+        flags |= EGSM_FLAG_NO_576P;
+    } else {
+        read(fd, romver, sizeof(romver));
+        close(fd);
+        if (romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
+            flags |= EGSM_FLAG_NO_576P;
+    }
+
+    return flags;
+}
+
+static void PS2ApplyEGSMIfNeeded(uint32_t flags)
+{
+    if (flags == 0)
+        return;
+
+    DPRINTF("%s: applying eGSM flags 0x%08x\n", __func__, flags);
+    enableGSM(flags);
+}
+
+static FILE *PS2OpenOSDGSMConfig(void)
+{
+    FILE *gsm_conf = NULL;
+
+#ifdef HDD
+    if (g_ps2disc_cfg_hint == PS2_DISC_HINT_HDD) {
+        DPRINTF("%s: trying %s\n", __func__, OSDGSM_HDD_PFS_PATH);
+        gsm_conf = fopen(OSDGSM_HDD_PFS_PATH, "r");
+    }
+#endif
+
+    if (gsm_conf == NULL) {
+        char cnf_path[] = OSDGSM_MC_PATH;
+        int preferred = (g_ps2disc_cfg_hint == PS2_DISC_HINT_MC1) ? 1 : 0;
+
+        cnf_path[2] = (char)('0' + preferred);
+        DPRINTF("%s: trying %s\n", __func__, cnf_path);
+        gsm_conf = fopen(cnf_path, "r");
+        if (gsm_conf == NULL) {
+            cnf_path[2] = (preferred == 1) ? '0' : '1';
+            DPRINTF("%s: trying %s\n", __func__, cnf_path);
+            gsm_conf = fopen(cnf_path, "r");
+        }
+    }
+
+    return gsm_conf;
+}
+
+static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
+{
+    FILE *gsm_conf;
+    char *default_arg = NULL;
+    char *title_arg = NULL;
+    char *selected_arg = NULL;
+    char line_buffer[64];
+
+    if (flags_out != NULL)
+        *flags_out = 0;
+
+    if (title_id == NULL || title_id[0] == '\0')
+        return NULL;
+
+    DPRINTF("%s: trying to load OSDGSM.CNF\n", __func__);
+    gsm_conf = PS2OpenOSDGSMConfig();
+    if (gsm_conf == NULL)
+        return NULL;
+
+    while (fgets(line_buffer, sizeof(line_buffer), gsm_conf) != NULL) {
+        char *key;
+        char *value;
+        char *sep = strchr(line_buffer, '=');
+
+        if (sep == NULL)
+            continue;
+
+        *sep = '\0';
+        key = PS2TrimLeft(line_buffer);
+        value = PS2TrimLeft(sep + 1);
+        value[strcspn(value, "\r\n")] = '\0';
+        PS2TrimRight(key);
+        PS2TrimRight(value);
+
+        if (*key == '\0' || *value == '\0')
+            continue;
+
+        if (!strncmp(key, title_id, 11)) {
+            DPRINTF("%s: OSDGSM.CNF title-specific match for %s\n", __func__, title_id);
+            title_arg = PS2DupString(value);
+            break;
+        }
+
+        if (!strncmp(key, "default", 7)) {
+            char *tmp = PS2DupString(value);
+            if (tmp != NULL) {
+                if (default_arg != NULL)
+                    free(default_arg);
+                default_arg = tmp;
+            }
+        }
+    }
+
+    fclose(gsm_conf);
+
+    if (title_arg != NULL) {
+        if (default_arg != NULL)
+            free(default_arg);
+        selected_arg = title_arg;
+    } else {
+        selected_arg = default_arg;
+    }
+
+    if (selected_arg != NULL) {
+        uint32_t flags = PS2ParseOSDGSMFlags(selected_arg);
+        if (flags == 0) {
+            DPRINTF("%s: ignoring invalid OSDGSM value '%s' for title %s\n", __func__, selected_arg, title_id);
+            free(selected_arg);
+            return NULL;
+        }
+
+        DPRINTF("%s: OSDGSM value '%s' parsed as flags 0x%08x\n", __func__, selected_arg, flags);
+        if (flags_out != NULL)
+            *flags_out = flags;
+    }
+
+    return selected_arg;
 }
 
 #define CNF_PATH_LEN_MAX 64
@@ -344,6 +601,8 @@ int PS2DiscBoot(int skip_PS2LOGO)
     int is_pal_vmode = 0;
     int bootfile_status = 0;
     char *args[1];
+    char *osdgsm_arg = NULL;
+    uint32_t osdgsm_flags = 0;
     const unsigned char *pChar;
     const char *cnf_start, *cnf_end;
     int fd, size, size_remaining, size_read;
@@ -422,10 +681,16 @@ int PS2DiscBoot(int skip_PS2LOGO)
     DPRINTF("%s updating play history\n", __func__);
     DPRINTF("%s:\n\tline:[%s]\n\tps2discboot:[%s]\n", __func__, line, ps2disc_boot);
     GameIDHandleDisc(ps2disc_boot, GameIDDiscEnabled());
+    osdgsm_arg = PS2GetOSDGSMArgument(ps2disc_boot, &osdgsm_flags);
+    if (osdgsm_arg != NULL)
+        DPRINTF("%s: discovered OSDGSM setting '%s' for %s\n", __func__, osdgsm_arg, ps2disc_boot);
 
     CleanUp();
     if (skip_PS2LOGO) {
         SifExitCmd();
+        PS2ApplyEGSMIfNeeded(osdgsm_flags);
+        if (osdgsm_arg != NULL)
+            free(osdgsm_arg);
         LoadExecPS2(line, 0, NULL);
     } else {
         int ret;
@@ -437,6 +702,9 @@ int PS2DiscBoot(int skip_PS2LOGO)
             SifLoadFileExit();
             DPRINTF("%s: failed to load rom0:PS2LOGO for patching (%d); falling back to LoadExecPS2\n", __func__, ret);
             SifExitCmd();
+            PS2ApplyEGSMIfNeeded(osdgsm_flags);
+            if (osdgsm_arg != NULL)
+                free(osdgsm_arg);
             LoadExecPS2("rom0:PS2LOGO", 1, args);
             return 0;
         }
@@ -445,6 +713,9 @@ int PS2DiscBoot(int skip_PS2LOGO)
         if (elfdata.epc == 0) {
             DPRINTF("%s: PS2LOGO load returned empty entrypoint; falling back to LoadExecPS2\n", __func__);
             SifExitCmd();
+            PS2ApplyEGSMIfNeeded(osdgsm_flags);
+            if (osdgsm_arg != NULL)
+                free(osdgsm_arg);
             LoadExecPS2("rom0:PS2LOGO", 1, args);
             return 0;
         }
@@ -452,6 +723,9 @@ int PS2DiscBoot(int skip_PS2LOGO)
         PatchPS2LOGO(elfdata.epc, is_pal_vmode);
         ResetIOPForExec();
         SifExitCmd();
+        PS2ApplyEGSMIfNeeded(osdgsm_flags);
+        if (osdgsm_arg != NULL)
+            free(osdgsm_arg);
         ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 1, args);
     }
     return 0;

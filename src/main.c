@@ -114,6 +114,21 @@ static int g_mx4sio_slot = -2;
 #endif
 static int config_source = SOURCE_INVALID;
 
+static int get_disc_config_hint(void)
+{
+#ifdef HDD
+    if (config_source == SOURCE_HDD)
+        return PS2_DISC_HINT_HDD;
+#endif
+#ifdef MMCE
+    if (config_source == SOURCE_MMCE1)
+        return PS2_DISC_HINT_MC1;
+#endif
+    if (config_source == SOURCE_MC1)
+        return PS2_DISC_HINT_MC1;
+    return PS2_DISC_HINT_MC0;
+}
+
 enum {
     DEV_UNKNOWN = -1,
     DEV_MC0 = 0,
@@ -409,6 +424,77 @@ static int resolve_pair_path(char *path, int slot_index, char preferred, char **
     return 0;
 }
 
+#ifdef HDD
+static int path_has_patinfo_token(const char *path)
+{
+    static const char token[] = ":PATINFO";
+    size_t token_len = sizeof(token) - 1;
+    const char *p;
+
+    if (path == NULL)
+        return 0;
+
+    for (p = path; *p != '\0'; p++) {
+        size_t k;
+        for (k = 0; k < token_len && p[k] != '\0'; k++) {
+            unsigned char a = (unsigned char)p[k];
+            unsigned char b = (unsigned char)token[k];
+
+            if (a >= 'a' && a <= 'z')
+                a -= ('a' - 'A');
+            if (b >= 'a' && b <= 'z')
+                b -= ('a' - 'A');
+            if (a != b)
+                break;
+        }
+
+        if (k == token_len)
+            return 1;
+    }
+
+    return 0;
+}
+
+static int entry_has_arg_ci(int key_idx, int entry_idx, const char *arg)
+{
+    int i;
+
+    if (arg == NULL)
+        return 0;
+    if (key_idx < 0 || key_idx >= 17)
+        return 0;
+    if (entry_idx < 0 || entry_idx >= CONFIG_KEY_INDEXES)
+        return 0;
+
+    for (i = 0; i < GLOBCFG.KEYARGC[key_idx][entry_idx] && i < MAX_ARGS_PER_ENTRY; i++) {
+        const char *entry_arg = GLOBCFG.KEYARGS[key_idx][entry_idx][i];
+        if (entry_arg == NULL)
+            continue;
+
+        while (*entry_arg == ' ' || *entry_arg == '\t')
+            entry_arg++;
+
+        if (ci_eq(entry_arg, arg))
+            return 1;
+    }
+
+    return 0;
+}
+
+static int allow_virtual_patinfo_entry(int key_idx, int entry_idx, const char *path)
+{
+    return path_has_patinfo_token(path) && entry_has_arg_ci(key_idx, entry_idx, "-patinfo");
+}
+#else
+static int allow_virtual_patinfo_entry(int key_idx, int entry_idx, const char *path)
+{
+    (void)key_idx;
+    (void)entry_idx;
+    (void)path;
+    return 0;
+}
+#endif
+
 #ifdef MMCE
 static char preferred_mmce_slot(void)
 {
@@ -518,7 +604,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 }
 #endif
                 path = CheckPath(path);
-                if (exist(path)) {
+                if (allow_virtual_patinfo_entry(i, j, path) || exist(path)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
                     if (first_valid[i] == NULL)
                         first_valid[i] = path;
@@ -576,7 +662,28 @@ static int ROMVERMatchesAnyPrefix(const u8 romver[16], const char *const *prefix
         return 0;
 
     for (i = 0; i < prefix_count; i++) {
-        if (!strncmp((const char *)romver, prefixes[i], ROMVER_MODEL_PREFIX_LEN))
+        size_t j;
+        int match = 1;
+
+        for (j = 0; j < ROMVER_MODEL_PREFIX_LEN; j++) {
+            unsigned char a = romver[j];
+            unsigned char b = (unsigned char)prefixes[i][j];
+
+            if (a == '\0' || b == '\0') {
+                match = 0;
+                break;
+            }
+            if (a >= 'a' && a <= 'z')
+                a -= ('a' - 'A');
+            if (b >= 'a' && b <= 'z')
+                b -= ('a' - 'A');
+            if (a != b) {
+                match = 0;
+                break;
+            }
+        }
+
+        if (match)
             return 1;
     }
 
@@ -1160,7 +1267,7 @@ int main(int argc, char *argv[])
 #endif
                     } else {
                         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
-                        if (!exist(EXECPATHS[j])) {
+                        if (!allow_virtual_patinfo_entry(x + 1, j, EXECPATHS[j]) && !exist(EXECPATHS[j])) {
                             scr_setfontcolor(0x00ffff);
                             DPRINTF("%s not found\n", EXECPATHS[j]);
                             scr_setfontcolor(0xffffff);
@@ -1213,7 +1320,7 @@ int main(int argc, char *argv[])
 #endif
         } else {
             EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[0][j]);
-            if (!exist(EXECPATHS[j])) {
+            if (!allow_virtual_patinfo_entry(0, j, EXECPATHS[j]) && !exist(EXECPATHS[j])) {
                 scr_printf("%s %-15s\r", EXECPATHS[j], "not found");
                 continue;
             }
@@ -1312,11 +1419,10 @@ char *CheckPath(char *path)
             DPRINTF("-{%s}-\n", path);
             return path;
         } else {
-            DPRINTF("--{%s}--{%s}\n", path, strstr(path, "pfs:"));
-            return strstr(path, "pfs:");
+            char *pfs_path = strstr(path, "pfs:");
+            DPRINTF("--{%s}--{%s}\n", path, (pfs_path != NULL) ? pfs_path : "<none>");
+            return (pfs_path != NULL) ? pfs_path : path;
         } // leave path as pfs:/blabla
-        if (!MountParty(path))
-            return strstr(path, "pfs:");
 #endif
 #ifdef MX4SIO
     } else if (!strncmp("massX:", path, 6)) {
@@ -1751,6 +1857,7 @@ int dischandler(int skip_ps2logo)
         case SCECdPS2CDDA:
         case SCECdPS2DVD:
             // Boot PlayStation 2 disc
+            PS2DiscSetConfigHint(get_disc_config_hint());
             PS2DiscBoot(skip_ps2logo);
             break;
 

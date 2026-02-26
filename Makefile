@@ -61,6 +61,7 @@ EE_ASM_DIR = asm/
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
           modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o \
+          egsm.o ee_exception_l2.o \
           $(EMBEDDED_STUFF) \
 		      $(IOP_OBJS)
 
@@ -70,9 +71,14 @@ EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
 EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib
 EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
+EE_LDFLAGS += -Wl,-Tlinkfile.egsm
 EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
-EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include
+EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2SDK)/common/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
+
+# Keep eGSM object layout predictable (matches OSDMenu's use of -G0).
+$(EE_OBJS_DIR)egsm.o: EE_CFLAGS += -G0 -Os
+$(EE_OBJS_DIR)ee_exception_l2.o: EE_CFLAGS += -G0 -Os
 
 # ---{ CONDITIONS }--- #
 
@@ -337,6 +343,12 @@ ifneq ($(VERBOSE),1)
 	@echo "  - $@"
 endif
 	$(EE_AS) $(EE_ASFLAGS) $< -o $@
+
+$(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.S | $(EE_OBJS_DIR)
+ifneq ($(VERBOSE),1)
+	@echo "  - $@"
+endif
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 #
 analize:
 	$(MAKE) rebuild DEBUG=1

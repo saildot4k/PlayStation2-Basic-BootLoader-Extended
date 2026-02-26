@@ -1,5 +1,21 @@
 
 /**
+ * @brief Hint used for OSDMenu-like OSDGSM.CNF lookup order.
+ */
+enum
+{
+    PS2_DISC_HINT_MC0 = 0,
+    PS2_DISC_HINT_MC1,
+    PS2_DISC_HINT_HDD
+};
+
+/**
+ * @brief Sets config-source hint used by PS2 disc helpers.
+ * @param hint one of PS2_DISC_HINT_*
+ */
+void PS2DiscSetConfigHint(int hint);
+
+/**
  * @brief  Boots the inserted PlayStation 2 game disc
  * @param skip_PS2LOGO wheter to load the game main executable via rom0:PS2LOGO or run it directly
  * @returns 0 on success.

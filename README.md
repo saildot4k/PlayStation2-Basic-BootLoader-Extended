@@ -28,8 +28,9 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 - `CDROM_DISABLE_GAMEID = 1` disables visual game ID for discs launched via `$CDVD`.
 
 ### PS2LOGO patching (PS2 discs only)
-- `$CDVD` boots via the boot ROM `rom0:PS2LOGO`, but PS2BBL patches it at runtime so logo behavior follows the disc region (not the console region) and bypasses the logo checksum reject path.
+- `$CDVD` Runs disc with logo.  PS2BBL gets the target video mode from the disc's SYSTEM.CNF and patches PS2LOGO to always use the disc region instead of the console region, removing logo checksum check.
 - `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
+- `SKIP_PS2LOGO` Global config is deprecated from PS2BBL because the above 2 options cover with and wthout logo.
 
 ### PS1DRV options (PS1 discs only)
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
@@ -41,7 +42,11 @@ These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
-You can pass up to 8 args per entry.
+- `-gsm=fp1|fp2|1080ix1|1080ix2|1080ix3[:1|:2|:3]` enables eGSM for ELF launch (ignored for `rom?:` paths).
+- `-dev9=NIC|NICHDD` sets DEV9/HDD policy before ELF launch.
+- `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
+  This is mainly for HDD builds.
+You can pass up to 8 args per entry. Args are processed in the same order they are written in the INI.
 Example:
 ```
 NAME_R1 = NHDDL
@@ -49,6 +54,14 @@ LK_R1_E1 = mmce?:/NEUTRINO/nhddl.elf
 ARG_R1_E1 = -video=480p
 ARG_R1_E1 = -mode=mmce
 ARG_R1_E1 = -mode=ata
+```
+PATINFO example:
+```
+LK_AUTO_E1 = hdd0:+OSDMENU:PATINFO
+ARG_AUTO_E1 = -patinfo
+ARG_AUTO_E1 = -gsm=fp2:1
+ARG_AUTO_E1 = -dev9=NIC
+ARG_AUTO_E1 = pfs:/APPS/APP.ELF
 ```
 
 ### Hotkey names
@@ -62,6 +75,7 @@ NAME_SQUARE = POPSLOADER
 
 ## Known bugs/issues
 
+- Master Patched Disc logos may be inverted. No fix incmoning - PCM720
 you tell me ;)
 
 ## Credits & Thanks
