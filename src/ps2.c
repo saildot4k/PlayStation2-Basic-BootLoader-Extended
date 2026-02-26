@@ -170,6 +170,7 @@ static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
     uint32_t flags = 0;
     const char *p = gsm_arg;
     int fd;
+    int nread;
     char romver[4] = {0};
 
     if (p == NULL || *p == '\0')
@@ -243,9 +244,12 @@ static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
     if (fd < 0) {
         flags |= EGSM_FLAG_NO_576P;
     } else {
-        read(fd, romver, sizeof(romver));
+        nread = read(fd, romver, sizeof(romver));
         close(fd);
-        if (romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
+        if (nread < (int)sizeof(romver) ||
+            romver[1] < '0' || romver[1] > '9' ||
+            romver[2] < '0' || romver[2] > '9' ||
+            romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
             flags |= EGSM_FLAG_NO_576P;
     }
 
