@@ -880,6 +880,9 @@ int main(int argc, char *argv[])
 
     DPRINTF("init ROMVER, model name ps1dvr and dvdplayer ver\n");
     OSDInitROMVER(); // Initialize ROM version (must be done first).
+    // Refresh ROMVER/platform after IOP services are fully initialized.
+    ReadROMVEROnce();
+    LogDetectedPlatform();
     ModelNameInit(); // Initialize model name
     PS1DRVInit();    // Initialize PlayStation Driver (PS1DRV)
     DVDPlayerInit(); // Initialize ROM DVD player. It is normal for this to fail on consoles that have no DVD ROM chip (i.e. DEX or the SCPH-10000/SCPH-15000).
