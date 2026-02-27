@@ -71,7 +71,6 @@ EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
 EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib
 EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
-EE_LDFLAGS += -Wl,-T,linkfile.egsm
 # Keep default PS2SDK linkfile for runtime stability.
 EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
 EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2SDK)/common/include -I$(PS2DEV)/gsKit/include

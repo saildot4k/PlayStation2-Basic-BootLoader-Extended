@@ -38,14 +38,11 @@ static int g_ps2disc_cfg_hint = PS2_DISC_HINT_MC0;
 /*
  * PS2LOGO packed-path callbacks cannot reliably execute from PS2BBL text
  * because rom0:PS2LOGO load may overwrite user RAM where PS2BBL resides.
- * Keep tiny trampolines in reserved kernel memory (OSDMenu-style), but place
- * them after the eGSM-resident block to avoid overlap.
+ * Keep tiny trampolines in reserved kernel memory (OSDMenu-style).
  */
-#define PS2LOGO_KERNEL_STUBS_DEFAULT_BASE 0x00090000u
-#define PS2LOGO_KERNEL_STUBS_ALIGN        0x80u
-#define PS2LOGO_KERNEL_UNSCRAMBLE_OFFSET  0x000u
-#define PS2LOGO_KERNEL_PATCHJUMP_OFFSET   0x080u
-#define PS2LOGO_KERNEL_PATCHEXEC_OFFSET   0x0C0u
+#define PS2LOGO_KERNEL_UNSCRAMBLE_ADDR 0x00081400
+#define PS2LOGO_KERNEL_PATCHJUMP_ADDR  0x00081480
+#define PS2LOGO_KERNEL_PATCHEXEC_ADDR  0x000814C0
 
 #define MIPS_REG_ZERO 0
 #define MIPS_REG_V0   2
@@ -78,46 +75,6 @@ static int g_ps2disc_cfg_hint = PS2_DISC_HINT_MC0;
 #define MIPS_HI16(v)              (((uint32_t)(v) >> 16) & 0xffffu)
 #define MIPS_LO16(v)              ((uint32_t)(v) & 0xffffu)
 
-extern unsigned char __egsm_end __attribute__((weak));
-
-static uint32_t g_ps2logo_kernel_stubs_base = 0;
-
-static uint32_t PS2LOGOGetKernelStubBase(void)
-{
-    uint32_t base = g_ps2logo_kernel_stubs_base;
-
-    if (base != 0)
-        return base;
-
-    if ((uintptr_t)&__egsm_end != 0u) {
-        base = ((uint32_t)(uintptr_t)&__egsm_end + PS2LOGO_KERNEL_STUBS_ALIGN - 1u) & ~(PS2LOGO_KERNEL_STUBS_ALIGN - 1u);
-        base += PS2LOGO_KERNEL_STUBS_ALIGN;
-    } else {
-        base = PS2LOGO_KERNEL_STUBS_DEFAULT_BASE;
-    }
-
-    if (base < 0x00080000u || base >= 0x00100000u)
-        base = PS2LOGO_KERNEL_STUBS_DEFAULT_BASE;
-
-    g_ps2logo_kernel_stubs_base = base;
-    return base;
-}
-
-static uint32_t PS2LOGOGetUnscrambleStubAddr(void)
-{
-    return PS2LOGOGetKernelStubBase() + PS2LOGO_KERNEL_UNSCRAMBLE_OFFSET;
-}
-
-static uint32_t PS2LOGOGetPatchJumpStubAddr(void)
-{
-    return PS2LOGOGetKernelStubBase() + PS2LOGO_KERNEL_PATCHJUMP_OFFSET;
-}
-
-static uint32_t PS2LOGOGetPatchExecStubAddr(void)
-{
-    return PS2LOGOGetKernelStubBase() + PS2LOGO_KERNEL_PATCHEXEC_OFFSET;
-}
-
 static void PS2LOGOWriteWords(uint32_t dst, const uint32_t *words, size_t word_count)
 {
     size_t i;
@@ -128,7 +85,6 @@ static void PS2LOGOWriteWords(uint32_t dst, const uint32_t *words, size_t word_c
 
 static void PS2LOGOInstallUnscrambleStub(void)
 {
-    uint32_t dst = PS2LOGOGetUnscrambleStubAddr();
     static const uint32_t code[] = {
         /* t0 = s1 (logo buffer) */
         MIPS_OR(MIPS_REG_T0, MIPS_REG_S1, MIPS_REG_ZERO),
@@ -152,7 +108,7 @@ static void PS2LOGOInstallUnscrambleStub(void)
         MIPS_NOP
     };
 
-    PS2LOGOWriteWords(dst, code, sizeof(code) / sizeof(code[0]));
+    PS2LOGOWriteWords(PS2LOGO_KERNEL_UNSCRAMBLE_ADDR, code, sizeof(code) / sizeof(code[0]));
 }
 
 static void PS2LOGOEmitPatchStub(uint32_t dst, uint32_t region_instr, uint32_t jal_unscramble_instr, uint32_t tail_jump)
@@ -193,20 +149,14 @@ static uint32_t PS2LOGOGetUnpackerExecTarget(void)
 
 static void PS2LOGOInstallKernelStubs(void)
 {
-    uint32_t unscramble_stub = PS2LOGOGetUnscrambleStubAddr();
-    uint32_t patchjump_stub = PS2LOGOGetPatchJumpStubAddr();
-    uint32_t patchexec_stub = PS2LOGOGetPatchExecStubAddr();
     uint32_t region_instr = (0x24020000u | (g_ps2logo_is_pal ? 2u : 0u));
-    uint32_t jal_unscramble_instr = MIPS_JAL(unscramble_stub);
+    uint32_t jal_unscramble_instr = MIPS_JAL(PS2LOGO_KERNEL_UNSCRAMBLE_ADDR);
     uint32_t unpacker_exec_target = PS2LOGOGetUnpackerExecTarget();
 
-    DPRINTF("%s: stubs base=0x%08x unscramble=0x%08x patchjump=0x%08x patchexec=0x%08x\n",
-            __func__, PS2LOGOGetKernelStubBase(), unscramble_stub, patchjump_stub, patchexec_stub);
-
     PS2LOGOInstallUnscrambleStub();
-    PS2LOGOEmitPatchStub(patchjump_stub, region_instr, jal_unscramble_instr, 0x00100000);
+    PS2LOGOEmitPatchStub(PS2LOGO_KERNEL_PATCHJUMP_ADDR, region_instr, jal_unscramble_instr, 0x00100000);
     if (unpacker_exec_target != 0)
-        PS2LOGOEmitPatchStub(patchexec_stub, region_instr, jal_unscramble_instr, unpacker_exec_target);
+        PS2LOGOEmitPatchStub(PS2LOGO_KERNEL_PATCHEXEC_ADDR, region_instr, jal_unscramble_instr, unpacker_exec_target);
 
     FlushCache(0);
     FlushCache(2);
@@ -224,7 +174,7 @@ static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t cd_dec_loc)
 
     // Disable DSP XORing call and replace post-read reset call with kernel descramble stub.
     _sw(0x00000000, cd_dec_loc);
-    _sw(MIPS_JAL(PS2LOGOGetUnscrambleStubAddr()), cd_dec_loc + 0x90);
+    _sw(MIPS_JAL(PS2LOGO_KERNEL_UNSCRAMBLE_ADDR), cd_dec_loc + 0x90);
 
     FlushCache(0);
     FlushCache(2);
@@ -260,10 +210,10 @@ static void PatchPS2LOGO(uint32_t epc, int is_pal)
         // Packed PS2LOGO fallback: hook unpacker path so patch is applied after unpack.
         if ((_lw(0x1000200) & 0xff000000) == 0x08000000) {
             // ROM 2.20+: replace unpacker jump target with kernel patch+jump wrapper.
-            _sw(MIPS_J(PS2LOGOGetPatchJumpStubAddr()), (uint32_t)0x1000200);
+            _sw(MIPS_J(PS2LOGO_KERNEL_PATCHJUMP_ADDR), (uint32_t)0x1000200);
         } else if ((_lw(0x100011c) & 0xff000000) == 0x0c000000) {
             // ROM 2.00: hijack unpacker's ExecPS2 call through kernel patch+exec wrapper.
-            _sw(MIPS_JAL(PS2LOGOGetPatchExecStubAddr()), (uint32_t)0x100011c);
+            _sw(MIPS_JAL(PS2LOGO_KERNEL_PATCHEXEC_ADDR), (uint32_t)0x100011c);
         }
 
         FlushCache(0);
@@ -863,7 +813,6 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
     CleanUp();
     if (skip_PS2LOGO) {
-        SifExitRpc();
         SifExitCmd();
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)
@@ -878,7 +827,6 @@ int PS2DiscBoot(int skip_PS2LOGO)
         if (ret && (ret = SifLoadElfEncrypted("rom0:PS2LOGO", &elfdata))) {
             SifLoadFileExit();
             DPRINTF("%s: failed to load rom0:PS2LOGO for patching (%d); falling back to LoadExecPS2\n", __func__, ret);
-            SifExitRpc();
             SifExitCmd();
             PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
@@ -890,7 +838,6 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
         if (elfdata.epc == 0) {
             DPRINTF("%s: PS2LOGO load returned empty entrypoint; falling back to LoadExecPS2\n", __func__);
-            SifExitRpc();
             SifExitCmd();
             PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
@@ -901,7 +848,6 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
         PatchPS2LOGO(elfdata.epc, is_pal_vmode);
         ResetIOPForExec();
-        SifExitRpc();
         SifExitCmd();
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)

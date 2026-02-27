@@ -8,7 +8,6 @@
 #include <ps2sdkapi.h>
 #include <syscallnr.h>
 #include <tamtypes.h>
-#include "debugprintf.h"
 
 #define MAKE_J(func) (uint32_t)((0x02 << 26) | (((uint32_t)func) / 4)) // Jump (MIPS instruction)
 #define NOP 0x00000000                                                 // No Operation (MIPS instruction)
@@ -62,7 +61,6 @@ struct gsm_state {
   uint64_t last_display2;
 };
 static struct gsm_state state = {NULL};
-static uint32_t g_hook_seen = 0;
 
 enum MIPS_OP {
   MOP_SPECIAL = 0x00,
@@ -558,12 +556,6 @@ void el2_c_handler(ee_registers_t *regs) {
 static void hook_SetGsCrt(short int interlace, short int mode, short int ffmd) {
   struct gsm_state *pstate = _TO_KSEG0(&state);
 
-  if (!g_hook_seen) {
-    g_hook_seen = 1;
-    DPRINTF("%s: first hit interlace=%d mode=0x%x ffmd=%d flags=0x%08x\n",
-            __func__, interlace, mode, ffmd, pstate->flags);
-  }
-
   // printf("%s(%d, 0x%x, %d)\n", __FUNCTION__, interlace, mode, ffmd);
 
   // Set game state
@@ -628,19 +620,12 @@ static void hook_SetGsCrt(short int interlace, short int mode, short int ffmd) {
 
 void enableGSM(uint32_t flags) {
   volatile uint32_t *v_debug = (volatile uint32_t *)0x80000100;
-  void *org_handler;
-  void *new_handler;
 
   state.flags = flags;
-  g_hook_seen = 0;
 
   // Hook SetGsCrt
-  org_handler = GetSyscallHandler(__NR_SetGsCrt);
-  state.org_SetGsCrt = org_handler;
+  state.org_SetGsCrt = GetSyscallHandler(__NR_SetGsCrt);
   SetSyscall(__NR_SetGsCrt, (void *)(((uint32_t)(hook_SetGsCrt) & ~0xE0000000) | 0x80000000));
-  new_handler = GetSyscallHandler(__NR_SetGsCrt);
-  DPRINTF("%s: flags=0x%08x org_SetGsCrt=%p hook_SetGsCrt=%p installed=%p\n",
-          __func__, flags, org_handler, hook_SetGsCrt, new_handler);
 
   // Make sure no exceptions are generated
   _ee_disable_bpc();
@@ -650,8 +635,6 @@ void enableGSM(uint32_t flags) {
   v_debug[0] = MAKE_J((int)el2_asm_handler);
   v_debug[1] = NOP;
   ee_kmode_exit();
-  DPRINTF("%s: EL2 vector [0]=0x%08x [1]=0x%08x el2_asm_handler=%p\n",
-          __func__, v_debug[0], v_debug[1], el2_asm_handler);
   FlushCache(WRITEBACK_DCACHE);
   FlushCache(INVALIDATE_ICACHE);
 
