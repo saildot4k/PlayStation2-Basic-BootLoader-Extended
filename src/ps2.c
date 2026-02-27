@@ -22,6 +22,105 @@
 #include "debugprintf.h"
 
 void CleanUp(void);
+
+#ifdef EMBED_PS2_STAGE2
+extern unsigned char ps2_stage2_loader_elf[];
+extern unsigned int size_ps2_stage2_loader_elf;
+
+#define ELF_MAGIC   0x464c457f
+#define ELF_PT_LOAD 1
+
+typedef struct
+{
+    uint8_t ident[16];
+    uint16_t type;
+    uint16_t machine;
+    uint32_t version;
+    uint32_t entry;
+    uint32_t phoff;
+    uint32_t shoff;
+    uint32_t flags;
+    uint16_t ehsize;
+    uint16_t phentsize;
+    uint16_t phnum;
+    uint16_t shentsize;
+    uint16_t shnum;
+    uint16_t shstrndx;
+} ps2_elf_header_t;
+
+typedef struct
+{
+    uint32_t type;
+    uint32_t offset;
+    void *vaddr;
+    uint32_t paddr;
+    uint32_t filesz;
+    uint32_t memsz;
+    uint32_t flags;
+    uint32_t align;
+} ps2_elf_pheader_t;
+
+static int PS2ExecEmbeddedELF(unsigned char *elf, unsigned int elf_size, int argc, char *argv[])
+{
+    ps2_elf_header_t *eh;
+    ps2_elf_pheader_t *eph;
+    int i;
+
+    if (elf == NULL || elf_size < sizeof(ps2_elf_header_t))
+        return -1;
+
+    eh = (ps2_elf_header_t *)elf;
+    if (_lw((uint32_t)&eh->ident) != ELF_MAGIC)
+        return -1;
+    if ((uint32_t)eh->phoff + ((uint32_t)eh->phnum * (uint32_t)sizeof(ps2_elf_pheader_t)) > elf_size)
+        return -1;
+
+    eph = (ps2_elf_pheader_t *)(elf + eh->phoff);
+    for (i = 0; i < eh->phnum; i++) {
+        void *pdata;
+
+        if (eph[i].type != ELF_PT_LOAD)
+            continue;
+        if ((uint32_t)eph[i].offset > elf_size || (uint32_t)eph[i].filesz > (elf_size - (uint32_t)eph[i].offset))
+            return -1;
+
+        pdata = (void *)(elf + eph[i].offset);
+        memcpy(eph[i].vaddr, pdata, eph[i].filesz);
+        if (eph[i].memsz > eph[i].filesz)
+            memset((uint8_t *)eph[i].vaddr + eph[i].filesz, 0, eph[i].memsz - eph[i].filesz);
+    }
+
+    FlushCache(0);
+    FlushCache(2);
+    ExecPS2((void *)eh->entry, NULL, argc, argv);
+    return 0;
+}
+
+static int PS2DiscBootViaStage2(const char *boot_path, int skip_PS2LOGO, const char *osdgsm_arg)
+{
+    char *stage2_argv[4];
+    int stage2_argc = 0;
+
+    if (boot_path == NULL || *boot_path == '\0' || size_ps2_stage2_loader_elf < sizeof(ps2_elf_header_t))
+        return -1;
+
+    if (skip_PS2LOGO) {
+        stage2_argv[stage2_argc++] = (char *)boot_path;
+    } else {
+        stage2_argv[stage2_argc++] = "rom0:PS2LOGO";
+        stage2_argv[stage2_argc++] = (char *)boot_path;
+    }
+
+    if (osdgsm_arg != NULL && *osdgsm_arg != '\0') {
+        stage2_argv[stage2_argc++] = (char *)osdgsm_arg;
+        stage2_argv[stage2_argc++] = "-la=G";
+    }
+
+    DPRINTF("%s: stage2 argv0=%s argc=%d\n", __func__, stage2_argv[0], stage2_argc);
+    return PS2ExecEmbeddedELF(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv);
+}
+#endif
+
 void BootError(void)
 {
     char *args[1];
@@ -812,6 +911,14 @@ int PS2DiscBoot(int skip_PS2LOGO)
         DPRINTF("%s: discovered OSDGSM setting '%s' for %s\n", __func__, osdgsm_arg, ps2disc_boot);
 
     CleanUp();
+#ifdef EMBED_PS2_STAGE2
+    if (PS2DiscBootViaStage2(line, skip_PS2LOGO, osdgsm_arg) == 0) {
+        if (osdgsm_arg != NULL)
+            free(osdgsm_arg);
+        return 0;
+    }
+    DPRINTF("%s: stage2 handoff failed, continuing with legacy path\n", __func__);
+#endif
     if (skip_PS2LOGO) {
         SifExitCmd();
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
