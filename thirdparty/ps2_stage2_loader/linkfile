@@ -1,0 +1,137 @@
+/*
+# Linkfile script for stage2 loader.
+# Places eGSM runtime at 0x00080000 and loader runtime at 0x00084000,
+# matching OSDMenu loader layout.
+*/
+
+ENTRY(__start);
+
+MEMORY {
+	kram	: ORIGIN = 0x0080000, LENGTH = 0x1500
+	bram	: ORIGIN = 0x0084000, LENGTH = 0x1c000
+}
+
+PHDRS {
+  egsm PT_LOAD;
+  text PT_LOAD;
+}
+
+SECTIONS {
+	.text : {
+		KEEP(*egsm.o(.text))
+		KEEP(*egsm.o(.text.*))
+		KEEP(*ee_exception_l2.o(.text))
+		KEEP(*ee_exception_l2.o(.text.*))
+	} >kram :egsm
+	.rodata ALIGN(128): {
+		KEEP(*egsm.o(.rodata))
+		KEEP(*egsm.o(.rodata.*))
+		KEEP(*ee_exception_l2.o(.rodata))
+		KEEP(*ee_exception_l2.o(.rodata.*))
+	} >kram
+	.data ALIGN(128): {
+		KEEP(*egsm.o(.data))
+		KEEP(*egsm.o(.data.*))
+		KEEP(*egsm.o(.sdata))
+		KEEP(*egsm.o(.sdata.*))
+		KEEP(*ee_exception_l2.o(.data))
+		KEEP(*ee_exception_l2.o(.data.*))
+		KEEP(*ee_exception_l2.o(.sdata))
+		KEEP(*ee_exception_l2.o(.sdata.*))
+	} >kram
+	.bss ALIGN(128): {
+		KEEP(*egsm.o(.sbss))
+		KEEP(*egsm.o(.sbss.*))
+		KEEP(*egsm.o(.bss))
+		KEEP(*egsm.o(.bss.*))
+		KEEP(*ee_exception_l2.o(.sbss))
+		KEEP(*ee_exception_l2.o(.sbss.*))
+		KEEP(*ee_exception_l2.o(.bss))
+		KEEP(*ee_exception_l2.o(.bss.*))
+	} >kram
+
+	.text : {
+		_ftext = .;
+		*(EXCLUDE_FILE(*egsm.o *ee_exception_l2.o) .text)
+		*(EXCLUDE_FILE(*egsm.o *ee_exception_l2.o) .text.*)
+		*(.gnu.linkonce.t*)
+		KEEP(*(.init))
+		KEEP(*(.fini))
+		QUAD(0)
+	} >bram :text
+
+	PROVIDE(_etext = .);
+	PROVIDE(etext = .);
+
+	.ctors ALIGN(16): {
+		KEEP(*crtbegin*.o(.ctors))
+		KEEP(*(EXCLUDE_FILE(*crtend*.o) .ctors))
+		KEEP(*(SORT(.ctors.*)))
+		KEEP(*(.ctors))
+	} >bram
+	.dtors ALIGN(16): {
+		KEEP(*crtbegin*.o(.dtors))
+		KEEP(*(EXCLUDE_FILE(*crtend*.o) .dtors))
+		KEEP(*(SORT(.dtors.*)))
+		KEEP(*(.dtors))
+	} >bram
+
+	.reginfo : { *(.reginfo) } >bram
+
+	.data ALIGN(128): {
+		_fdata = .;
+		*(.data)
+		*(.data.*)
+		*(.gnu.linkonce.d*)
+		SORT(CONSTRUCTORS)
+	} >bram
+
+	.rodata ALIGN(128): {
+		*(EXCLUDE_FILE(*egsm.o *ee_exception_l2.o) .rodata)
+		*(EXCLUDE_FILE(*egsm.o *ee_exception_l2.o) .rodata.*)
+		*(.gnu.linkonce.r*)
+	} >bram
+
+	.rdata ALIGN(128): { *(.rdata) } >bram
+	.gcc_except_table ALIGN(128): { *(.gcc_except_table) } >bram
+
+	_gp = ALIGN(128) + 0x7ff0;
+	.lit4 ALIGN(128): { *(.lit4) } >bram
+	.lit8 ALIGN(128): { *(.lit8) } >bram
+
+	.sdata ALIGN(128): {
+		*(.sdata)
+		*(.sdata.*)
+		*(.gnu.linkonce.s*)
+	} >bram
+
+	_edata = .;
+	PROVIDE(edata = .);
+
+	.sbss ALIGN(128): {
+		_fbss = .;
+		*(.sbss)
+		*(.sbss.*)
+		*(.gnu.linkonce.sb*)
+		*(.scommon)
+	} >bram
+
+	.bss ALIGN(128): {
+		*(EXCLUDE_FILE(*egsm.o *ee_exception_l2.o) .bss)
+		*(EXCLUDE_FILE(*egsm.o *ee_exception_l2.o) .bss.*)
+		*(.gnu.linkonce.b*)
+		*(COMMON)
+	} >bram
+	_end_bss = .;
+
+	_end = .;
+	PROVIDE(end = .);
+
+	.spad 0x70000000: {
+		*(.spad)
+	}
+
+	PROVIDE(_heap_size = -1);
+	PROVIDE(_stack = .);
+	PROVIDE(_stack_size = ORIGIN(bram) + LENGTH(bram) - _stack);
+}
