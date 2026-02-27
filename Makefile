@@ -25,7 +25,6 @@ UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
-EMBED_PS2_STAGE2 ?= 1 # embed OSDMenu loader-style stage2 for PS2 disc launch
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -67,12 +66,6 @@ EE_OBJS = main.o \
 		      $(IOP_OBJS)
 
 EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o
-
-ifeq ($(EMBED_PS2_STAGE2), 1)
-  $(info --- embedding PS2 stage2 loader)
-  EE_OBJS += ps2_stage2_loader_elf.o
-  EE_CFLAGS += -DEMBED_PS2_STAGE2
-endif
 
 EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
@@ -298,9 +291,6 @@ release: clean $(EE_BIN_PACKED)
 clean:
 	@rm -rf $(EE_BIN) $(EE_BIN_STRIPPED) $(EE_BIN_ENCRYPTED) $(EE_BIN_PACKED)
 	@rm -rf $(EE_OBJS_DIR) $(EE_ASM_DIR)
-ifeq ($(EMBED_PS2_STAGE2), 1)
-	@$(MAKE) -C thirdparty/ps2_stage2_loader clean
-endif
 
 $(EE_BIN_STRIPPED): $(EE_BIN)
 	@echo " -- Stripping"
