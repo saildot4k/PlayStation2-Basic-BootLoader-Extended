@@ -725,7 +725,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
     char system_cnf[CNF_LEN_MAX], line[CNF_PATH_LEN_MAX]; // These were originally globals/static.
     int is_pal_vmode = 0;
     int bootfile_status = 0;
-    char *args[1];
+    char *args[2];
     char *osdgsm_arg = NULL;
     uint32_t osdgsm_flags = 0;
     const unsigned char *pChar;
@@ -800,7 +800,8 @@ int PS2DiscBoot(int skip_PS2LOGO)
     if (ps2disc_boot[0] == '\0')
         CNFExtractDiscIDFromBootPath(line, ps2disc_boot, sizeof(ps2disc_boot));
 
-    args[0] = line;
+    args[0] = "rom0:PS2LOGO";
+    args[1] = line;
 
 
     DPRINTF("%s updating play history\n", __func__);
@@ -830,7 +831,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
             PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
                 free(osdgsm_arg);
-            LoadExecPS2("rom0:PS2LOGO", 1, args);
+            LoadExecPS2("rom0:PS2LOGO", 2, args);
             return 0;
         }
         SifLoadFileExit();
@@ -841,7 +842,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
             PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
                 free(osdgsm_arg);
-            LoadExecPS2("rom0:PS2LOGO", 1, args);
+            LoadExecPS2("rom0:PS2LOGO", 2, args);
             return 0;
         }
 
@@ -851,7 +852,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)
             free(osdgsm_arg);
-        ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 1, args);
+        ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 2, args);
     }
     return 0;
 }
