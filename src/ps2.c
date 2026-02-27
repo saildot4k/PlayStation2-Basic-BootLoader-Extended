@@ -35,28 +35,131 @@ void BootError(void)
 static int g_ps2logo_is_pal = 0;
 static int g_ps2disc_cfg_hint = PS2_DISC_HINT_MC0;
 
-// Manual descramble handler used instead of the DSP XOR path.
-static int PS2LOGOUnscrambleLogo(char *unused_arg, void *logo_buffer, int buf_size)
+/*
+ * PS2LOGO packed-path callbacks cannot reliably execute from PS2BBL text
+ * because rom0:PS2LOGO load may overwrite user RAM where PS2BBL resides.
+ * Keep tiny trampolines in reserved kernel memory (OSDMenu-style).
+ */
+#define PS2LOGO_KERNEL_UNSCRAMBLE_ADDR 0x00081400
+#define PS2LOGO_KERNEL_PATCHJUMP_ADDR  0x00081480
+#define PS2LOGO_KERNEL_PATCHEXEC_ADDR  0x000814C0
+
+#define MIPS_REG_ZERO 0
+#define MIPS_REG_V0   2
+#define MIPS_REG_T0   8
+#define MIPS_REG_T1   9
+#define MIPS_REG_T2   10
+#define MIPS_REG_T3   11
+#define MIPS_REG_T4   12
+#define MIPS_REG_T5   13
+#define MIPS_REG_T6   14
+#define MIPS_REG_S1   17
+#define MIPS_REG_RA   31
+
+#define MIPS_NOP                  0x00000000u
+#define MIPS_LUI(rt, imm)         (0x3c000000u | ((uint32_t)(rt) << 16) | ((uint32_t)(imm) & 0xffffu))
+#define MIPS_ORI(rt, rs, imm)     (0x34000000u | ((uint32_t)(rs) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(imm) & 0xffffu))
+#define MIPS_ADDIU(rt, rs, imm)   (0x24000000u | ((uint32_t)(rs) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(imm) & 0xffffu))
+#define MIPS_LBU(rt, off, base)   (0x90000000u | ((uint32_t)(base) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(off) & 0xffffu))
+#define MIPS_SB(rt, off, base)    (0xa0000000u | ((uint32_t)(base) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(off) & 0xffffu))
+#define MIPS_SW(rt, off, base)    (0xac000000u | ((uint32_t)(base) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(off) & 0xffffu))
+#define MIPS_SLL(rd, rt, sa)      (0x00000000u | ((uint32_t)(rt) << 16) | ((uint32_t)(rd) << 11) | ((uint32_t)(sa) << 6))
+#define MIPS_SRL(rd, rt, sa)      (0x00000002u | ((uint32_t)(rt) << 16) | ((uint32_t)(rd) << 11) | ((uint32_t)(sa) << 6))
+#define MIPS_XOR(rd, rs, rt)      (0x00000026u | ((uint32_t)(rs) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(rd) << 11))
+#define MIPS_OR(rd, rs, rt)       (0x00000025u | ((uint32_t)(rs) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(rd) << 11))
+#define MIPS_SLTI(rt, rs, imm)    (0x28000000u | ((uint32_t)(rs) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)(imm) & 0xffffu))
+#define MIPS_BNE(rs, rt, off)     (0x14000000u | ((uint32_t)(rs) << 21) | ((uint32_t)(rt) << 16) | ((uint32_t)((off) & 0xffff)))
+#define MIPS_J(addr)              (0x08000000u | (((uint32_t)(addr) >> 2) & 0x03ffffffu))
+#define MIPS_JAL(addr)            (0x0c000000u | (((uint32_t)(addr) >> 2) & 0x03ffffffu))
+#define MIPS_JR(rs)               (0x00000008u | ((uint32_t)(rs) << 21))
+#define MIPS_HI16(v)              (((uint32_t)(v) >> 16) & 0xffffu)
+#define MIPS_LO16(v)              ((uint32_t)(v) & 0xffffu)
+
+static void PS2LOGOWriteWords(uint32_t dst, const uint32_t *words, size_t word_count)
 {
-    uint8_t *logo = NULL;
-    int i;
-    uint8_t key;
+    size_t i;
 
-    (void)unused_arg;
-    (void)logo_buffer;
-    (void)buf_size;
+    for (i = 0; i < word_count; i++)
+        _sw(words[i], dst + ((uint32_t)i * 4));
+}
 
-    asm volatile("move %0, $s1" : "=r"(logo)::);
-    if (logo == NULL)
-        return -1;
+static void PS2LOGOInstallUnscrambleStub(void)
+{
+    static const uint32_t code[] = {
+        /* t0 = s1 (logo buffer) */
+        MIPS_OR(MIPS_REG_T0, MIPS_REG_S1, MIPS_REG_ZERO),
+        /* t1 = key = logo[0], t2 = i = 0 */
+        MIPS_LBU(MIPS_REG_T1, 0, MIPS_REG_T0),
+        MIPS_ADDIU(MIPS_REG_T2, MIPS_REG_ZERO, 0),
+        /* loop: t3 = logo[i] */
+        MIPS_LBU(MIPS_REG_T3, 0, MIPS_REG_T0),
+        MIPS_XOR(MIPS_REG_T3, MIPS_REG_T3, MIPS_REG_T1),
+        MIPS_SLL(MIPS_REG_T4, MIPS_REG_T3, 3),
+        MIPS_SRL(MIPS_REG_T5, MIPS_REG_T3, 5),
+        MIPS_OR(MIPS_REG_T3, MIPS_REG_T4, MIPS_REG_T5),
+        MIPS_SB(MIPS_REG_T3, 0, MIPS_REG_T0),
+        MIPS_ADDIU(MIPS_REG_T0, MIPS_REG_T0, 1),
+        MIPS_ADDIU(MIPS_REG_T2, MIPS_REG_T2, 1),
+        MIPS_SLTI(MIPS_REG_T6, MIPS_REG_T2, 0x6000),
+        MIPS_BNE(MIPS_REG_T6, MIPS_REG_ZERO, -10),
+        MIPS_NOP,
+        MIPS_ADDIU(MIPS_REG_V0, MIPS_REG_ZERO, 0),
+        MIPS_JR(MIPS_REG_RA),
+        MIPS_NOP
+    };
 
-    key = logo[0];
-    for (i = 0; i < 0x6000; i++) {
-        logo[i] ^= key;
-        logo[i] = (uint8_t)((logo[i] << 3) | (logo[i] >> 5));
-    }
+    PS2LOGOWriteWords(PS2LOGO_KERNEL_UNSCRAMBLE_ADDR, code, sizeof(code) / sizeof(code[0]));
+}
 
-    return 0;
+static void PS2LOGOEmitPatchStub(uint32_t dst, uint32_t region_instr, uint32_t jal_unscramble_instr, uint32_t tail_jump)
+{
+    uint32_t code[] = {
+        MIPS_LUI(MIPS_REG_T0, MIPS_HI16(0x00102020)),
+        MIPS_ORI(MIPS_REG_T0, MIPS_REG_T0, MIPS_LO16(0x00102020)),
+        MIPS_LUI(MIPS_REG_T1, MIPS_HI16(region_instr)),
+        MIPS_ORI(MIPS_REG_T1, MIPS_REG_T1, MIPS_LO16(region_instr)),
+        MIPS_SW(MIPS_REG_T1, 0, MIPS_REG_T0),
+
+        MIPS_LUI(MIPS_REG_T0, MIPS_HI16(0x00101578)),
+        MIPS_ORI(MIPS_REG_T0, MIPS_REG_T0, MIPS_LO16(0x00101578)),
+        MIPS_SW(MIPS_REG_ZERO, 0, MIPS_REG_T0),
+
+        MIPS_LUI(MIPS_REG_T0, MIPS_HI16(0x00101608)),
+        MIPS_ORI(MIPS_REG_T0, MIPS_REG_T0, MIPS_LO16(0x00101608)),
+        MIPS_LUI(MIPS_REG_T1, MIPS_HI16(jal_unscramble_instr)),
+        MIPS_ORI(MIPS_REG_T1, MIPS_REG_T1, MIPS_LO16(jal_unscramble_instr)),
+        MIPS_SW(MIPS_REG_T1, 0, MIPS_REG_T0),
+
+        MIPS_J(tail_jump),
+        MIPS_NOP
+    };
+
+    PS2LOGOWriteWords(dst, code, sizeof(code) / sizeof(code[0]));
+}
+
+static uint32_t PS2LOGOGetUnpackerExecTarget(void)
+{
+    uint32_t instr = _lw(0x100011c);
+
+    if ((instr & 0xff000000u) != 0x0c000000u)
+        return 0;
+
+    return ((instr & 0x03ffffffu) << 2);
+}
+
+static void PS2LOGOInstallKernelStubs(void)
+{
+    uint32_t region_instr = (0x24020000u | (g_ps2logo_is_pal ? 2u : 0u));
+    uint32_t jal_unscramble_instr = MIPS_JAL(PS2LOGO_KERNEL_UNSCRAMBLE_ADDR);
+    uint32_t unpacker_exec_target = PS2LOGOGetUnpackerExecTarget();
+
+    PS2LOGOInstallUnscrambleStub();
+    PS2LOGOEmitPatchStub(PS2LOGO_KERNEL_PATCHJUMP_ADDR, region_instr, jal_unscramble_instr, 0x00100000);
+    if (unpacker_exec_target != 0)
+        PS2LOGOEmitPatchStub(PS2LOGO_KERNEL_PATCHEXEC_ADDR, region_instr, jal_unscramble_instr, unpacker_exec_target);
+
+    FlushCache(0);
+    FlushCache(2);
 }
 
 static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t cd_dec_loc)
@@ -69,56 +172,48 @@ static int PS2LOGOPatchWithOffsets(uint32_t get_region_loc, uint32_t cd_dec_loc)
     // Force logo region from disc VMODE (PAL/NTSC) directly.
     _sw((0x24020000 | (g_ps2logo_is_pal ? 2 : 0)), get_region_loc + 8);
 
-    // Disable DSP XORing call and replace post-read reset call with software descramble.
+    // Disable DSP XORing call and replace post-read reset call with kernel descramble stub.
     _sw(0x00000000, cd_dec_loc);
-    _sw((0x0c000000 | ((uint32_t)PS2LOGOUnscrambleLogo >> 2)), cd_dec_loc + 0x90);
+    _sw(MIPS_JAL(PS2LOGO_KERNEL_UNSCRAMBLE_ADDR), cd_dec_loc + 0x90);
 
     FlushCache(0);
     FlushCache(2);
     return 0;
 }
 
-static void ApplyPS2LOGOPatch(void)
+static int ApplyPS2LOGOPatch(void)
 {
     // ROM 1.10
     if (!PS2LOGOPatchWithOffsets(0x100178, 0x1069e8))
-        return;
+        return 0;
     // ROM 1.20-1.70
     if (!PS2LOGOPatchWithOffsets(0x102078, 0x1015b0))
-        return;
+        return 0;
     // ROM 1.80+
-    PS2LOGOPatchWithOffsets(0x102018, 0x101578);
-}
+    if (!PS2LOGOPatchWithOffsets(0x102018, 0x101578))
+        return 0;
 
-static void PatchedExecPS2(void *entry, void *gp, int argc, char *argv[])
-{
-    ApplyPS2LOGOPatch();
-    ExecPS2(entry, gp, argc, argv);
-}
-
-static void PatchedPS2LOGOJump(void *entry, void *gp, int argc, char *argv[])
-{
-    (void)entry;
-    (void)gp;
-    (void)argc;
-    (void)argv;
-
-    ApplyPS2LOGOPatch();
-    asm volatile("j 0x100000");
+    return -1;
 }
 
 static void PatchPS2LOGO(uint32_t epc, int is_pal)
 {
     g_ps2logo_is_pal = (is_pal != 0);
+    PS2LOGOInstallKernelStubs();
+
+    // Attempt immediate in-memory patch first (works for unpacked PS2LOGO and
+    // for packed variants where target code is already present).
+    if (ApplyPS2LOGOPatch() == 0)
+        return;
 
     if (epc > 0x1000000) {
-        // Packed PS2LOGO.
+        // Packed PS2LOGO fallback: hook unpacker path so patch is applied after unpack.
         if ((_lw(0x1000200) & 0xff000000) == 0x08000000) {
-            // ROM 2.20+: replace unpacker jump target with patch+jump wrapper.
-            _sw((0x08000000 | ((uint32_t)PatchedPS2LOGOJump >> 2)), (uint32_t)0x1000200);
+            // ROM 2.20+: replace unpacker jump target with kernel patch+jump wrapper.
+            _sw(MIPS_J(PS2LOGO_KERNEL_PATCHJUMP_ADDR), (uint32_t)0x1000200);
         } else if ((_lw(0x100011c) & 0xff000000) == 0x0c000000) {
-            // ROM 2.00: hijack unpacker's ExecPS2 call.
-            _sw((0x0c000000 | ((uint32_t)PatchedExecPS2 >> 2)), (uint32_t)0x100011c);
+            // ROM 2.00: hijack unpacker's ExecPS2 call through kernel patch+exec wrapper.
+            _sw(MIPS_JAL(PS2LOGO_KERNEL_PATCHEXEC_ADDR), (uint32_t)0x100011c);
         }
 
         FlushCache(0);
@@ -129,11 +224,7 @@ static void PatchPS2LOGO(uint32_t epc, int is_pal)
     // Ignore protokernels.
     if (epc > 0x200000)
         return;
-
-    // Unpacked PS2LOGO.
-    ApplyPS2LOGOPatch();
 }
-
 static void ResetIOPForExec(void)
 {
     while (!SifIopReset("", 0)) {

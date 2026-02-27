@@ -79,6 +79,7 @@ EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVE
 # Keep eGSM object layout predictable (matches OSDMenu's use of -G0).
 $(EE_OBJS_DIR)egsm.o: EE_CFLAGS += -G0 -Os
 $(EE_OBJS_DIR)ee_exception_l2.o: EE_CFLAGS += -G0 -Os
+$(EE_OBJS_DIR)ps2.o: EE_CFLAGS += -G0 -Os
 
 # ---{ CONDITIONS }--- #
 
