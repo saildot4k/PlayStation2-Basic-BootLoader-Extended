@@ -4,8 +4,7 @@
 #include <tamtypes.h>
 
 void SplashRenderTextBody(int logo_disp,
-                          int is_psx_desr,
-                          const char *const keynames[17]);
+                          int is_psx_desr);
 
 void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *model,

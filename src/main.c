@@ -1031,8 +1031,7 @@ int main(int argc, char *argv[])
 
     // Stores last key during DELAY msec
     SplashRenderTextBody(GLOBCFG.LOGO_DISP,
-                         g_is_psx_desr,
-                         (const char *const *)GLOBCFG.KEYNAMES);
+                         g_is_psx_desr);
     if (GLOBCFG.LOGO_DISP > 0) {
         char model_buf[64];
         char ps1_buf[64];
@@ -1064,7 +1063,8 @@ int main(int argc, char *argv[])
                                     ps1ver,
                                     source);
 #ifndef NO_TEMP_DISP
-        PrintTemperature();
+        if (GLOBCFG.LOGO_DISP <= 2)
+            PrintTemperature();
 #endif
     }
     DPRINTF("Timer starts!\n");

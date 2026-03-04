@@ -8,7 +8,7 @@
 
 #define FONT_W 5
 #define FONT_H 7
-#define FONT_SCALE 2
+#define FONT_SCALE 1
 #define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
 #define TEXT_Z 10
 #define BG_Z 1
