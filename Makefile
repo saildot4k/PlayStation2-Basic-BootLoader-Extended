@@ -13,8 +13,6 @@ export HEADER
 # ---{BUILD CFG}--- #
 HAS_EMBED_IRX ?= 1# whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
-CHAINLOAD ?= 0 # Only inits the system and boots CHAINLOAD_PATH from the memory card. If specified file doesn't exist, attempts to boot RESCUE.ELF from USB
-CHAINLOAD_PATH ?= "mc?:BOOT/PAYLOAD.ELF"
 PSX ?= 0 # PSX DESR support
 HDD ?= 0 # Internal HDD support
 MMCE ?= 0
@@ -99,12 +97,6 @@ $(EE_OBJS_DIR)ps2.o: EE_CFLAGS += -G0 -Os
 
 ifneq ($(VERBOSE), 1)
    .SILENT:
-endif
-
-ifeq ($(CHAINLOAD), 1)
-  HAS_EMBED_IRX = 1
-  EE_CFLAGS += -DCHAINLOAD -DCHAINLOAD_PATH=\"$(CHAINLOAD_PATH)\"
-  undefine EMBEDDED_STUFF
 endif
 
 ifeq ($(MX4SIO), 1)
