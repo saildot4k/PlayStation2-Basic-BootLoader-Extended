@@ -25,6 +25,8 @@ UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
+EGSM_BUILD ?= 0 # build embedded eGSM runtime (0=disabled, 1=enabled)
+EGSM_TRACE ?= 0 # verbose eGSM runtime tracing (used only when EGSM_BUILD=1)
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -61,9 +63,18 @@ EE_ASM_DIR = asm/
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
           modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o \
-          egsm.o ee_exception_l2.o \
           $(EMBEDDED_STUFF) \
 		      $(IOP_OBJS)
+
+ifeq ($(EGSM_BUILD), 1)
+  $(info --- building with eGSM runtime enabled)
+  EE_OBJS += egsm.o ee_exception_l2.o
+  EE_CFLAGS += -DEGSM_BUILD=1 -DEGSM_TRACE=$(EGSM_TRACE)
+else
+  $(info --- building with eGSM runtime disabled)
+  EE_OBJS += egsm_stub.o
+  EE_CFLAGS += -DEGSM_BUILD=0 -DEGSM_TRACE=0
+endif
 
 EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o
 

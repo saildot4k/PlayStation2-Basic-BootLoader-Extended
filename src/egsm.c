@@ -8,6 +8,17 @@
 #include <ps2sdkapi.h>
 #include <syscallnr.h>
 #include <tamtypes.h>
+#include "debugprintf.h"
+
+#ifndef EGSM_TRACE
+#define EGSM_TRACE 0
+#endif
+
+#if EGSM_TRACE
+#define EGSM_LOG(...) DPRINTF(__VA_ARGS__)
+#else
+#define EGSM_LOG(...)
+#endif
 
 #define MAKE_J(func) (uint32_t)((0x02 << 26) | (((uint32_t)func) / 4)) // Jump (MIPS instruction)
 #define NOP 0x00000000                                                 // No Operation (MIPS instruction)
@@ -61,6 +72,8 @@ struct gsm_state {
   uint64_t last_display2;
 };
 static struct gsm_state state = {NULL};
+static uint32_t g_trace_setgscrt_hits = 0;
+static uint32_t g_trace_el2_hits = 0;
 
 enum MIPS_OP {
   MOP_SPECIAL = 0x00,
@@ -295,6 +308,11 @@ void el2_c_handler(ee_registers_t *regs) {
   struct gsm_state *pstate = _TO_KSEG0(&state);
   uint32_t cop0_Cause = _ee_mfc0(EE_COP0_Cause);
   uint32_t cop0_ErrorEPC = _ee_mfc0(EE_COP0_ErrorEPC);
+
+  if (g_trace_el2_hits < 8) {
+    g_trace_el2_hits++;
+    EGSM_LOG("eGSM EL2: hit=%u cause=0x%08x err_epc=0x%08x\n", g_trace_el2_hits, cop0_Cause, cop0_ErrorEPC);
+  }
 
   // Check for debug exception
   if (M_EE_GET_CAUSE_EXC2(cop0_Cause) != EE_EXC2_DBG) {
@@ -556,6 +574,12 @@ void el2_c_handler(ee_registers_t *regs) {
 static void hook_SetGsCrt(short int interlace, short int mode, short int ffmd) {
   struct gsm_state *pstate = _TO_KSEG0(&state);
 
+  if (g_trace_setgscrt_hits < 8) {
+    g_trace_setgscrt_hits++;
+    EGSM_LOG("eGSM hook_SetGsCrt: hit=%u interlace=%d mode=0x%x ffmd=%d flags=0x%08x\n",
+             g_trace_setgscrt_hits, interlace, mode, ffmd, pstate->flags);
+  }
+
   // printf("%s(%d, 0x%x, %d)\n", __FUNCTION__, interlace, mode, ffmd);
 
   // Set game state
@@ -620,12 +644,21 @@ static void hook_SetGsCrt(short int interlace, short int mode, short int ffmd) {
 
 void enableGSM(uint32_t flags) {
   volatile uint32_t *v_debug = (volatile uint32_t *)0x80000100;
+  void *org_handler;
+  void *new_handler;
 
   state.flags = flags;
+  g_trace_setgscrt_hits = 0;
+  g_trace_el2_hits = 0;
+  EGSM_LOG("eGSM enableGSM: flags=0x%08x\n", flags);
 
   // Hook SetGsCrt
-  state.org_SetGsCrt = GetSyscallHandler(__NR_SetGsCrt);
+  org_handler = GetSyscallHandler(__NR_SetGsCrt);
+  state.org_SetGsCrt = org_handler;
   SetSyscall(__NR_SetGsCrt, (void *)(((uint32_t)(hook_SetGsCrt) & ~0xE0000000) | 0x80000000));
+  new_handler = GetSyscallHandler(__NR_SetGsCrt);
+  EGSM_LOG("eGSM enableGSM: org_SetGsCrt=%p hook_SetGsCrt=%p installed=%p\n",
+           org_handler, hook_SetGsCrt, new_handler);
 
   // Make sure no exceptions are generated
   _ee_disable_bpc();
@@ -635,6 +668,8 @@ void enableGSM(uint32_t flags) {
   v_debug[0] = MAKE_J((int)el2_asm_handler);
   v_debug[1] = NOP;
   ee_kmode_exit();
+  EGSM_LOG("eGSM enableGSM: EL2 vec[0]=0x%08x vec[1]=0x%08x handler=%p\n",
+           v_debug[0], v_debug[1], el2_asm_handler);
   FlushCache(WRITEBACK_DCACHE);
   FlushCache(INVALIDATE_ICACHE);
 
@@ -651,8 +686,10 @@ void enableGSM(uint32_t flags) {
   if (state.flags & (EGSM_FLAG_COMP_1 | EGSM_FLAG_COMP_2 | EGSM_FLAG_COMP_3)) {
     // For FIELD flipping we need to also set a breakpoint for CSR register
     _ee_mtdabm(0x1fffef5f);
+    EGSM_LOG("eGSM enableGSM: bpc mask=0x1fffef5f (compat mode)\n");
   } else {
     _ee_mtdabm(0x1fffff5f);
+    EGSM_LOG("eGSM enableGSM: bpc mask=0x1fffff5f\n");
   }
 }
 

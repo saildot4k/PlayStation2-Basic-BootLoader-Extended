@@ -122,6 +122,8 @@ static uint32_t parse_gsm_flags(const char *gsm_arg)
     if (p == NULL || *p == '\0')
         return 0;
 
+    DPRINTF("%s: parsing -gsm value '%s'\n", __func__, gsm_arg);
+
     if (!strncmp(p, "fp", 2)) {
         switch (p[2]) {
             case '1':
@@ -186,6 +188,7 @@ static uint32_t parse_gsm_flags(const char *gsm_arg)
             flags |= EGSM_FLAG_NO_576P;
     }
 
+    DPRINTF("%s: parsed -gsm flags=0x%08x\n", __func__, flags);
     return flags;
 }
 
@@ -317,8 +320,12 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         if (path_is_rom_binary(launch_filename)) {
             DPRINTF("Ignoring -gsm for ROM path '%s'\n", launch_filename);
         } else {
+#if EGSM_BUILD
             DPRINTF("Applying -gsm flags 0x%08x before launch\n", gsm_flags);
             enableGSM(gsm_flags);
+#else
+            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", gsm_flags);
+#endif
         }
     }
 

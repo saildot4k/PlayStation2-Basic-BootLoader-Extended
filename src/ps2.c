@@ -247,6 +247,7 @@ void PS2DiscSetConfigHint(int hint)
     }
 }
 
+#if EGSM_BUILD
 #define OSDGSM_MC_PATH       "mc0:/SYS-CONF/OSDGSM.CNF"
 #define OSDGSM_HDD_PFS_PATH  "pfs0:/osdmenu/OSDGSM.CNF"
 
@@ -296,6 +297,8 @@ static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
 
     if (p == NULL || *p == '\0')
         return 0;
+
+    DPRINTF("%s: parsing OSDGSM value '%s'\n", __func__, gsm_arg);
 
     /*
      * Match OSDMenu loader format:
@@ -374,13 +377,16 @@ static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
             flags |= EGSM_FLAG_NO_576P;
     }
 
+    DPRINTF("%s: parsed flags=0x%08x\n", __func__, flags);
     return flags;
 }
 
 static void PS2ApplyEGSMIfNeeded(uint32_t flags)
 {
-    if (flags == 0)
+    if (flags == 0) {
+        DPRINTF("%s: no eGSM flags to apply\n", __func__);
         return;
+    }
 
     DPRINTF("%s: applying eGSM flags 0x%08x\n", __func__, flags);
     enableGSM(flags);
@@ -430,8 +436,10 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
 
     DPRINTF("%s: trying to load OSDGSM.CNF\n", __func__);
     gsm_conf = PS2OpenOSDGSMConfig();
-    if (gsm_conf == NULL)
+    if (gsm_conf == NULL) {
+        DPRINTF("%s: no OSDGSM.CNF found\n", __func__);
         return NULL;
+    }
 
     while (fgets(line_buffer, sizeof(line_buffer), gsm_conf) != NULL) {
         char *key;
@@ -473,8 +481,11 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
         if (default_arg != NULL)
             free(default_arg);
         selected_arg = title_arg;
+        DPRINTF("%s: using title-specific OSDGSM value\n", __func__);
     } else {
         selected_arg = default_arg;
+        if (selected_arg != NULL)
+            DPRINTF("%s: using default OSDGSM value\n", __func__);
     }
 
     if (selected_arg != NULL) {
@@ -492,6 +503,14 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
 
     return selected_arg;
 }
+#endif
+
+#if !EGSM_BUILD
+static void PS2ApplyEGSMIfNeeded(uint32_t flags)
+{
+    (void)flags;
+}
+#endif
 
 #define CNF_PATH_LEN_MAX 64
 #define CNF_LEN_MAX      1024
@@ -807,9 +826,13 @@ int PS2DiscBoot(int skip_PS2LOGO)
     DPRINTF("%s updating play history\n", __func__);
     DPRINTF("%s:\n\tline:[%s]\n\tps2discboot:[%s]\n", __func__, line, ps2disc_boot);
     GameIDHandleDisc(ps2disc_boot, GameIDDiscEnabled());
+#if EGSM_BUILD
     osdgsm_arg = PS2GetOSDGSMArgument(ps2disc_boot, &osdgsm_flags);
     if (osdgsm_arg != NULL)
         DPRINTF("%s: discovered OSDGSM setting '%s' for %s\n", __func__, osdgsm_arg, ps2disc_boot);
+#else
+    DPRINTF("%s: eGSM build disabled, skipping OSDGSM.CNF lookup\n", __func__);
+#endif
 
     CleanUp();
     if (skip_PS2LOGO) {
