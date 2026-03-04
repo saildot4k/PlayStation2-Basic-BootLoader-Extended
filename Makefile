@@ -62,7 +62,7 @@ EE_ASM_DIR = asm/
 
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
-          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o \
+          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash_screen.o splash_assets.o splash_render.o \
           $(EMBEDDED_STUFF) \
 		      $(IOP_OBJS)
 
@@ -76,7 +76,7 @@ else
   EE_CFLAGS += -DEGSM_BUILD=0 -DEGSM_TRACE=0
 endif
 
-EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o
+EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o splash_images_rbg.o
 
 EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS

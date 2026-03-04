@@ -1,5 +1,6 @@
 #include "main.h"
 #include "game_id.h"
+#include "splash_screen.h"
 
 // Whitespace/CRLF trimming for config values (in-place)
 // Returns a pointer to the first non-whitespace character (may be inside the original buffer).
@@ -149,65 +150,6 @@ static int dev_state[DEV_COUNT] = {
 #ifdef HDD
 static int CheckHDD(void);
 #endif
-
-static const char *get_hotkey_name(int key)
-{
-    const char *name = GLOBCFG.KEYNAMES[key];
-    if (name != NULL && *name != '\0')
-        return name;
-    return "";
-}
-
-static void PrintHotkeyNamesTemplate(const char *tmpl)
-{
-    char buf[128];
-    int bi = 0;
-    const char *p = tmpl;
-
-    while (*p) {
-        if (*p == '{' && !strncmp(p, "{NAME_", 6)) {
-            const char *start = p + 6;
-            const char *end = strchr(start, '}');
-            if (end != NULL) {
-                size_t len = (size_t)(end - start);
-                int k, matched = 0;
-
-                if (bi > 0) {
-                    buf[bi] = '\0';
-                    scr_printf("%s", buf);
-                    bi = 0;
-                }
-
-                for (k = 0; k < 17; k++) {
-                    if (len == strlen(KEYS_ID[k]) && !strncmp(start, KEYS_ID[k], len)) {
-                        scr_printf("%s", get_hotkey_name(k));
-                        matched = 1;
-                        break;
-                    }
-                }
-
-                if (!matched) {
-                    scr_printf("{NAME_%.*s}", (int)len, start);
-                }
-
-                p = end + 1;
-                continue;
-            }
-        }
-
-        buf[bi++] = *p++;
-        if (bi >= (int)sizeof(buf) - 1) {
-            buf[bi] = '\0';
-            scr_printf("%s", buf);
-            bi = 0;
-        }
-    }
-
-    if (bi > 0) {
-        buf[bi] = '\0';
-        scr_printf("%s", buf);
-    }
-}
 
 static int is_command_token(const char *path)
 {
@@ -716,15 +658,6 @@ static const char *GetRuntimeHotkeysBanner(void)
 #endif
 }
 
-static const char *GetRuntimeHotkeyNamesTemplate(void)
-{
-#if defined(PSX)
-    return g_is_psx_desr ? BANNER_HOTKEYS_NAMES_PSX : BANNER_HOTKEYS_NAMES_PS2;
-#else
-    return BANNER_HOTKEYS_NAMES_PS2;
-#endif
-}
-
 static void LogDetectedPlatform(void)
 {
     char rom_prefix[ROMVER_MODEL_PREFIX_LEN + 1];
@@ -748,7 +681,6 @@ int main(int argc, char *argv[])
     char *CNFBUFF, *name, *value;
     const char *active_banner;
     const char *active_hotkeys_banner;
-    const char *active_hotkeys_names;
 
     ReadROMVEROnce();
     ResetIOP();
@@ -1147,29 +1079,14 @@ int main(int argc, char *argv[])
     // Stores last key during DELAY msec
     active_banner = GetRuntimeBanner();
     active_hotkeys_banner = GetRuntimeHotkeysBanner();
-    active_hotkeys_names = GetRuntimeHotkeyNamesTemplate();
-    scr_clear();
-    if (GLOBCFG.LOGO_DISP >= 3) {
-        scr_setfontcolor(banner_color);
-        scr_printf("\n%s", active_hotkeys_banner);
-        scr_setfontcolor(0xffffff);
-        if (GLOBCFG.HOTKEY_DISPLAY == 3) {
-            if (config_source == SOURCE_INVALID) {
-                scr_setfontcolor(0x00ffff);
-                scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER_NOCONFIG);
-                scr_setfontcolor(0xffffff);
-            } else {
-                scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER);
-            }
-        }
-        PrintHotkeyNamesTemplate((GLOBCFG.HOTKEY_DISPLAY == 3) ? BANNER_HOTKEYS_PATHS : active_hotkeys_names);
-    } else if (GLOBCFG.LOGO_DISP > 1) {
-        scr_setfontcolor(banner_color);
-        scr_printf("\n\n\n\n%s", active_banner);
-    }
-    scr_setfontcolor(0xffffff);
-    if (GLOBCFG.LOGO_DISP > 1 && GLOBCFG.LOGO_DISP < 3)
-        scr_printf(BANNER_FOOTER);
+    SplashRenderTextBody(GLOBCFG.LOGO_DISP,
+                         GLOBCFG.HOTKEY_DISPLAY,
+                         config_source,
+                         g_is_psx_desr,
+                         banner_color,
+                         active_banner,
+                         active_hotkeys_banner,
+                         (const char *const *)GLOBCFG.KEYNAMES);
     if (GLOBCFG.LOGO_DISP > 0) {
         char model_buf[64];
         char ps1_buf[64];
@@ -1194,12 +1111,12 @@ int main(int argc, char *argv[])
             snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
         }
 
-        scr_printf("\n  MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s  CFG SRC: %s \n",
-                    model,
-                    rom_fmt,
-                    dvdver,
-                    ps1ver,
-                    source);
+        SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                    model,
+                                    rom_fmt,
+                                    dvdver,
+                                    ps1ver,
+                                    source);
 #ifndef NO_TEMP_DISP
         PrintTemperature();
 #endif
