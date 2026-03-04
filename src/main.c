@@ -631,15 +631,6 @@ static void ReadROMVEROnce(void)
     g_is_psx_desr = IsPSXDESRROMVER(ROMVER);
 }
 
-static const char *GetRuntimePlatformName(void)
-{
-#if defined(PSX)
-    return g_is_psx_desr ? "PSX-DESR" : "PS2";
-#else
-    return "PS2";
-#endif
-}
-
 static const char *GetRuntimeBanner(void)
 {
 #if defined(PSX)
@@ -652,6 +643,13 @@ static const char *GetRuntimeBanner(void)
 static void LogDetectedPlatform(void)
 {
     char rom_prefix[ROMVER_MODEL_PREFIX_LEN + 1];
+    const char *platform_name;
+
+#if defined(PSX)
+    platform_name = g_is_psx_desr ? "PSX-DESR" : "PS2";
+#else
+    platform_name = "PS2";
+#endif
 
     if (ROMVER[0] != '\0') {
         memcpy(rom_prefix, ROMVER, ROMVER_MODEL_PREFIX_LEN);
@@ -660,7 +658,7 @@ static void LogDetectedPlatform(void)
         strcpy(rom_prefix, "N/A");
     }
 
-    DPRINTF("Detected platform: %s (ROMVER prefix: %s)\n", GetRuntimePlatformName(), rom_prefix);
+    DPRINTF("Detected platform: %s (ROMVER prefix: %s)\n", platform_name, rom_prefix);
 }
 
 int main(int argc, char *argv[])
@@ -1031,40 +1029,6 @@ int main(int argc, char *argv[])
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
 
-    int R = 0x80, G = 0x80, B = 0x80;
-    u32 banner_color = 0xffffff;
-    if (GLOBCFG.OSDHISTORY_READ && (GLOBCFG.LOGO_DISP > 1)) {
-        j = 1;
-        // Try to load the history file from memory card slot 1
-        if (LoadHistoryFile(0) < 0) { // Try memory card slot 2
-            if (LoadHistoryFile(1) < 0) {
-                DPRINTF("no history files found\n\n");
-                j = 0;
-            }
-        }
-
-        if (j) {
-            for (j = 0; j < MAX_HISTORY_ENTRIES; j++) {
-                switch (j % 3) {
-                    case 0:
-                        R += (HistoryEntries[j].LaunchCount * 2);
-                        break;
-                    case 1:
-                        G += (HistoryEntries[j].LaunchCount * 2);
-                        break;
-                    case 2:
-                        B += (HistoryEntries[j].LaunchCount * 2);
-                        break;
-                    default:
-                        B += (HistoryEntries[j].LaunchCount * 2);
-                }
-            }
-            banner_color = RBG2INT(B, G, R);
-            DPRINTF("New banner color is: #%8x\n", banner_color);
-        } else {
-            DPRINTF("can't find any osd history for banner color\n");
-        }
-    }
     // Stores last key during DELAY msec
     SplashRenderTextBody(GLOBCFG.LOGO_DISP,
                          g_is_psx_desr,
