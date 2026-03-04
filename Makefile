@@ -44,6 +44,9 @@ SUBVERSION = 3
 PATCHLEVEL = 0
 STATUS = Beta
 
+# Prefer python3, fall back to python for CI images that don't ship python3 binary name.
+PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
+
 # ---{ EXECUTABLES }--- #
 
 BINDIR ?= bin/
