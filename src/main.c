@@ -649,15 +649,6 @@ static const char *GetRuntimeBanner(void)
 #endif
 }
 
-static const char *GetRuntimeHotkeysBanner(void)
-{
-#if defined(PSX)
-    return g_is_psx_desr ? BANNER_HOTKEYS_PSX : BANNER_HOTKEYS_PS2;
-#else
-    return BANNER_HOTKEYS_PS2;
-#endif
-}
-
 static void LogDetectedPlatform(void)
 {
     char rom_prefix[ROMVER_MODEL_PREFIX_LEN + 1];
@@ -679,8 +670,6 @@ int main(int argc, char *argv[])
     int button, x, j, cnf_size, result;
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
-    const char *active_banner;
-    const char *active_hotkeys_banner;
 
     ReadROMVEROnce();
     ResetIOP();
@@ -1077,15 +1066,8 @@ int main(int argc, char *argv[])
         }
     }
     // Stores last key during DELAY msec
-    active_banner = GetRuntimeBanner();
-    active_hotkeys_banner = GetRuntimeHotkeysBanner();
     SplashRenderTextBody(GLOBCFG.LOGO_DISP,
-                         GLOBCFG.HOTKEY_DISPLAY,
-                         config_source,
                          g_is_psx_desr,
-                         banner_color,
-                         active_banner,
-                         active_hotkeys_banner,
                          (const char *const *)GLOBCFG.KEYNAMES);
     if (GLOBCFG.LOGO_DISP > 0) {
         char model_buf[64];

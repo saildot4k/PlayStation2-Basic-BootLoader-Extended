@@ -1,8 +1,29 @@
-#include "main.h"
+#include <stdio.h>
+#include <string.h>
 #include "splash_render.h"
 #include "splash_screen.h"
 
 #define HK_MAX_CHARS 70
+
+enum {
+    KEY_AUTO = 0,
+    KEY_SELECT = 1,
+    KEY_L3 = 2,
+    KEY_R3 = 3,
+    KEY_START = 4,
+    KEY_UP = 5,
+    KEY_RIGHT = 6,
+    KEY_DOWN = 7,
+    KEY_LEFT = 8,
+    KEY_L2 = 9,
+    KEY_R2 = 10,
+    KEY_L1 = 11,
+    KEY_R1 = 12,
+    KEY_TRIANGLE = 13,
+    KEY_CIRCLE = 14,
+    KEY_CROSS = 15,
+    KEY_SQUARE = 16,
+};
 
 typedef struct
 {
@@ -15,27 +36,25 @@ typedef struct
 // Required display order for splash hotkey lines.
 // offset_x/offset_y are pixel offsets from the splash image top-left (image is centered on screen).
 static const HOTKEY_LINE g_hotkey_lines[] = {
-    {AUTO, "AUTO", 104, 75},
-    {TRIANGLE, "TRIANGLE", 104, 98},
-    {CIRCLE, "CIRCLE", 104, 121},
-    {CROSS, "CROSS", 104, 144},
-    {SQUARE, "SQUARE", 104, 167},
-    {UP, "UP", 104, 190},
-    {DOWN, "DOWN", 104, 213},
-    {LEFT, "LEFT", 104, 236},
-    {RIGHT, "RIGHT", 104, 259},
-    {L1, "L1", 104, 282},
-    {L2, "L2", 104, 305},
-    {L3, "L3", 104, 328},
-    {R1, "R1", 104, 351},
-    {R2, "R2", 104, 374},
-    {R3, "R3", 104, 397},
-    {SELECT, "SELECT", 104, 420},
-    {START, "START", 104, 443},
+    {KEY_AUTO, "AUTO", 104, 75},
+    {KEY_TRIANGLE, "TRIANGLE", 104, 98},
+    {KEY_CIRCLE, "CIRCLE", 104, 121},
+    {KEY_CROSS, "CROSS", 104, 144},
+    {KEY_SQUARE, "SQUARE", 104, 167},
+    {KEY_UP, "UP", 104, 190},
+    {KEY_DOWN, "DOWN", 104, 213},
+    {KEY_LEFT, "LEFT", 104, 236},
+    {KEY_RIGHT, "RIGHT", 104, 259},
+    {KEY_L1, "L1", 104, 282},
+    {KEY_L2, "L2", 104, 305},
+    {KEY_L3, "L3", 104, 328},
+    {KEY_R1, "R1", 104, 351},
+    {KEY_R2, "R2", 104, 374},
+    {KEY_R3, "R3", 104, 397},
+    {KEY_SELECT, "SELECT", 104, 420},
+    {KEY_START, "START", 104, 443},
 };
 
-#define INFO_LINE_X 1
-#define INFO_LINE_Y 26
 #define INFO_OFFSET_X 104
 #define INFO_OFFSET_Y 466
 
@@ -68,7 +87,7 @@ static void trim_line_to_max_chars(const char *src, char *dst, int max_chars)
     dst[i] = '\0';
 }
 
-static void print_hotkey_lines(const char *const keynames[17], int use_gs)
+static void print_hotkey_lines(const char *const keynames[17])
 {
     int i;
     int base_x = SplashRenderGetImageX();
@@ -84,61 +103,28 @@ static void print_hotkey_lines(const char *const keynames[17], int use_gs)
         const char *name = keynames[line->key_index];
         trim_line_to_max_chars(name, limited_name, HK_MAX_CHARS);
         snprintf(render_line, sizeof(render_line), "%-8s %s", line->label, limited_name);
-        if (use_gs) {
-            SplashRenderDrawTextPx(base_x + line->offset_x, base_y + line->offset_y, 0xffffff, render_line);
-        } else {
-            scr_printf("  %s\n", render_line);
-        }
+        SplashRenderDrawTextPx(base_x + line->offset_x, base_y + line->offset_y, 0xffffff, render_line);
     }
 }
 
 void SplashRenderTextBody(int logo_disp,
-                          int hotkey_display,
-                          int config_source,
                           int is_psx_desr,
-                          u32 banner_color,
-                          const char *active_banner,
-                          const char *active_hotkeys_banner,
                           const char *const keynames[17])
 {
-    int image_drawn = SplashRenderBegin(logo_disp, is_psx_desr);
+    int image_drawn;
 
-    if (!image_drawn)
+    if (logo_disp < 2)
+        return;
+
+    image_drawn = SplashRenderBegin(logo_disp, is_psx_desr);
+
+    if (!image_drawn) {
         scr_clear();
-
-    if (logo_disp >= 3) {
-        if (!image_drawn) {
-            scr_setfontcolor(banner_color);
-            scr_setXY(1, 1);
-            scr_printf("\n%s", active_hotkeys_banner);
-        }
-        if (image_drawn) {
-            print_hotkey_lines(keynames, 1);
-        } else {
-            scr_setfontcolor(0xffffff);
-            if (hotkey_display == 3) {
-                if (config_source == SOURCE_INVALID) {
-                    scr_setfontcolor(0x00ffff);
-                    scr_setXY(1, 4);
-                    scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER_NOCONFIG);
-                    scr_setfontcolor(0xffffff);
-                } else {
-                    scr_setXY(1, 4);
-                    scr_printf("%s", BANNER_HOTKEYS_PATHS_HEADER);
-                }
-            }
-            print_hotkey_lines(keynames, 0);
-        }
-    } else if (logo_disp > 1) {
-        if (!image_drawn) {
-            scr_setfontcolor(banner_color);
-            scr_printf("\n\n\n\n%s", active_banner);
-        }
+        return;
     }
 
-    scr_setfontcolor(0xffffff);
-    if (logo_disp > 1 && logo_disp < 3)
-        scr_printf(BANNER_FOOTER);
+    if (logo_disp >= 3)
+        print_hotkey_lines(keynames);
 }
 
 void SplashRenderConsoleInfoLine(int logo_disp,
@@ -162,14 +148,15 @@ void SplashRenderConsoleInfoLine(int logo_disp,
              ps1ver,
              config_source_name);
 
+    if (logo_disp == 1) {
+        scr_printf("\n%s", info_line);
+        return;
+    }
+
     if (SplashRenderIsActive()) {
         int base_x = SplashRenderGetImageX();
         int base_y = SplashRenderGetImageY();
         SplashRenderDrawTextPx(base_x + INFO_OFFSET_X, base_y + INFO_OFFSET_Y, 0xffffff, info_line);
         SplashRenderEnd();
-    } else {
-        // Shared console-info location for LOGO_DISPLAY=2..5 (text-mode fallback).
-        scr_setXY(INFO_LINE_X, INFO_LINE_Y);
-        scr_printf("%s", info_line);
     }
 }

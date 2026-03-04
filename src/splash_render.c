@@ -1,4 +1,6 @@
-#include "main.h"
+#include <malloc.h>
+#include <stdlib.h>
+#include <string.h>
 #include "splash_assets.h"
 #include "splash_render.h"
 #include <dmaKit.h>
