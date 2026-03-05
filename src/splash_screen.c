@@ -12,8 +12,8 @@
 // AUTO line anchors from the hotkeys image top-left.
 #define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 84
 #define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 1
-#define HOTKEY_TEXT_LINE_SPACING 21
-#define HK_MAX_CHARS 64
+#define HOTKEY_TEXT_LINE_SPACING 22
+#define HK_MAX_CHARS 70
 
 static void copy_clamped(char *dst, size_t dst_size, const char *src, int max_chars)
 {
