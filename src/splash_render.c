@@ -109,10 +109,10 @@ static int rbga_to_rgba(const SPLASH_IMAGE *img, unsigned char *dst_rgba, size_t
 
     for (i = 0; i < pixels; i++) {
         size_t off = i * 4;
-        unsigned char r = img->pixels_rbga[off + 0];
-        unsigned char b = img->pixels_rbga[off + 1];
-        unsigned char g = img->pixels_rbga[off + 2];
-        unsigned char a = img->pixels_rbga[off + 3];
+        unsigned char r = img->pixels[off + 0];
+        unsigned char b = img->pixels[off + 1];
+        unsigned char g = img->pixels[off + 2];
+        unsigned char a = img->pixels[off + 3];
         dst_rgba[off + 0] = r;
         dst_rgba[off + 1] = g;
         dst_rgba[off + 2] = b;
@@ -122,11 +122,28 @@ static int rbga_to_rgba(const SPLASH_IMAGE *img, unsigned char *dst_rgba, size_t
     return 0;
 }
 
+static int copy_idx8(const SPLASH_IMAGE *img, unsigned char *dst_idx8, size_t dst_size)
+{
+    size_t pixels;
+
+    if (img == NULL || dst_idx8 == NULL)
+        return -1;
+
+    pixels = (size_t)img->width * (size_t)img->height;
+    if (dst_size < pixels)
+        return -1;
+
+    memcpy(dst_idx8, img->pixels, pixels);
+    return 0;
+}
+
 static void destroy_frame_state(void)
 {
     if (g_tex_ready) {
         if (g_tex.Mem != NULL)
             free(g_tex.Mem);
+        if (g_tex.Clut != NULL)
+            free(g_tex.Clut);
         memset(&g_tex, 0, sizeof(g_tex));
         g_tex_ready = 0;
     }
@@ -140,6 +157,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
     const SPLASH_IMAGE *img = NULL;
     size_t tex_size;
+    size_t clut_size;
 
     destroy_frame_state();
     g_image_x = 0;
@@ -149,15 +167,16 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         return 0;
 
     img = (logo_disp == 2) ? SplashGetLogoImage(is_psx_desr) : SplashGetTemplateImage(is_psx_desr);
-    if (img == NULL || img->pixels_rbga == NULL || img->width == 0 || img->height == 0)
+    if (img == NULL || img->pixels == NULL || img->width == 0 || img->height == 0)
         return 0;
 
     g_gs = gsKit_init_global();
     if (g_gs == NULL)
         return 0;
 
-    g_gs->DoubleBuffering = GS_SETTING_ON;
-    g_gs->ZBuffering = GS_SETTING_ON;
+    // Keep VRAM usage as low as possible for splash templates.
+    g_gs->DoubleBuffering = GS_SETTING_OFF;
+    g_gs->ZBuffering = GS_SETTING_OFF;
     gsKit_init_screen(g_gs);
     gsKit_display_buffer(g_gs);
     gsKit_mode_switch(g_gs, GS_ONESHOT);
@@ -166,7 +185,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     memset(&g_tex, 0, sizeof(g_tex));
     g_tex.Width = img->width;
     g_tex.Height = img->height;
-    g_tex.PSM = GS_PSM_CT32;
+    g_tex.PSM = (img->format == SPLASH_PIXFMT_IDX8_CLUT32) ? GS_PSM_T8 : GS_PSM_CT32;
     g_tex.Filter = GS_FILTER_NEAREST;
     tex_size = gsKit_texture_size(g_tex.Width, g_tex.Height, g_tex.PSM);
     g_tex.Mem = memalign(128, tex_size);
@@ -174,9 +193,32 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         destroy_frame_state();
         return 0;
     }
-    if (rbga_to_rgba(img, (unsigned char *)g_tex.Mem, tex_size) != 0) {
-        destroy_frame_state();
-        return 0;
+
+    if (img->format == SPLASH_PIXFMT_IDX8_CLUT32) {
+        if (img->clut_rgba == NULL || img->clut_entries == 0) {
+            destroy_frame_state();
+            return 0;
+        }
+
+        if (copy_idx8(img, (unsigned char *)g_tex.Mem, tex_size) != 0) {
+            destroy_frame_state();
+            return 0;
+        }
+
+        g_tex.ClutPSM = GS_PSM_CT32;
+        clut_size = (size_t)img->clut_entries * 4;
+        g_tex.Clut = memalign(128, clut_size);
+        if (g_tex.Clut == NULL) {
+            destroy_frame_state();
+            return 0;
+        }
+        memcpy(g_tex.Clut, img->clut_rgba, clut_size);
+        g_tex.VramClut = gsKit_vram_alloc(g_gs, clut_size, GSKIT_ALLOC_USERBUFFER);
+    } else {
+        if (rbga_to_rgba(img, (unsigned char *)g_tex.Mem, tex_size) != 0) {
+            destroy_frame_state();
+            return 0;
+        }
     }
 
     g_tex.Vram = gsKit_vram_alloc(g_gs, tex_size, GSKIT_ALLOC_USERBUFFER);
