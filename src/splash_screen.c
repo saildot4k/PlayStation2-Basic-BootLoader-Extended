@@ -9,9 +9,9 @@
 #define INFO_Y_FROM_CENTER (214)
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
-// The values are center-relative and correspond to x=104, y=75 at 640x480.
-#define HOTKEY_TEXT_X_FROM_CENTER (-216)
-#define HOTKEY_TEXT_Y_FROM_CENTER (-165)
+// AUTO line anchors from the hotkeys image top-left.
+#define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 84
+#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 5
 #define HOTKEY_TEXT_LINE_SPACING 23
 #define HK_MAX_CHARS 64
 
@@ -48,14 +48,21 @@ void SplashRenderHotkeyLines(int logo_disp,
     int i;
     int x;
     int y;
+    int hotkeys_x;
+    int hotkeys_y;
 
     if (logo_disp < 3 || hotkey_lines == NULL)
         return;
     if (!SplashRenderIsActive())
         return;
 
-    x = SplashRenderGetScreenCenterX() + HOTKEY_TEXT_X_FROM_CENTER;
-    y = SplashRenderGetScreenCenterY() + HOTKEY_TEXT_Y_FROM_CENTER;
+    hotkeys_x = SplashRenderGetHotkeysX();
+    hotkeys_y = SplashRenderGetHotkeysY();
+    if (hotkeys_x < 0 || hotkeys_y < 0)
+        return;
+
+    x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
+    y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP;
     for (i = 0; i < 17; i++) {
         char clamped[HK_MAX_CHARS + 1];
         copy_clamped(clamped, sizeof(clamped), hotkey_lines[i], HK_MAX_CHARS);

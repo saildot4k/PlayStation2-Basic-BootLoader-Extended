@@ -47,6 +47,8 @@ static GSGLOBAL *g_gs = NULL;
 static SPLASH_LAYER g_layers[2];
 static int g_screen_w = 0;
 static int g_screen_h = 0;
+static int g_hotkeys_x = -1;
+static int g_hotkeys_y = -1;
 
 // 5x7 uppercase glyphs for splash labels.
 static const GLYPH g_font[] = {
@@ -173,6 +175,8 @@ static void destroy_frame_state(void)
 
     g_screen_w = 0;
     g_screen_h = 0;
+    g_hotkeys_x = -1;
+    g_hotkeys_y = -1;
 }
 
 static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img)
@@ -294,6 +298,8 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
         hotkeys_x = center_x + (-(g_screen_w / 2) + MODE35_LEFT_MARGIN_PX + MODE35_HOTKEYS_X_FROM_CENTER);
         hotkeys_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + (int)logo->height + MODE35_STACK_GAP_PX + MODE35_HOTKEYS_Y_FROM_CENTER);
+        g_hotkeys_x = hotkeys_x;
+        g_hotkeys_y = hotkeys_y;
 
         draw_layer(&g_layers[0], logo_x, logo_y, BG_Z);
         draw_layer(&g_layers[1], hotkeys_x, hotkeys_y, BG_Z);
@@ -370,4 +376,14 @@ int SplashRenderGetScreenCenterX(void)
 int SplashRenderGetScreenCenterY(void)
 {
     return SplashRenderGetScreenHeight() / 2;
+}
+
+int SplashRenderGetHotkeysX(void)
+{
+    return g_hotkeys_x;
+}
+
+int SplashRenderGetHotkeysY(void)
+{
+    return g_hotkeys_y;
 }

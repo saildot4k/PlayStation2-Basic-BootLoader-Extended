@@ -11,5 +11,7 @@ int SplashRenderGetScreenWidth(void);
 int SplashRenderGetScreenHeight(void);
 int SplashRenderGetScreenCenterX(void);
 int SplashRenderGetScreenCenterY(void);
+int SplashRenderGetHotkeysX(void);
+int SplashRenderGetHotkeysY(void);
 
 #endif
