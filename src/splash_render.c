@@ -118,27 +118,31 @@ static u64 color_to_gs(u32 color)
     return GS_SETREG_RGBAQ(r, g, b, 0x80, 0x00);
 }
 
-static size_t min_size(size_t a, size_t b)
+static int rbg_to_rgba(const SPLASH_IMAGE *img, unsigned char *dst_rgba, size_t dst_size)
 {
-    return (a < b) ? a : b;
-}
+    size_t pixels;
+    size_t i;
 
-static void rbga_clut_to_rgba(const unsigned char *src_rbga,
-                              unsigned char *dst_rgba,
-                              unsigned int entry_count)
-{
-    unsigned int i;
+    if (img == NULL || dst_rgba == NULL)
+        return -1;
 
-    if (src_rbga == NULL || dst_rgba == NULL)
-        return;
+    pixels = (size_t)img->width * (size_t)img->height;
+    if (dst_size < (pixels * 4))
+        return -1;
 
-    for (i = 0; i < entry_count; i++) {
-        unsigned int off = i * 4u;
-        dst_rgba[off + 0] = src_rbga[off + 0];
-        dst_rgba[off + 1] = src_rbga[off + 2];
-        dst_rgba[off + 2] = src_rbga[off + 1];
-        dst_rgba[off + 3] = src_rbga[off + 3];
+    for (i = 0; i < pixels; i++) {
+        size_t src = i * 3;
+        size_t dst = i * 4;
+        unsigned char r = img->pixels_rbg[src + 0];
+        unsigned char b = img->pixels_rbg[src + 1];
+        unsigned char g = img->pixels_rbg[src + 2];
+        dst_rgba[dst + 0] = r;
+        dst_rgba[dst + 1] = g;
+        dst_rgba[dst + 2] = b;
+        dst_rgba[dst + 3] = 0x80;
     }
+
+    return 0;
 }
 
 static void destroy_layer(SPLASH_LAYER *layer)
@@ -174,46 +178,36 @@ static void destroy_frame_state(void)
 static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img)
 {
     size_t tex_size;
-    size_t clut_size;
-    size_t raw_tex_size;
-    size_t raw_clut_size;
 
     if (layer == NULL || img == NULL)
         return 0;
 
-    if (img->pixels_t8 == NULL || img->clut_rbga == NULL || img->width == 0 || img->height == 0)
+    if (img->pixels_rbg == NULL || img->width == 0 || img->height == 0)
         return 0;
 
     memset(&layer->tex, 0, sizeof(layer->tex));
     layer->tex.Width = img->width;
     layer->tex.Height = img->height;
-    layer->tex.PSM = GS_PSM_T8;
-    layer->tex.ClutPSM = GS_PSM_CT32;
+    layer->tex.PSM = GS_PSM_CT32;
     layer->tex.Filter = GS_FILTER_NEAREST;
 
     tex_size = gsKit_texture_size(layer->tex.Width, layer->tex.Height, layer->tex.PSM);
-    clut_size = gsKit_texture_size(16, 16, layer->tex.ClutPSM);
-    raw_tex_size = (size_t)img->width * (size_t)img->height;
-    raw_clut_size = (size_t)img->clut_entries * 4u;
 
     layer->tex.Mem = memalign(128, tex_size);
-    layer->tex.Clut = memalign(128, clut_size);
-    if (layer->tex.Mem == NULL || layer->tex.Clut == NULL) {
+    if (layer->tex.Mem == NULL) {
         destroy_layer(layer);
         return 0;
     }
 
     memset(layer->tex.Mem, 0, tex_size);
-    memset(layer->tex.Clut, 0, clut_size);
-    memcpy(layer->tex.Mem, img->pixels_t8, min_size(raw_tex_size, tex_size));
-    rbga_clut_to_rgba(img->clut_rbga,
-                      (unsigned char *)layer->tex.Clut,
-                      (unsigned int)(min_size(raw_clut_size, clut_size) / 4u));
+    if (rbg_to_rgba(img, (unsigned char *)layer->tex.Mem, tex_size) != 0) {
+        destroy_layer(layer);
+        return 0;
+    }
 
     layer->tex.Vram = gsKit_vram_alloc(g_gs, tex_size, GSKIT_ALLOC_USERBUFFER);
-    layer->tex.VramClut = gsKit_vram_alloc(g_gs, clut_size, GSKIT_ALLOC_USERBUFFER);
 #ifdef GSKIT_ALLOC_ERROR
-    if (layer->tex.Vram == GSKIT_ALLOC_ERROR || layer->tex.VramClut == GSKIT_ALLOC_ERROR) {
+    if (layer->tex.Vram == GSKIT_ALLOC_ERROR) {
         destroy_layer(layer);
         return 0;
     }

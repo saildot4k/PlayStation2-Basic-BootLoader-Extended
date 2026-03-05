@@ -3,11 +3,9 @@
 
 typedef struct
 {
-    const unsigned char *pixels_t8;
-    const unsigned char *clut_rbga;
+    const unsigned char *pixels_rbg;
     unsigned int width;
     unsigned int height;
-    unsigned int clut_entries;
 } SPLASH_IMAGE;
 
 const SPLASH_IMAGE *SplashGetLogoImage(int is_psx_desr);
