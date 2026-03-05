@@ -42,14 +42,12 @@ These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
-- `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
-- eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
 - `-dev9=<mode>` sets DEV9/HDD policy before launching the target ELF.
 - supported values:
   - `NICHDD` keeps both DEV9 (network adapter) and HDD powered/on.
   - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
-- if omitted, PS2BBL does not force a DEV9 policy override.
-- note: on non-HDD builds this option has no effect.
+  - if omitted, PS2BBL does not force a DEV9 policy override.
+  - note: on non-HDD builds this option has no effect.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
   This is mainly for HDD builds.
 You can pass up to 8 args per entry. Args are processed in the same order they are written in the INI.
@@ -61,8 +59,10 @@ ARG_R1_E1 = -video=480p
 ARG_R1_E1 = -mode=mmce
 ARG_R1_E1 = -mode=ata
 ```
-
-eGSM format (OSDMenu-style):
+__eGSM NOT YET IMPLEMENTED__
+- `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
+  - eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
+  eGSM format (OSDMenu-style):
 - `v` = video mode:
 - empty = do not force (default)
 - `fp1` = force progressive scan (240p/288p)
