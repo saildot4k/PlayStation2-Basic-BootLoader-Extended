@@ -7,7 +7,9 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr);
 void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text);
 int SplashRenderIsActive(void);
 void SplashRenderEnd(void);
-int SplashRenderGetImageX(void);
-int SplashRenderGetImageY(void);
+int SplashRenderGetScreenWidth(void);
+int SplashRenderGetScreenHeight(void);
+int SplashRenderGetScreenCenterX(void);
+int SplashRenderGetScreenCenterY(void);
 
 #endif

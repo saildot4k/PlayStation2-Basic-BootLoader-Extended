@@ -5,7 +5,6 @@ import struct
 import sys
 import zlib
 
-
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 
 
@@ -32,6 +31,8 @@ def decode_png_rgba(path: pathlib.Path):
     bit_depth = None
     color_type = None
     interlace = None
+    plte = None
+    trns = None
     idat = bytearray()
 
     while pos + 8 <= len(data):
@@ -46,6 +47,10 @@ def decode_png_rgba(path: pathlib.Path):
             width, height, bit_depth, color_type, comp, filt, interlace = struct.unpack(">IIBBBBB", cdata)
             if comp != 0 or filt != 0:
                 raise ValueError(f"{path}: unsupported PNG compression/filter method")
+        elif ctype == b"PLTE":
+            plte = bytes(cdata)
+        elif ctype == b"tRNS":
+            trns = bytes(cdata)
         elif ctype == b"IDAT":
             idat.extend(cdata)
         elif ctype == b"IEND":
@@ -53,18 +58,34 @@ def decode_png_rgba(path: pathlib.Path):
 
     if width is None or height is None:
         raise ValueError(f"{path}: missing IHDR")
-    if bit_depth != 8 or color_type != 6:
-        raise ValueError(f"{path}: only 8-bit RGBA PNG (color type 6) is supported")
+    if bit_depth != 8:
+        raise ValueError(f"{path}: only 8-bit PNG is supported")
+    if color_type not in (2, 3, 6):
+        raise ValueError(f"{path}: only color types 2 (RGB), 3 (indexed), or 6 (RGBA) are supported")
     if interlace != 0:
         raise ValueError(f"{path}: interlaced PNG is not supported")
 
-    raw = zlib.decompress(bytes(idat))
-    stride = width * 4
+    channels = {2: 3, 3: 1, 6: 4}[color_type]
+    stride = width * channels
     expected = (stride + 1) * height
+    raw = zlib.decompress(bytes(idat))
     if len(raw) != expected:
         raise ValueError(f"{path}: decoded data length mismatch ({len(raw)} != {expected})")
 
-    out = bytearray(width * height * 4)
+    palette = []
+    palette_alpha = []
+    if color_type == 3:
+        if plte is None or len(plte) % 3 != 0:
+            raise ValueError(f"{path}: indexed PNG missing valid PLTE chunk")
+        palette_count = len(plte) // 3
+        for i in range(palette_count):
+            palette.append((plte[i * 3 + 0], plte[i * 3 + 1], plte[i * 3 + 2]))
+        palette_alpha = [255] * palette_count
+        if trns is not None:
+            for i in range(min(len(trns), palette_count)):
+                palette_alpha[i] = trns[i]
+
+    rgba = bytearray(width * height * 4)
     prev = bytearray(stride)
 
     for y in range(height):
@@ -74,9 +95,9 @@ def decode_png_rgba(path: pathlib.Path):
         cur = bytearray(stride)
 
         for x in range(stride):
-            left = cur[x - 4] if x >= 4 else 0
+            left = cur[x - channels] if x >= channels else 0
             up = prev[x]
-            up_left = prev[x - 4] if x >= 4 else 0
+            up_left = prev[x - channels] if x >= channels else 0
             val = src[x]
 
             if filt == 0:
@@ -92,21 +113,104 @@ def decode_png_rgba(path: pathlib.Path):
             else:
                 raise ValueError(f"{path}: unsupported filter type {filt}")
 
-        # Convert RGBA -> RBGA to match project RBG convention.
-        dst_off = y * stride
-        for px in range(0, stride, 4):
-            r = cur[px + 0]
-            g = cur[px + 1]
-            b = cur[px + 2]
-            a = cur[px + 3]
-            out[dst_off + px + 0] = r
-            out[dst_off + px + 1] = b
-            out[dst_off + px + 2] = g
-            out[dst_off + px + 3] = a
+        dst_off = y * width * 4
+        if color_type == 2:
+            for px in range(width):
+                s = px * 3
+                d = dst_off + px * 4
+                rgba[d + 0] = cur[s + 0]
+                rgba[d + 1] = cur[s + 1]
+                rgba[d + 2] = cur[s + 2]
+                rgba[d + 3] = 255
+        elif color_type == 6:
+            for px in range(width):
+                s = px * 4
+                d = dst_off + px * 4
+                rgba[d + 0] = cur[s + 0]
+                rgba[d + 1] = cur[s + 1]
+                rgba[d + 2] = cur[s + 2]
+                rgba[d + 3] = cur[s + 3]
+        else:  # color type 3
+            for px in range(width):
+                idx = cur[px]
+                if idx >= len(palette):
+                    raise ValueError(f"{path}: palette index {idx} out of range")
+                d = dst_off + px * 4
+                rgba[d + 0] = palette[idx][0]
+                rgba[d + 1] = palette[idx][1]
+                rgba[d + 2] = palette[idx][2]
+                rgba[d + 3] = palette_alpha[idx]
 
         prev = cur
 
-    return width, height, bytes(out)
+    return width, height, bytes(rgba)
+
+
+def nearest_color_index(color, palette):
+    r, g, b, _ = color
+    best_idx = 0
+    best_dist = 1 << 30
+
+    for i, p in enumerate(palette):
+        pr, pg, pb, _ = p
+        dr = r - pr
+        dg = g - pg
+        db = b - pb
+        dist = dr * dr + dg * dg + db * db
+        if dist < best_dist:
+            best_dist = dist
+            best_idx = i
+            if dist == 0:
+                break
+
+    return best_idx
+
+
+def quantize_to_t8(rgba: bytes):
+    if len(rgba) % 4 != 0:
+        raise ValueError("RGBA buffer length must be divisible by 4")
+
+    counts = {}
+    for i in range(0, len(rgba), 4):
+        c = (rgba[i + 0], rgba[i + 1], rgba[i + 2], rgba[i + 3])
+        counts[c] = counts.get(c, 0) + 1
+
+    unique_count = len(counts)
+    if unique_count <= 256:
+        palette = list(counts.keys())
+    else:
+        # Keep the 256 most frequent colors and map all others to nearest palette entry.
+        palette = [
+            item[0]
+            for item in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:256]
+        ]
+
+    mapping = {}
+    for idx, color in enumerate(palette):
+        mapping[color] = idx
+
+    if unique_count > 256:
+        for color in counts:
+            if color not in mapping:
+                mapping[color] = nearest_color_index(color, palette)
+
+    indices = bytearray(len(rgba) // 4)
+    out_pos = 0
+    for i in range(0, len(rgba), 4):
+        c = (rgba[i + 0], rgba[i + 1], rgba[i + 2], rgba[i + 3])
+        indices[out_pos] = mapping[c]
+        out_pos += 1
+
+    # Emit full 256-entry CLUT for GS PSMT8 upload.
+    clut = bytearray(256 * 4)
+    for i in range(min(len(palette), 256)):
+        r, g, b, a = palette[i]
+        clut[i * 4 + 0] = r
+        clut[i * 4 + 1] = b  # project RBG convention (RBGA)
+        clut[i * 4 + 2] = g
+        clut[i * 4 + 3] = a
+
+    return bytes(indices), bytes(clut), 256
 
 
 def emit_c_array(name: str, blob: bytes) -> str:
@@ -119,7 +223,7 @@ def emit_c_array(name: str, blob: bytes) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Convert RGBA PNG files to C arrays in RBGA byte order")
+    parser = argparse.ArgumentParser(description="Convert PNG files to paletted T8 + RBGA CLUT C arrays")
     parser.add_argument("--output", required=True)
     parser.add_argument("inputs", nargs="+")
     args = parser.parse_args()
@@ -132,17 +236,21 @@ def main() -> int:
         p = pathlib.Path(src)
         stem = p.stem.lower().replace("-", "_")
         symbol = f"splash_{stem}"
-        width, height, blob = decode_png_rgba(p)
-        entries.append((symbol, width, height, blob, p))
+        width, height, rgba = decode_png_rgba(p)
+        indices, clut, clut_entries = quantize_to_t8(rgba)
+        entries.append((symbol, width, height, indices, clut, clut_entries, p))
 
     with out_path.open("w", encoding="ascii") as f:
         f.write("/* Auto-generated by tools/png_rgba_to_rbg_c.py */\n")
-        f.write("/* Pixel layout is RBGA (R, B, G, A) by design. */\n\n")
-        for symbol, width, height, blob, src_path in entries:
+        f.write("/* Pixel layout: T8 indexed texture + RBGA CLUT entries (R, B, G, A). */\n\n")
+        for symbol, width, height, idx_blob, clut_blob, clut_entries, src_path in entries:
             f.write(f"/* Source: {src_path.as_posix()} */\n")
             f.write(f"const unsigned int {symbol}_width = {width}u;\n")
             f.write(f"const unsigned int {symbol}_height = {height}u;\n")
-            f.write(emit_c_array(f"{symbol}_rbga", blob))
+            f.write(f"const unsigned int {symbol}_clut_entries = {clut_entries}u;\n")
+            f.write(emit_c_array(f"{symbol}_t8", idx_blob))
+            f.write("\n")
+            f.write(emit_c_array(f"{symbol}_clut_rbga", clut_blob))
             f.write("\n\n")
 
     return 0

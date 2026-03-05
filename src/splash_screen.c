@@ -4,23 +4,18 @@
 #include "splash_render.h"
 #include "splash_screen.h"
 
-#define INFO_OFFSET_X 104
-#define INFO_OFFSET_Y 466
+// Console info text anchor for LOGO_DISPLAY = 2-5, in center-relative pixels.
+#define INFO_X_FROM_CENTER (-216)
+#define INFO_Y_FROM_CENTER (214)
 
 void SplashRenderTextBody(int logo_disp,
                           int is_psx_desr)
 {
-    int image_drawn;
-
     if (logo_disp < 2)
         return;
 
-    image_drawn = SplashRenderBegin(logo_disp, is_psx_desr);
-
-    if (!image_drawn) {
-        scr_clear();
+    if (!SplashRenderBegin(logo_disp, is_psx_desr))
         return;
-    }
 }
 
 void SplashRenderConsoleInfoLine(int logo_disp,
@@ -50,9 +45,9 @@ void SplashRenderConsoleInfoLine(int logo_disp,
     }
 
     if (SplashRenderIsActive()) {
-        int base_x = SplashRenderGetImageX();
-        int base_y = SplashRenderGetImageY();
-        SplashRenderDrawTextPx(base_x + INFO_OFFSET_X, base_y + INFO_OFFSET_Y, 0xffffff, info_line);
+        int x = SplashRenderGetScreenCenterX() + INFO_X_FROM_CENTER;
+        int y = SplashRenderGetScreenCenterY() + INFO_Y_FROM_CENTER;
+        SplashRenderDrawTextPx(x, y, 0xffffff, info_line);
         SplashRenderEnd();
     }
 }
