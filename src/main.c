@@ -1056,6 +1056,29 @@ int main(int argc, char *argv[])
             snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
         }
 
+        {
+            const char *hotkey_lines[17] = {
+                GLOBCFG.KEYNAMES[AUTO],
+                GLOBCFG.KEYNAMES[TRIANGLE],
+                GLOBCFG.KEYNAMES[CIRCLE],
+                GLOBCFG.KEYNAMES[CROSS],
+                GLOBCFG.KEYNAMES[SQUARE],
+                GLOBCFG.KEYNAMES[UP],
+                GLOBCFG.KEYNAMES[DOWN],
+                GLOBCFG.KEYNAMES[LEFT],
+                GLOBCFG.KEYNAMES[RIGHT],
+                GLOBCFG.KEYNAMES[L1],
+                GLOBCFG.KEYNAMES[L2],
+                GLOBCFG.KEYNAMES[L3],
+                GLOBCFG.KEYNAMES[R1],
+                GLOBCFG.KEYNAMES[R2],
+                GLOBCFG.KEYNAMES[R3],
+                GLOBCFG.KEYNAMES[SELECT],
+                GLOBCFG.KEYNAMES[START],
+            };
+            SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+        }
+
         SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
                                     model,
                                     rom_fmt,

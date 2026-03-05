@@ -6,6 +6,9 @@
 void SplashRenderTextBody(int logo_disp,
                           int is_psx_desr);
 
+void SplashRenderHotkeyLines(int logo_disp,
+                             const char *const hotkey_lines[17]);
+
 void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *model,
                                  const char *rom_fmt,

@@ -8,6 +8,30 @@
 #define INFO_X_FROM_CENTER (-216)
 #define INFO_Y_FROM_CENTER (214)
 
+// Hotkey text layout for LOGO_DISPLAY = 3-5.
+// The values are center-relative and correspond to x=104, y=75 at 640x480.
+#define HOTKEY_TEXT_X_FROM_CENTER (-216)
+#define HOTKEY_TEXT_Y_FROM_CENTER (-165)
+#define HOTKEY_TEXT_LINE_SPACING 23
+#define HK_MAX_CHARS 64
+
+static void copy_clamped(char *dst, size_t dst_size, const char *src, int max_chars)
+{
+    size_t i = 0;
+
+    if (dst == NULL || dst_size == 0)
+        return;
+
+    if (src == NULL)
+        src = "";
+
+    while (src[i] != '\0' && (int)i < max_chars && (i + 1) < dst_size) {
+        dst[i] = src[i];
+        i++;
+    }
+    dst[i] = '\0';
+}
+
 void SplashRenderTextBody(int logo_disp,
                           int is_psx_desr)
 {
@@ -16,6 +40,29 @@ void SplashRenderTextBody(int logo_disp,
 
     if (!SplashRenderBegin(logo_disp, is_psx_desr))
         return;
+}
+
+void SplashRenderHotkeyLines(int logo_disp,
+                             const char *const hotkey_lines[17])
+{
+    int i;
+    int x;
+    int y;
+
+    if (logo_disp < 3 || hotkey_lines == NULL)
+        return;
+    if (!SplashRenderIsActive())
+        return;
+
+    x = SplashRenderGetScreenCenterX() + HOTKEY_TEXT_X_FROM_CENTER;
+    y = SplashRenderGetScreenCenterY() + HOTKEY_TEXT_Y_FROM_CENTER;
+    for (i = 0; i < 17; i++) {
+        char clamped[HK_MAX_CHARS + 1];
+        copy_clamped(clamped, sizeof(clamped), hotkey_lines[i], HK_MAX_CHARS);
+        if (clamped[0] == '\0')
+            continue;
+        SplashRenderDrawTextPx(x, y + (i * HOTKEY_TEXT_LINE_SPACING), 0xffffff, clamped);
+    }
 }
 
 void SplashRenderConsoleInfoLine(int logo_disp,
