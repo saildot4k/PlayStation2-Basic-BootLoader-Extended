@@ -1,6 +1,7 @@
 #include "main.h"
 #include "game_id.h"
 #include "splash_screen.h"
+#include "splash_render.h"
 
 // Whitespace/CRLF trimming for config values (in-place)
 // Returns a pointer to the first non-whitespace character (may be inside the original buffer).
@@ -682,6 +683,7 @@ static void LogDetectedPlatform(void)
 #else
     platform_name = "PS2";
 #endif
+    (void)platform_name;
 
     if (ROMVER[0] != '\0') {
         memcpy(rom_prefix, ROMVER, ROMVER_MODEL_PREFIX_LEN);
