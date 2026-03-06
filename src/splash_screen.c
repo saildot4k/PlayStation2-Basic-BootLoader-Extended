@@ -12,9 +12,9 @@
 #define GLYPH_ADVANCE_PX 6
 #define GLYPH_HEIGHT_PX 7
 #define AUTOBOOT_PREFIX "  AUTO: "
-#define AUTOBOOT_VALUE_DEFAULT_WIDTH 6
+#define AUTOBOOT_VALUE_DEFAULT_WIDTH 5
 #define TEMP_TAG " TEMP: "
-#define TEMP_VALUE_WIDTH_CHARS 6
+#define TEMP_VALUE_WIDTH_CHARS 5
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;
@@ -107,7 +107,7 @@ void SplashRenderConsoleInfoLine(int logo_disp,
         snprintf(temp_padded, sizeof(temp_padded), "%-*s", TEMP_VALUE_WIDTH_CHARS, temp_celsius);
         snprintf(info_line,
                  sizeof(info_line),
-                 "MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s" TEMP_TAG "%s  CFG SRC: %s",
+                 "MODEL: %s  ROM: %s  DVD: %s  PS1DRV: %s" TEMP_TAG "%s  CFG SRC: %s",
                  model,
                  rom_fmt,
                  dvdver,
@@ -117,7 +117,7 @@ void SplashRenderConsoleInfoLine(int logo_disp,
     } else {
         snprintf(info_line,
                  sizeof(info_line),
-                 "MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s  CFG SRC: %s",
+                 "MODEL: %s  ROM: %s  DVD: %s  PS1DRV: %s  CFG SRC: %s",
                  model,
                  rom_fmt,
                  dvdver,

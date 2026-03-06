@@ -94,6 +94,8 @@ static int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
     unsigned char in_buffer[1];
     unsigned char out_buffer[16];
     unsigned short temp;
+    int whole;
+    int tenths;
     int stat = 0;
 
     if (temp_buf == NULL || temp_buf_size == 0)
@@ -110,11 +112,17 @@ static int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
         return 0;
 
     temp = (unsigned short)(out_buffer[1] * 256 + out_buffer[2]);
+    whole = (temp - (temp % 128)) / 128;
+    tenths = (int)(((temp % 128) * 10 + 64) / 128);
+    if (tenths >= 10) {
+        whole++;
+        tenths -= 10;
+    }
     snprintf(temp_buf,
              temp_buf_size,
-             "%02d.%02dC",
-             (temp - (temp % 128)) / 128,
-             (temp % 128));
+             "%02d.%dC",
+             whole,
+             tenths);
     return 1;
 }
 #endif
@@ -1184,9 +1192,9 @@ int main(int argc, char *argv[])
 #endif
                 u64 remaining_ms = (now <= deadline) ? (deadline - now) : 0;
                 unsigned int remaining_sec = (unsigned int)(remaining_ms / 1000u);
-                unsigned int remaining_csec = (unsigned int)((remaining_ms % 1000u) / 10u);
+                unsigned int remaining_tenths = (unsigned int)((remaining_ms % 1000u) / 100u);
 
-                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%02uS", remaining_sec, remaining_csec);
+                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%uS", remaining_sec, remaining_tenths);
                 SplashRenderConsoleInfoCountdownOnly(autoboot_text);
                 SplashRenderPresent();
             }
