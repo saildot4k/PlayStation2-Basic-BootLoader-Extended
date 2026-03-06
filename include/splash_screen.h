@@ -15,6 +15,9 @@ void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *dvdver,
                                  const char *ps1ver,
                                  const char *temp_celsius,
+                                 const char *autoboot_countdown,
                                  const char *config_source_name);
+
+void SplashRenderConsoleInfoCountdownOnly(const char *autoboot_countdown);
 
 #endif

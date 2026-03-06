@@ -1060,11 +1060,10 @@ int main(int argc, char *argv[])
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
+    int dev_ok[DEV_COUNT];
 
     // Stores last key during DELAY msec
-    SplashRenderTextBody(GLOBCFG.LOGO_DISP,
-                         g_is_psx_desr);
-    if (GLOBCFG.LOGO_DISP > 0) {
+    {
         char model_buf[64];
         char ps1_buf[64];
         char dvd_buf[64];
@@ -1072,68 +1071,109 @@ int main(int argc, char *argv[])
         char rom_raw[ROMVER_MAX_LEN + 1];
         char rom_buf[32];
         char rom_fmt[8];
+        char autoboot_text[48];
 #ifndef NO_TEMP_DISP
         char temp_buf[16];
 #endif
+        const char *model = "";
+        const char *ps1ver = "";
+        const char *dvdver = "";
+        const char *source = "";
         const char *temp_celsius = NULL;
-        const char *model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
-        const char *ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
-        const char *dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
-        const char *source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
+        const char *hotkey_lines[17] = {
+            GLOBCFG.KEYNAMES[AUTO],
+            GLOBCFG.KEYNAMES[TRIANGLE],
+            GLOBCFG.KEYNAMES[CIRCLE],
+            GLOBCFG.KEYNAMES[CROSS],
+            GLOBCFG.KEYNAMES[SQUARE],
+            GLOBCFG.KEYNAMES[UP],
+            GLOBCFG.KEYNAMES[DOWN],
+            GLOBCFG.KEYNAMES[LEFT],
+            GLOBCFG.KEYNAMES[RIGHT],
+            GLOBCFG.KEYNAMES[L1],
+            GLOBCFG.KEYNAMES[L2],
+            GLOBCFG.KEYNAMES[L3],
+            GLOBCFG.KEYNAMES[R1],
+            GLOBCFG.KEYNAMES[R2],
+            GLOBCFG.KEYNAMES[R3],
+            GLOBCFG.KEYNAMES[SELECT],
+            GLOBCFG.KEYNAMES[START],
+        };
+        u64 deadline;
 
-        memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
-        rom_raw[ROMVER_MAX_LEN] = '\0';
-        {
-            const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
-            char major = (romver[1] != '\0') ? romver[1] : '?';
-            char minor1 = (romver[2] != '\0') ? romver[2] : '?';
-            char minor2 = (romver[3] != '\0') ? romver[3] : '?';
-            char region = (romver[4] != '\0') ? romver[4] : '?';
-            snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
-        }
+        SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+
+        if (GLOBCFG.LOGO_DISP > 0) {
+            model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
+            ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
+            dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
+            source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
+
+            memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
+            rom_raw[ROMVER_MAX_LEN] = '\0';
+            {
+                const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
+                char major = (romver[1] != '\0') ? romver[1] : '?';
+                char minor1 = (romver[2] != '\0') ? romver[2] : '?';
+                char minor2 = (romver[3] != '\0') ? romver[3] : '?';
+                char region = (romver[4] != '\0') ? romver[4] : '?';
+                snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
+            }
 
 #ifndef NO_TEMP_DISP
-        if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf)))
-            temp_celsius = temp_buf;
+            if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf)))
+                temp_celsius = temp_buf;
 #endif
 
-        {
-            const char *hotkey_lines[17] = {
-                GLOBCFG.KEYNAMES[AUTO],
-                GLOBCFG.KEYNAMES[TRIANGLE],
-                GLOBCFG.KEYNAMES[CIRCLE],
-                GLOBCFG.KEYNAMES[CROSS],
-                GLOBCFG.KEYNAMES[SQUARE],
-                GLOBCFG.KEYNAMES[UP],
-                GLOBCFG.KEYNAMES[DOWN],
-                GLOBCFG.KEYNAMES[LEFT],
-                GLOBCFG.KEYNAMES[RIGHT],
-                GLOBCFG.KEYNAMES[L1],
-                GLOBCFG.KEYNAMES[L2],
-                GLOBCFG.KEYNAMES[L3],
-                GLOBCFG.KEYNAMES[R1],
-                GLOBCFG.KEYNAMES[R2],
-                GLOBCFG.KEYNAMES[R3],
-                GLOBCFG.KEYNAMES[SELECT],
-                GLOBCFG.KEYNAMES[START],
-            };
-            SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+            if (GLOBCFG.LOGO_DISP == 1) {
+                SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                            model,
+                                            rom_fmt,
+                                            dvdver,
+                                            ps1ver,
+                                            temp_celsius,
+                                            "",
+                                            source);
+            }
+        } else {
+            rom_fmt[0] = '\0';
         }
 
-        SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
-                                    model,
-                                    rom_fmt,
-                                    dvdver,
-                                    ps1ver,
-                                    temp_celsius,
-                                    source);
-    }
-    DPRINTF("Timer starts!\n");
-    TimerInit();
-    tstart = Timer();
-    int dev_ok[DEV_COUNT];
-    build_device_available_cache(dev_ok, DEV_COUNT);
-    while (Timer() <= (tstart + GLOBCFG.DELAY)) {
+        if (SplashRenderIsActive()) {
+            int pass;
+            for (pass = 0; pass < 2; pass++) {
+                SplashRenderBeginFrame();
+                SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+                SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                            model,
+                                            rom_fmt,
+                                            dvdver,
+                                            ps1ver,
+                                            temp_celsius,
+                                            "",
+                                            source);
+                SplashRenderPresent();
+            }
+        }
+
+        DPRINTF("Timer starts!\n");
+        TimerInit();
+        tstart = Timer();
+        deadline = tstart + GLOBCFG.DELAY;
+        build_device_available_cache(dev_ok, DEV_COUNT);
+        while (Timer() <= deadline) {
+            u64 now = Timer();
+
+            if (SplashRenderIsActive()) {
+                u64 remaining_ms = (now <= deadline) ? (deadline - now) : 0;
+                unsigned int remaining_sec = (unsigned int)(remaining_ms / 1000u);
+                unsigned int remaining_csec = (unsigned int)((remaining_ms % 1000u) / 10u);
+
+                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%02us", remaining_sec, remaining_csec);
+                SplashRenderConsoleInfoCountdownOnly(autoboot_text);
+                SplashRenderPresent();
+            }
+
         button = pad_button; // reset the value so we can iterate (bit-shift) again
         PAD = ReadCombinedPadStatus_raw();
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
@@ -1191,10 +1231,14 @@ int main(int argc, char *argv[])
             }
             button = button << 1; // sll of 1 cleared bit to move to next pad button
         }
+        }
+        if (SplashRenderIsActive())
+            SplashRenderEnd();
+
+        DPRINTF("Wait time consummed. Running AUTO entry\n");
+        TimerEnd();
+        build_device_available_cache(dev_ok, DEV_COUNT);
     }
-    DPRINTF("Wait time consummed. Running AUTO entry\n");
-    TimerEnd();
-    build_device_available_cache(dev_ok, DEV_COUNT);
     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
         // Skip empty/unset AUTO entries too
         if (GLOBCFG.KEYPATHS[0][j] == NULL || *GLOBCFG.KEYPATHS[0][j] == '\0')
@@ -1876,6 +1920,9 @@ static void AlarmCallback(s32 alarm_id, u16 time, void *common)
 
 void CleanUp(void)
 {
+    if (SplashRenderIsActive())
+        SplashRenderEnd();
+
     sceCdInit(SCECdEXIT);
     // Keep config_buf alive so argv pointers remain valid during ELF load.
     PadDeinitPads();

@@ -56,8 +56,12 @@ static GSGLOBAL *g_gs = NULL;
 static SPLASH_LAYER g_layers[LAYER_COUNT];
 static int g_screen_w = 0;
 static int g_screen_h = 0;
+static int g_logo_x = -1;
+static int g_logo_y = -1;
+static int g_logo_visible = 0;
 static int g_hotkeys_x = -1;
 static int g_hotkeys_y = -1;
+static int g_hotkeys_visible = 0;
 
 // 5x7 glyphs for splash labels.
 static const GLYPH g_font[] = {
@@ -217,8 +221,12 @@ static void destroy_frame_state(void)
 
     g_screen_w = 0;
     g_screen_h = 0;
+    g_logo_x = -1;
+    g_logo_y = -1;
+    g_logo_visible = 0;
     g_hotkeys_x = -1;
     g_hotkeys_y = -1;
+    g_hotkeys_visible = 0;
 }
 
 static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img, int filter)
@@ -302,6 +310,85 @@ static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
                               GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
 }
 
+void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h)
+{
+    int x0;
+    int y0;
+    int x1;
+    int y1;
+    float u0;
+    float v0;
+    float u1;
+    float v1;
+    const SPLASH_LAYER *bg = &g_layers[LAYER_BG];
+
+    if (g_gs == NULL || !bg->ready || g_screen_w <= 0 || g_screen_h <= 0 || w <= 0 || h <= 0)
+        return;
+
+    x0 = x;
+    y0 = y;
+    x1 = x + w;
+    y1 = y + h;
+
+    if (x0 < 0)
+        x0 = 0;
+    if (y0 < 0)
+        y0 = 0;
+    if (x1 > g_screen_w)
+        x1 = g_screen_w;
+    if (y1 > g_screen_h)
+        y1 = g_screen_h;
+
+    if (x0 >= x1 || y0 >= y1)
+        return;
+
+    u0 = ((float)x0 * (float)bg->tex.Width) / (float)g_screen_w;
+    v0 = ((float)y0 * (float)bg->tex.Height) / (float)g_screen_h;
+    u1 = ((float)x1 * (float)bg->tex.Width) / (float)g_screen_w;
+    v1 = ((float)y1 * (float)bg->tex.Height) / (float)g_screen_h;
+
+    gsKit_prim_sprite_texture(g_gs,
+                              (GSTEXTURE *)&bg->tex,
+                              (float)x0,
+                              (float)y0,
+                              u0,
+                              v0,
+                              (float)x1,
+                              (float)y1,
+                              u1,
+                              v1,
+                              FG_Z,
+                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
+}
+
+static void draw_static_layers(void)
+{
+    draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
+    if (g_logo_visible)
+        draw_layer(&g_layers[LAYER_LOGO], g_logo_x, g_logo_y, FG_Z);
+    if (g_hotkeys_visible)
+        draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z);
+}
+
+void SplashRenderBeginFrame(void)
+{
+    if (g_gs == NULL)
+        return;
+
+    gsKit_clear(g_gs, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x00, 0x00));
+    draw_static_layers();
+}
+
+void SplashRenderPresent(void)
+{
+    if (g_gs == NULL)
+        return;
+
+    gsKit_queue_exec(g_gs);
+    gsKit_finish();
+    gsKit_sync_flip(g_gs);
+}
+
 int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
     const SPLASH_IMAGE *bg;
@@ -340,8 +427,6 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         return 0;
     }
 
-    draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
-
     logo = SplashGetLogoImage(is_psx_desr);
     if (!upload_layer_texture(&g_layers[LAYER_LOGO], logo, GS_FILTER_NEAREST)) {
         destroy_frame_state();
@@ -349,9 +434,11 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     }
 
     if (logo_disp == 2) {
-        int logo_x = center_x - ((int)logo->width / 2) + MODE2_LOGO_X_FROM_CENTER;
-        int logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER + logo_y_offset;
-        draw_layer(&g_layers[LAYER_LOGO], logo_x, logo_y, FG_Z);
+        g_logo_x = center_x - ((int)logo->width / 2) + MODE2_LOGO_X_FROM_CENTER;
+        g_logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER + logo_y_offset;
+        g_logo_visible = 1;
+        g_hotkeys_visible = 0;
+        SplashRenderBeginFrame();
         return 1;
     }
 
@@ -372,11 +459,14 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
         hotkeys_x = center_x + (-(g_screen_w / 2) + MODE35_LEFT_MARGIN_PX + MODE35_HOTKEYS_X_FROM_CENTER);
         hotkeys_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + (int)logo->height + MODE35_STACK_GAP_PX + MODE35_HOTKEYS_Y_FROM_CENTER);
+        g_logo_x = logo_x;
+        g_logo_y = logo_y;
+        g_logo_visible = 1;
         g_hotkeys_x = hotkeys_x;
         g_hotkeys_y = hotkeys_y;
+        g_hotkeys_visible = 1;
 
-        draw_layer(&g_layers[LAYER_LOGO], logo_x, logo_y, FG_Z);
-        draw_layer(&g_layers[LAYER_HOTKEYS], hotkeys_x, hotkeys_y, FG_Z);
+        SplashRenderBeginFrame();
     }
 
     return 1;
@@ -434,11 +524,7 @@ int SplashRenderIsActive(void)
 
 void SplashRenderEnd(void)
 {
-    if (g_gs != NULL) {
-        gsKit_queue_exec(g_gs);
-        gsKit_finish();
-        gsKit_sync_flip(g_gs);
-    }
+    SplashRenderPresent();
     destroy_frame_state();
 }
 

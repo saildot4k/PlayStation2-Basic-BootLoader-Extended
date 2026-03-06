@@ -8,11 +8,20 @@
 #define INFO_X_FROM_CENTER (-216)
 #define INFO_Y_FROM_CENTER (205)
 #define INFO_TEXT_COLOR 0x707070
+#define INFO_AUTOBOOT_COLOR 0xffff00
+#define GLYPH_ADVANCE_PX 6
+#define GLYPH_HEIGHT_PX 7
+#define AUTOBOOT_PREFIX "  AUTOBOOT in "
+
+static int g_countdown_x = 0;
+static int g_countdown_y = 0;
+static int g_countdown_visible = 0;
+static int g_last_countdown_chars = 0;
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
 #define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 50
-#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 6
+#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 5
 #define HOTKEY_TEXT_LINE_SPACING 21
 #define HK_MAX_CHARS 70
 
@@ -79,6 +88,7 @@ void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *dvdver,
                                  const char *ps1ver,
                                  const char *temp_celsius,
+                                 const char *autoboot_countdown,
                                  const char *config_source_name)
 {
     char info_line[320];
@@ -108,14 +118,60 @@ void SplashRenderConsoleInfoLine(int logo_disp,
     }
 
     if (logo_disp == 1) {
-        scr_printf("\n%s", info_line);
+        g_countdown_visible = 0;
+        g_last_countdown_chars = 0;
+        if (autoboot_countdown != NULL && autoboot_countdown[0] != '\0')
+            scr_printf("\n%s%s", info_line, autoboot_countdown);
+        else
+            scr_printf("\n%s", info_line);
         return;
     }
 
     if (SplashRenderIsActive()) {
+        int suffix_x;
+        int prefix_width_px;
         int x = SplashRenderGetScreenCenterX() + INFO_X_FROM_CENTER;
         int y = SplashRenderGetScreenCenterY() + INFO_Y_FROM_CENTER;
         SplashRenderDrawTextPxScaled(x, y, INFO_TEXT_COLOR, info_line, 1);
-        SplashRenderEnd();
+
+        suffix_x = x + ((int)strlen(info_line) * GLYPH_ADVANCE_PX);
+        SplashRenderDrawTextPxScaled(suffix_x, y, INFO_AUTOBOOT_COLOR, AUTOBOOT_PREFIX, 1);
+        prefix_width_px = (int)strlen(AUTOBOOT_PREFIX) * GLYPH_ADVANCE_PX;
+        g_countdown_x = suffix_x + prefix_width_px;
+        g_countdown_y = y;
+        g_countdown_visible = 1;
+        g_last_countdown_chars = 0;
+
+        if (autoboot_countdown == NULL || autoboot_countdown[0] == '\0')
+            return;
+
+        SplashRenderDrawTextPxScaled(g_countdown_x, y, INFO_AUTOBOOT_COLOR, autoboot_countdown, 1);
+        g_last_countdown_chars = (int)strlen(autoboot_countdown);
     }
+}
+
+void SplashRenderConsoleInfoCountdownOnly(const char *autoboot_countdown)
+{
+    int countdown_chars;
+    int clear_chars;
+
+    if (!g_countdown_visible || !SplashRenderIsActive())
+        return;
+
+    if (autoboot_countdown == NULL)
+        autoboot_countdown = "";
+
+    countdown_chars = (int)strlen(autoboot_countdown);
+    clear_chars = (countdown_chars > g_last_countdown_chars) ? countdown_chars : g_last_countdown_chars;
+    if (clear_chars > 0) {
+        SplashRenderRestoreBackgroundRect(g_countdown_x,
+                                          g_countdown_y,
+                                          clear_chars * GLYPH_ADVANCE_PX,
+                                          GLYPH_HEIGHT_PX);
+    }
+
+    if (countdown_chars > 0)
+        SplashRenderDrawTextPxScaled(g_countdown_x, g_countdown_y, INFO_AUTOBOOT_COLOR, autoboot_countdown, 1);
+
+    g_last_countdown_chars = countdown_chars;
 }
