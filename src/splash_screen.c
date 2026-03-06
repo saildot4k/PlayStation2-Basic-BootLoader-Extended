@@ -7,12 +7,12 @@
 // Console info text anchor for LOGO_DISPLAY = 2-5, in center-relative pixels.
 #define INFO_X_FROM_CENTER (-216)
 #define INFO_Y_FROM_CENTER (205)
-#define INFO_TEXT_COLOR 0xF0F0F0
+#define INFO_TEXT_COLOR 0x707070
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
 #define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 50
-#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 10
+#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 7
 #define HOTKEY_TEXT_LINE_SPACING 21
 #define HK_MAX_CHARS 70
 
