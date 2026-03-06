@@ -19,5 +19,6 @@ void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *config_source_name);
 
 void SplashRenderConsoleInfoCountdownOnly(const char *autoboot_countdown);
+void SplashRenderConsoleInfoTemperatureOnly(const char *temp_celsius);
 
 #endif

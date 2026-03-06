@@ -1102,6 +1102,9 @@ int main(int argc, char *argv[])
             GLOBCFG.KEYNAMES[START],
         };
         u64 deadline;
+#ifndef NO_TEMP_DISP
+        u64 next_temp_refresh = 0;
+#endif
 
         SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
 
@@ -1162,11 +1165,23 @@ int main(int argc, char *argv[])
         TimerInit();
         tstart = Timer();
         deadline = tstart + GLOBCFG.DELAY;
+#ifndef NO_TEMP_DISP
+        next_temp_refresh = tstart + 500;
+#endif
         build_device_available_cache(dev_ok, DEV_COUNT);
         while (Timer() <= deadline) {
             u64 now = Timer();
 
             if (SplashRenderIsActive()) {
+#ifndef NO_TEMP_DISP
+                if (temp_celsius != NULL && temp_celsius[0] != '\0' && now >= next_temp_refresh) {
+                    if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf))) {
+                        temp_celsius = temp_buf;
+                        SplashRenderConsoleInfoTemperatureOnly(temp_celsius);
+                    }
+                    next_temp_refresh = now + 500;
+                }
+#endif
                 u64 remaining_ms = (now <= deadline) ? (deadline - now) : 0;
                 unsigned int remaining_sec = (unsigned int)(remaining_ms / 1000u);
                 unsigned int remaining_csec = (unsigned int)((remaining_ms % 1000u) / 10u);

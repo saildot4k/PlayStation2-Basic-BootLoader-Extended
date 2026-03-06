@@ -13,11 +13,16 @@
 #define GLYPH_HEIGHT_PX 7
 #define AUTOBOOT_PREFIX "  AUTOBOOT: "
 #define AUTOBOOT_VALUE_DEFAULT_WIDTH 5
+#define TEMP_TAG " TEMP: "
+#define TEMP_VALUE_WIDTH_CHARS 7
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;
 static int g_countdown_visible = 0;
 static int g_last_countdown_chars = 0;
+static int g_temp_x = 0;
+static int g_temp_y = 0;
+static int g_temp_visible = 0;
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
@@ -93,19 +98,21 @@ void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *config_source_name)
 {
     char info_line[320];
+    char temp_padded[TEMP_VALUE_WIDTH_CHARS + 1];
 
     if (logo_disp <= 0)
         return;
 
     if (temp_celsius != NULL && temp_celsius[0] != '\0') {
+        snprintf(temp_padded, sizeof(temp_padded), "%-*s", TEMP_VALUE_WIDTH_CHARS, temp_celsius);
         snprintf(info_line,
                  sizeof(info_line),
-                 "MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s  TEMP: %s  CFG SRC: %s",
+                 "MODEL: %s  ROMVER: %s  DVD: %s  PS1DRV: %s" TEMP_TAG "%s  CFG SRC: %s",
                  model,
                  rom_fmt,
                  dvdver,
                  ps1ver,
-                 temp_celsius,
+                 temp_padded,
                  config_source_name);
     } else {
         snprintf(info_line,
@@ -121,6 +128,7 @@ void SplashRenderConsoleInfoLine(int logo_disp,
     if (logo_disp == 1) {
         g_countdown_visible = 0;
         g_last_countdown_chars = 0;
+        g_temp_visible = 0;
         if (autoboot_countdown != NULL && autoboot_countdown[0] != '\0')
             scr_printf("\n%s%s", info_line, autoboot_countdown);
         else
@@ -158,6 +166,20 @@ void SplashRenderConsoleInfoLine(int logo_disp,
         g_countdown_visible = 1;
         g_last_countdown_chars = 0;
 
+        if (temp_celsius != NULL && temp_celsius[0] != '\0') {
+            const char *temp_tag = strstr(info_line, TEMP_TAG);
+            if (temp_tag != NULL) {
+                int temp_prefix_chars = (int)(temp_tag - info_line) + (int)strlen(TEMP_TAG);
+                g_temp_x = x + (temp_prefix_chars * GLYPH_ADVANCE_PX);
+                g_temp_y = y;
+                g_temp_visible = 1;
+            } else {
+                g_temp_visible = 0;
+            }
+        } else {
+            g_temp_visible = 0;
+        }
+
         if (autoboot_countdown == NULL || autoboot_countdown[0] == '\0')
             return;
 
@@ -190,4 +212,22 @@ void SplashRenderConsoleInfoCountdownOnly(const char *autoboot_countdown)
         SplashRenderDrawTextPxScaled(g_countdown_x, g_countdown_y, INFO_AUTOBOOT_COLOR, autoboot_countdown, 1);
 
     g_last_countdown_chars = countdown_chars;
+}
+
+void SplashRenderConsoleInfoTemperatureOnly(const char *temp_celsius)
+{
+    char temp_padded[TEMP_VALUE_WIDTH_CHARS + 1];
+
+    if (!g_temp_visible || !SplashRenderIsActive())
+        return;
+
+    if (temp_celsius == NULL)
+        temp_celsius = "";
+
+    snprintf(temp_padded, sizeof(temp_padded), "%-*s", TEMP_VALUE_WIDTH_CHARS, temp_celsius);
+    SplashRenderRestoreBackgroundRect(g_temp_x,
+                                      g_temp_y,
+                                      TEMP_VALUE_WIDTH_CHARS * GLYPH_ADVANCE_PX,
+                                      GLYPH_HEIGHT_PX);
+    SplashRenderDrawTextPxScaled(g_temp_x, g_temp_y, INFO_TEXT_COLOR, temp_padded, 1);
 }
