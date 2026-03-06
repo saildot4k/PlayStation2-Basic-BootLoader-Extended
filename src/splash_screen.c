@@ -5,13 +5,14 @@
 #include "splash_screen.h"
 
 // Console info text anchor for LOGO_DISPLAY = 2-5, in center-relative pixels.
-#define INFO_X_FROM_CENTER (-216)
+#define INFO_CENTER_ADJUST_X 0
 #define INFO_Y_FROM_CENTER (205)
 #define INFO_TEXT_COLOR 0x707070
 #define INFO_AUTOBOOT_COLOR 0xffff00
 #define GLYPH_ADVANCE_PX 6
 #define GLYPH_HEIGHT_PX 7
 #define AUTOBOOT_PREFIX "  AUTOBOOT in "
+#define AUTOBOOT_VALUE_DEFAULT_WIDTH 6
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;
@@ -128,10 +129,25 @@ void SplashRenderConsoleInfoLine(int logo_disp,
     }
 
     if (SplashRenderIsActive()) {
+        int line_chars;
+        int countdown_layout_chars;
+        int line_width_px;
         int suffix_x;
         int prefix_width_px;
-        int x = SplashRenderGetScreenCenterX() + INFO_X_FROM_CENTER;
+        int x;
         int y = SplashRenderGetScreenCenterY() + INFO_Y_FROM_CENTER;
+
+        countdown_layout_chars = AUTOBOOT_VALUE_DEFAULT_WIDTH;
+        if (autoboot_countdown != NULL && autoboot_countdown[0] != '\0') {
+            int provided_chars = (int)strlen(autoboot_countdown);
+            if (provided_chars > countdown_layout_chars)
+                countdown_layout_chars = provided_chars;
+        }
+
+        line_chars = (int)strlen(info_line) + (int)strlen(AUTOBOOT_PREFIX) + countdown_layout_chars;
+        line_width_px = line_chars * GLYPH_ADVANCE_PX;
+        x = SplashRenderGetScreenCenterX() - (line_width_px / 2) + INFO_CENTER_ADJUST_X;
+
         SplashRenderDrawTextPxScaled(x, y, INFO_TEXT_COLOR, info_line, 1);
 
         suffix_x = x + ((int)strlen(info_line) * GLYPH_ADVANCE_PX);
