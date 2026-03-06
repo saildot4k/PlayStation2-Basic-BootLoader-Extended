@@ -10,10 +10,11 @@
 
 #define FONT_W 5
 #define FONT_H 7
-#define FONT_SCALE 1
+#define FONT_SCALE 2
 #define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
 #define TEXT_Z 10
 #define BG_Z 1
+#define FG_Z 2
 
 // LOGO_DISPLAY = 2 centered logo fine tuning.
 #define MODE2_LOGO_X_FROM_CENTER 0
@@ -43,8 +44,16 @@ typedef struct
     int ready;
 } SPLASH_LAYER;
 
+enum
+{
+    LAYER_BG = 0,
+    LAYER_LOGO,
+    LAYER_HOTKEYS,
+    LAYER_COUNT
+};
+
 static GSGLOBAL *g_gs = NULL;
-static SPLASH_LAYER g_layers[2];
+static SPLASH_LAYER g_layers[LAYER_COUNT];
 static int g_screen_w = 0;
 static int g_screen_h = 0;
 static int g_hotkeys_x = -1;
@@ -147,7 +156,12 @@ static u64 color_to_gs(u32 color)
     return GS_SETREG_RGBAQ(r, g, b, 0x80, 0x00);
 }
 
-static int rbg_to_rgba(const SPLASH_IMAGE *img, unsigned char *dst_rgba, size_t dst_size)
+static unsigned char png_alpha_to_gs_alpha(unsigned char alpha)
+{
+    return (unsigned char)(((unsigned int)alpha * 0x80u + 127u) / 255u);
+}
+
+static int rbga_to_rgba(const SPLASH_IMAGE *img, unsigned char *dst_rgba, size_t dst_size)
 {
     size_t pixels;
     size_t i;
@@ -160,15 +174,16 @@ static int rbg_to_rgba(const SPLASH_IMAGE *img, unsigned char *dst_rgba, size_t 
         return -1;
 
     for (i = 0; i < pixels; i++) {
-        size_t src = i * 3;
+        size_t src = i * 4;
         size_t dst = i * 4;
-        unsigned char r = img->pixels_rbg[src + 0];
-        unsigned char b = img->pixels_rbg[src + 1];
-        unsigned char g = img->pixels_rbg[src + 2];
+        unsigned char r = img->pixels_rbga[src + 0];
+        unsigned char b = img->pixels_rbga[src + 1];
+        unsigned char g = img->pixels_rbga[src + 2];
+        unsigned char a = img->pixels_rbga[src + 3];
         dst_rgba[dst + 0] = r;
         dst_rgba[dst + 1] = g;
         dst_rgba[dst + 2] = b;
-        dst_rgba[dst + 3] = 0x80;
+        dst_rgba[dst + 3] = png_alpha_to_gs_alpha(a);
     }
 
     return 0;
@@ -206,21 +221,21 @@ static void destroy_frame_state(void)
     g_hotkeys_y = -1;
 }
 
-static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img)
+static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img, int filter)
 {
     size_t tex_size;
 
     if (layer == NULL || img == NULL)
         return 0;
 
-    if (img->pixels_rbg == NULL || img->width == 0 || img->height == 0)
+    if (img->pixels_rbga == NULL || img->width == 0 || img->height == 0)
         return 0;
 
     memset(&layer->tex, 0, sizeof(layer->tex));
     layer->tex.Width = img->width;
     layer->tex.Height = img->height;
     layer->tex.PSM = GS_PSM_CT32;
-    layer->tex.Filter = GS_FILTER_NEAREST;
+    layer->tex.Filter = filter;
 
     tex_size = gsKit_texture_size(layer->tex.Width, layer->tex.Height, layer->tex.PSM);
 
@@ -231,7 +246,7 @@ static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img)
     }
 
     memset(layer->tex.Mem, 0, tex_size);
-    if (rbg_to_rgba(img, (unsigned char *)layer->tex.Mem, tex_size) != 0) {
+    if (rbga_to_rgba(img, (unsigned char *)layer->tex.Mem, tex_size) != 0) {
         destroy_layer(layer);
         return 0;
     }
@@ -268,8 +283,28 @@ static void draw_layer(const SPLASH_LAYER *layer, int x, int y, int z)
                               GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
 }
 
+static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
+{
+    if (layer == NULL || !layer->ready)
+        return;
+
+    gsKit_prim_sprite_texture(g_gs,
+                              (GSTEXTURE *)&layer->tex,
+                              0.0f,
+                              0.0f,
+                              0.0f,
+                              0.0f,
+                              (float)g_screen_w,
+                              (float)g_screen_h,
+                              (float)layer->tex.Width,
+                              (float)layer->tex.Height,
+                              z,
+                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
+}
+
 int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
+    const SPLASH_IMAGE *bg;
     const SPLASH_IMAGE *logo;
     int center_x;
     int center_y;
@@ -295,8 +330,16 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     center_x = g_screen_w / 2;
     center_y = g_screen_h / 2;
 
+    bg = SplashGetBackgroundImage(is_psx_desr);
+    if (!upload_layer_texture(&g_layers[LAYER_BG], bg, GS_FILTER_LINEAR)) {
+        destroy_frame_state();
+        return 0;
+    }
+
+    draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
+
     logo = SplashGetLogoImage(is_psx_desr);
-    if (!upload_layer_texture(&g_layers[0], logo)) {
+    if (!upload_layer_texture(&g_layers[LAYER_LOGO], logo, GS_FILTER_NEAREST)) {
         destroy_frame_state();
         return 0;
     }
@@ -304,7 +347,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     if (logo_disp == 2) {
         int logo_x = center_x - ((int)logo->width / 2) + MODE2_LOGO_X_FROM_CENTER;
         int logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER;
-        draw_layer(&g_layers[0], logo_x, logo_y, BG_Z);
+        draw_layer(&g_layers[LAYER_LOGO], logo_x, logo_y, FG_Z);
         return 1;
     }
 
@@ -315,7 +358,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         int hotkeys_x;
         int hotkeys_y;
 
-        if (!upload_layer_texture(&g_layers[1], hotkeys)) {
+        if (!upload_layer_texture(&g_layers[LAYER_HOTKEYS], hotkeys, GS_FILTER_NEAREST)) {
             destroy_frame_state();
             return 0;
         }
@@ -328,8 +371,8 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_hotkeys_x = hotkeys_x;
         g_hotkeys_y = hotkeys_y;
 
-        draw_layer(&g_layers[0], logo_x, logo_y, BG_Z);
-        draw_layer(&g_layers[1], hotkeys_x, hotkeys_y, BG_Z);
+        draw_layer(&g_layers[LAYER_LOGO], logo_x, logo_y, FG_Z);
+        draw_layer(&g_layers[LAYER_HOTKEYS], hotkeys_x, hotkeys_y, FG_Z);
     }
 
     return 1;
