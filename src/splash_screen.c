@@ -46,6 +46,7 @@ void SplashRenderHotkeyLines(int logo_disp,
                              const char *const hotkey_lines[17])
 {
     int i;
+    int text_scale;
     int x;
     int y;
     int hotkeys_x;
@@ -63,12 +64,13 @@ void SplashRenderHotkeyLines(int logo_disp,
 
     x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
     y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP;
+    text_scale = (logo_disp == 5) ? 1 : 2;
     for (i = 0; i < 17; i++) {
         char clamped[HK_MAX_CHARS + 1];
         copy_clamped(clamped, sizeof(clamped), hotkey_lines[i], HK_MAX_CHARS);
         if (clamped[0] == '\0')
             continue;
-        SplashRenderDrawTextPx(x, y + (i * HOTKEY_TEXT_LINE_SPACING), 0xffffff, clamped);
+        SplashRenderDrawTextPxScaled(x, y + (i * HOTKEY_TEXT_LINE_SPACING), 0xffffff, clamped, text_scale);
     }
 }
 
