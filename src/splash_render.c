@@ -355,8 +355,10 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     return 1;
 }
 
-void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
+void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int scale)
 {
+    int draw_scale;
+    int advance;
     int i;
     int cx;
     u64 gs_color;
@@ -365,6 +367,8 @@ void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
         return;
 
     gs_color = color_to_gs(color);
+    draw_scale = (scale > 0) ? scale : 1;
+    advance = (FONT_W + 1) * draw_scale;
 
     cx = x;
     for (i = 0; text[i] != '\0'; i++) {
@@ -375,20 +379,25 @@ void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
             int col;
             for (col = 0; col < FONT_W; col++) {
                 if (bits & (1u << (FONT_W - 1 - col))) {
-                    int px = cx + (col * FONT_SCALE);
-                    int py = y + (row * FONT_SCALE);
+                    int px = cx + (col * draw_scale);
+                    int py = y + (row * draw_scale);
                     gsKit_prim_sprite(g_gs,
                                       (float)px,
                                       (float)py,
-                                      (float)(px + FONT_SCALE),
-                                      (float)(py + FONT_SCALE),
+                                      (float)(px + draw_scale),
+                                      (float)(py + draw_scale),
                                       TEXT_Z,
                                       gs_color);
                 }
             }
         }
-        cx += FONT_ADVANCE;
+        cx += advance;
     }
+}
+
+void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
+{
+    SplashRenderDrawTextPxScaled(x, y, color, text, FONT_SCALE);
 }
 
 int SplashRenderIsActive(void)

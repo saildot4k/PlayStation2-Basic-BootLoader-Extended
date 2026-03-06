@@ -6,13 +6,13 @@
 
 // Console info text anchor for LOGO_DISPLAY = 2-5, in center-relative pixels.
 #define INFO_X_FROM_CENTER (-216)
-#define INFO_Y_FROM_CENTER (214)
+#define INFO_Y_FROM_CENTER (200)
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
-#define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 84
-#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 1
-#define HOTKEY_TEXT_LINE_SPACING 22
+#define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 50
+#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 2
+#define HOTKEY_TEXT_LINE_SPACING 21
 #define HK_MAX_CHARS 70
 
 static void copy_clamped(char *dst, size_t dst_size, const char *src, int max_chars)
@@ -101,7 +101,7 @@ void SplashRenderConsoleInfoLine(int logo_disp,
     if (SplashRenderIsActive()) {
         int x = SplashRenderGetScreenCenterX() + INFO_X_FROM_CENTER;
         int y = SplashRenderGetScreenCenterY() + INFO_Y_FROM_CENTER;
-        SplashRenderDrawTextPx(x, y, 0xffffff, info_line);
+        SplashRenderDrawTextPxScaled(x, y, 0xffffff, info_line, 1);
         SplashRenderEnd();
     }
 }

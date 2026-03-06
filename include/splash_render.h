@@ -5,6 +5,7 @@
 
 int SplashRenderBegin(int logo_disp, int is_psx_desr);
 void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text);
+void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int scale);
 int SplashRenderIsActive(void);
 void SplashRenderEnd(void);
 int SplashRenderGetScreenWidth(void);
