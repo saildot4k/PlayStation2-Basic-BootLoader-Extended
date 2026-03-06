@@ -11,9 +11,11 @@
 #define FONT_ATLAS_COLS 19
 #define FONT_ATLAS_CELL_W 30
 #define FONT_ATLAS_CELL_H 30
+#define FONT_GLYPH_W 16
+#define FONT_GLYPH_H 16
+#define FONT_ATLAS_GLYPH_OFFSET_X ((FONT_ATLAS_CELL_W - FONT_GLYPH_W) / 2)
+#define FONT_ATLAS_GLYPH_OFFSET_Y ((FONT_ATLAS_CELL_H - FONT_GLYPH_H) / 2)
 #define FONT_DRAW_ADVANCE 16
-#define FONT_DRAW_OFFSET_X 7
-#define FONT_DRAW_OFFSET_Y 7
 #define FONT_ASCII_FIRST 32
 #define FONT_ASCII_LAST 126
 #define TEXT_Z 10
@@ -87,13 +89,13 @@ static void draw_font_char(int x, int y, int char_idx, u64 gs_color)
 
     src_col = char_idx % FONT_ATLAS_COLS;
     src_row = char_idx / FONT_ATLAS_COLS;
-    src_x = src_col * FONT_ATLAS_CELL_W;
-    src_y = src_row * FONT_ATLAS_CELL_H;
+    src_x = (src_col * FONT_ATLAS_CELL_W) + FONT_ATLAS_GLYPH_OFFSET_X;
+    src_y = (src_row * FONT_ATLAS_CELL_H) + FONT_ATLAS_GLYPH_OFFSET_Y;
 
-    draw_x1 = (float)(x - FONT_DRAW_OFFSET_X);
-    draw_y1 = (float)(y - FONT_DRAW_OFFSET_Y);
-    draw_x2 = draw_x1 + (float)FONT_ATLAS_CELL_W;
-    draw_y2 = draw_y1 + (float)FONT_ATLAS_CELL_H;
+    draw_x1 = (float)x;
+    draw_y1 = (float)y;
+    draw_x2 = draw_x1 + (float)FONT_GLYPH_W;
+    draw_y2 = draw_y1 + (float)FONT_GLYPH_H;
 
     gsKit_prim_sprite_texture(g_gs,
                               (GSTEXTURE *)&font->tex,
@@ -103,8 +105,8 @@ static void draw_font_char(int x, int y, int char_idx, u64 gs_color)
                               (float)src_y,
                               draw_x2,
                               draw_y2,
-                              (float)(src_x + FONT_ATLAS_CELL_W),
-                              (float)(src_y + FONT_ATLAS_CELL_H),
+                              (float)(src_x + FONT_GLYPH_W),
+                              (float)(src_y + FONT_GLYPH_H),
                               TEXT_Z,
                               gs_color);
 }
