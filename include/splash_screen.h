@@ -14,6 +14,7 @@ void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *rom_fmt,
                                  const char *dvdver,
                                  const char *ps1ver,
+                                 const char *temp_celsius,
                                  const char *config_source_name);
 
 #endif

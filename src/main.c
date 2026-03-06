@@ -86,6 +86,38 @@ static int ci_starts_with(const char *s, const char *prefix)
     return 1;
 }
 
+#ifndef NO_TEMP_DISP
+// Query CDVD thermal sensor and return formatted Celsius string when supported.
+static int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
+{
+    unsigned char in_buffer[1];
+    unsigned char out_buffer[16];
+    unsigned short temp;
+    int stat = 0;
+
+    if (temp_buf == NULL || temp_buf_size == 0)
+        return 0;
+
+    temp_buf[0] = '\0';
+    memset(out_buffer, 0, sizeof(out_buffer));
+
+    in_buffer[0] = 0xEF;
+    if (sceCdApplySCmd(0x03, in_buffer, sizeof(in_buffer), out_buffer) != 0)
+        stat = out_buffer[0];
+
+    if (stat != 0)
+        return 0;
+
+    temp = (unsigned short)(out_buffer[1] * 256 + out_buffer[2]);
+    snprintf(temp_buf,
+             temp_buf_size,
+             "%02d.%02dC",
+             (temp - (temp % 128)) / 128,
+             (temp % 128));
+    return 1;
+}
+#endif
+
 // --------------- glob stuff --------------- //
 typedef struct
 {
@@ -1040,6 +1072,10 @@ int main(int argc, char *argv[])
         char rom_raw[ROMVER_MAX_LEN + 1];
         char rom_buf[32];
         char rom_fmt[8];
+#ifndef NO_TEMP_DISP
+        char temp_buf[16];
+#endif
+        const char *temp_celsius = NULL;
         const char *model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
         const char *ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
         const char *dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
@@ -1055,6 +1091,11 @@ int main(int argc, char *argv[])
             char region = (romver[4] != '\0') ? romver[4] : '?';
             snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
         }
+
+#ifndef NO_TEMP_DISP
+        if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf)))
+            temp_celsius = temp_buf;
+#endif
 
         {
             const char *hotkey_lines[17] = {
@@ -1084,11 +1125,8 @@ int main(int argc, char *argv[])
                                     rom_fmt,
                                     dvdver,
                                     ps1ver,
+                                    temp_celsius,
                                     source);
-#ifndef NO_TEMP_DISP
-        if (GLOBCFG.LOGO_DISP <= 2)
-            PrintTemperature();
-#endif
     }
     DPRINTF("Timer starts!\n");
     TimerInit();
@@ -1879,23 +1917,10 @@ void runOSDNoUpdate(void)
 #ifndef NO_TEMP_DISP
 void PrintTemperature()
 {
-    // Based on PS2Ident libxcdvd from SP193
-    unsigned char in_buffer[1], out_buffer[16];
-    int stat = 0;
+    char temp_buf[16];
 
-    memset(&out_buffer, 0, 16);
-
-    in_buffer[0] = 0xEF;
-    if (sceCdApplySCmd(0x03, in_buffer, sizeof(in_buffer), out_buffer /*, sizeof(out_buffer)*/) != 0) {
-        stat = out_buffer[0];
-    }
-
-    if (!stat) {
-        unsigned short temp = out_buffer[1] * 256 + out_buffer[2];
-        scr_printf("  Temp: %02d.%02dC\n", (temp - (temp % 128)) / 128, (temp % 128));
-    } else {
-        DPRINTF("Failed 0x03 0xEF command. stat=%x \n", stat);
-    }
+    if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf)))
+        scr_printf("  Temp: %s\n", temp_buf);
 }
 #endif
 
