@@ -11,8 +11,8 @@
 #define INFO_AUTOBOOT_COLOR 0xffff00
 #define GLYPH_ADVANCE_PX 6
 #define GLYPH_HEIGHT_PX 7
-#define AUTOBOOT_PREFIX "  AUTOBOOT in "
-#define AUTOBOOT_VALUE_DEFAULT_WIDTH 6
+#define AUTOBOOT_PREFIX "  AUTOBOOT: "
+#define AUTOBOOT_VALUE_DEFAULT_WIDTH 5
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;

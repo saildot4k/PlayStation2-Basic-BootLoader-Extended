@@ -1171,7 +1171,7 @@ int main(int argc, char *argv[])
                 unsigned int remaining_sec = (unsigned int)(remaining_ms / 1000u);
                 unsigned int remaining_csec = (unsigned int)((remaining_ms % 1000u) / 10u);
 
-                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%02us", remaining_sec, remaining_csec);
+                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%02u", remaining_sec, remaining_csec);
                 SplashRenderConsoleInfoCountdownOnly(autoboot_text);
                 SplashRenderPresent();
             }
