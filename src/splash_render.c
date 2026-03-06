@@ -8,10 +8,13 @@
 #include "splash_assets.h"
 #include "splash_render.h"
 
-#define FONT_W 5
-#define FONT_H 7
-#define FONT_SCALE 1
-#define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
+#define FONT_SRC_W 5
+#define FONT_SRC_H 7
+#define FONT_W 8
+#define FONT_H 16
+#define FONT_ADVANCE FONT_W
+#define FONT_AA_SAMPLES 4
+#define FONT_AA_LEVELS (FONT_AA_SAMPLES * FONT_AA_SAMPLES)
 #define TEXT_Z 10
 #define BG_Z 1
 #define FG_Z 2
@@ -29,13 +32,13 @@
 #define MODE35_STACK_GAP_PX 0
 #define MODE35_LOGO_X_FROM_CENTER 0
 #define MODE35_LOGO_Y_FROM_CENTER -5
-#define MODE35_HOTKEYS_X_FROM_CENTER 0
+#define MODE35_HOTKEYS_X_FROM_CENTER 10
 #define MODE35_HOTKEYS_Y_FROM_CENTER -10
 
 typedef struct
 {
     char ch;
-    unsigned char rows[FONT_H];
+    unsigned char rows[FONT_SRC_H];
 } GLYPH;
 
 typedef struct
@@ -132,6 +135,9 @@ static const GLYPH g_font[] = {
     {'~', {0x00, 0x00, 0x09, 0x16, 0x00, 0x00, 0x00}},
 };
 
+static unsigned char g_font_aa[sizeof(g_font) / sizeof(g_font[0])][FONT_H][FONT_W];
+static int g_font_aa_ready = 0;
+
 static const GLYPH *find_glyph(char ch)
 {
     int i;
@@ -148,12 +154,56 @@ static const GLYPH *find_glyph(char ch)
     return &g_font[0];
 }
 
-static u64 color_to_gs(u32 color)
+static int glyph_source_pixel_on(const GLYPH *g, int sx, int sy)
 {
-    int r = (color >> 16) & 0xff;
-    int g = (color >> 8) & 0xff;
-    int b = color & 0xff;
-    return GS_SETREG_RGBAQ(r, g, b, 0x80, 0x00);
+    if (g == NULL)
+        return 0;
+    if (sx < 0 || sx >= FONT_SRC_W || sy < 0 || sy >= FONT_SRC_H)
+        return 0;
+    return (g->rows[sy] & (1u << (FONT_SRC_W - 1 - sx))) ? 1 : 0;
+}
+
+static void build_font_aa_table(void)
+{
+    int gi;
+
+    if (g_font_aa_ready)
+        return;
+
+    for (gi = 0; gi < (int)(sizeof(g_font) / sizeof(g_font[0])); gi++) {
+        int dy;
+        for (dy = 0; dy < FONT_H; dy++) {
+            int dx;
+            for (dx = 0; dx < FONT_W; dx++) {
+                int hits = 0;
+                int sy;
+                for (sy = 0; sy < FONT_AA_SAMPLES; sy++) {
+                    int sx;
+                    for (sx = 0; sx < FONT_AA_SAMPLES; sx++) {
+                        int src_x_num = (((dx * FONT_AA_SAMPLES) + sx) * 2 + 1) * FONT_SRC_W;
+                        int src_y_num = (((dy * FONT_AA_SAMPLES) + sy) * 2 + 1) * FONT_SRC_H;
+                        int src_den = FONT_W * FONT_AA_SAMPLES * 2;
+                        int src_x = src_x_num / src_den;
+                        int src_y = src_y_num / (FONT_H * FONT_AA_SAMPLES * 2);
+                        hits += glyph_source_pixel_on(&g_font[gi], src_x, src_y);
+                    }
+                }
+                g_font_aa[gi][dy][dx] = (unsigned char)hits;
+            }
+        }
+    }
+
+    g_font_aa_ready = 1;
+}
+
+static void color_to_rgb(u32 color, int *r, int *g, int *b)
+{
+    if (r != NULL)
+        *r = (color >> 16) & 0xff;
+    if (g != NULL)
+        *g = (color >> 8) & 0xff;
+    if (b != NULL)
+        *b = color & 0xff;
 }
 
 static unsigned char png_alpha_to_gs_alpha(unsigned char alpha)
@@ -306,6 +356,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
     const SPLASH_IMAGE *bg;
     const SPLASH_IMAGE *logo;
+    int logo_y_offset;
     int center_x;
     int center_y;
 
@@ -329,6 +380,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     g_screen_w = (int)g_gs->Width;
     g_screen_h = (int)g_gs->Height;
+    logo_y_offset = 6;
     center_x = g_screen_w / 2;
     center_y = g_screen_h / 2;
 
@@ -348,7 +400,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     if (logo_disp == 2) {
         int logo_x = center_x - ((int)logo->width / 2) + MODE2_LOGO_X_FROM_CENTER;
-        int logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER;
+        int logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER + logo_y_offset;
         draw_layer(&g_layers[LAYER_LOGO], logo_x, logo_y, FG_Z);
         return 1;
     }
@@ -366,7 +418,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         }
 
         logo_x = center_x - ((int)logo->width / 2) + MODE35_LOGO_X_FROM_CENTER;
-        logo_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + MODE35_LOGO_Y_FROM_CENTER);
+        logo_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + MODE35_LOGO_Y_FROM_CENTER + logo_y_offset);
 
         hotkeys_x = center_x + (-(g_screen_w / 2) + MODE35_LEFT_MARGIN_PX + MODE35_HOTKEYS_X_FROM_CENTER);
         hotkeys_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + (int)logo->height + MODE35_STACK_GAP_PX + MODE35_HOTKEYS_Y_FROM_CENTER);
@@ -384,30 +436,43 @@ void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
 {
     int i;
     int cx;
-    u64 gs_color;
+    int r;
+    int g_ch;
+    int b;
+    u64 aa_colors[FONT_AA_LEVELS + 1];
+    int level;
 
     if (g_gs == NULL || text == NULL)
         return;
 
-    gs_color = color_to_gs(color);
+    build_font_aa_table();
+
+    color_to_rgb(color, &r, &g_ch, &b);
+    for (level = 0; level <= FONT_AA_LEVELS; level++) {
+        unsigned char alpha255 = (unsigned char)((level * 255 + (FONT_AA_LEVELS / 2)) / FONT_AA_LEVELS);
+        aa_colors[level] = GS_SETREG_RGBAQ(r, g_ch, b, png_alpha_to_gs_alpha(alpha255), 0x00);
+    }
+
     cx = x;
     for (i = 0; text[i] != '\0'; i++) {
+        int glyph_index;
         int row;
-        const GLYPH *g = find_glyph(text[i]);
+        const GLYPH *glyph = find_glyph(text[i]);
+        glyph_index = (int)(glyph - g_font);
         for (row = 0; row < FONT_H; row++) {
-            unsigned char bits = g->rows[row];
             int col;
             for (col = 0; col < FONT_W; col++) {
-                if (bits & (1u << (FONT_W - 1 - col))) {
-                    int px = cx + (col * FONT_SCALE);
-                    int py = y + (row * FONT_SCALE);
+                unsigned char coverage = g_font_aa[glyph_index][row][col];
+                if (coverage != 0) {
+                    int px = cx + col;
+                    int py = y + row;
                     gsKit_prim_sprite(g_gs,
                                       (float)px,
                                       (float)py,
-                                      (float)(px + FONT_SCALE),
-                                      (float)(py + FONT_SCALE),
+                                      (float)(px + 1),
+                                      (float)(py + 1),
                                       TEXT_Z,
-                                      gs_color);
+                                      aa_colors[coverage]);
                 }
             }
         }
