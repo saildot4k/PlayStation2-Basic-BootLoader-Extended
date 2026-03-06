@@ -1074,9 +1074,6 @@ int main(int argc, char *argv[])
         char rom_buf[32];
         char rom_fmt[8];
         char autoboot_text[48];
-#ifndef NO_TEMP_DISP
-        char temp_buf[16];
-#endif
         const char *model = "";
         const char *ps1ver = "";
         const char *dvdver = "";
@@ -1103,7 +1100,9 @@ int main(int argc, char *argv[])
         };
         u64 deadline;
 #ifndef NO_TEMP_DISP
-        u64 next_temp_refresh = 0;
+        char temp_query_buf[16];
+        char temp_render_buf[16];
+        int temp_supported = 0;
 #endif
 
         SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
@@ -1126,8 +1125,12 @@ int main(int argc, char *argv[])
             }
 
 #ifndef NO_TEMP_DISP
-            if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf)))
-                temp_celsius = temp_buf;
+            if (QueryTemperatureCelsius(temp_query_buf, sizeof(temp_query_buf))) {
+                strncpy(temp_render_buf, temp_query_buf, sizeof(temp_render_buf));
+                temp_render_buf[sizeof(temp_render_buf) - 1] = '\0';
+                temp_celsius = temp_render_buf;
+                temp_supported = 1;
+            }
 #endif
 
             if (GLOBCFG.LOGO_DISP == 1) {
@@ -1165,28 +1168,25 @@ int main(int argc, char *argv[])
         TimerInit();
         tstart = Timer();
         deadline = tstart + GLOBCFG.DELAY;
-#ifndef NO_TEMP_DISP
-        next_temp_refresh = tstart + 500;
-#endif
         build_device_available_cache(dev_ok, DEV_COUNT);
         while (Timer() <= deadline) {
             u64 now = Timer();
 
             if (SplashRenderIsActive()) {
 #ifndef NO_TEMP_DISP
-                if (temp_celsius != NULL && temp_celsius[0] != '\0' && now >= next_temp_refresh) {
-                    if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf))) {
-                        temp_celsius = temp_buf;
-                        SplashRenderConsoleInfoTemperatureOnly(temp_celsius);
+                if (temp_supported) {
+                    if (QueryTemperatureCelsius(temp_query_buf, sizeof(temp_query_buf))) {
+                        strncpy(temp_render_buf, temp_query_buf, sizeof(temp_render_buf));
+                        temp_render_buf[sizeof(temp_render_buf) - 1] = '\0';
                     }
-                    next_temp_refresh = now + 500;
+                    SplashRenderConsoleInfoTemperatureOnly(temp_render_buf);
                 }
 #endif
                 u64 remaining_ms = (now <= deadline) ? (deadline - now) : 0;
                 unsigned int remaining_sec = (unsigned int)(remaining_ms / 1000u);
                 unsigned int remaining_csec = (unsigned int)((remaining_ms % 1000u) / 10u);
 
-                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%02u", remaining_sec, remaining_csec);
+                snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%02uS", remaining_sec, remaining_csec);
                 SplashRenderConsoleInfoCountdownOnly(autoboot_text);
                 SplashRenderPresent();
             }

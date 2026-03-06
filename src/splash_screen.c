@@ -11,10 +11,10 @@
 #define INFO_AUTOBOOT_COLOR 0xffff00
 #define GLYPH_ADVANCE_PX 6
 #define GLYPH_HEIGHT_PX 7
-#define AUTOBOOT_PREFIX "  AUTOBOOT: "
-#define AUTOBOOT_VALUE_DEFAULT_WIDTH 5
+#define AUTOBOOT_PREFIX "  AUTO: "
+#define AUTOBOOT_VALUE_DEFAULT_WIDTH 6
 #define TEMP_TAG " TEMP: "
-#define TEMP_VALUE_WIDTH_CHARS 7
+#define TEMP_VALUE_WIDTH_CHARS 6
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;
@@ -27,7 +27,7 @@ static int g_temp_visible = 0;
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
 #define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 50
-#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 5
+#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 6
 #define HOTKEY_TEXT_LINE_SPACING 21
 #define HK_MAX_CHARS 70
 
