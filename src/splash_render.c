@@ -10,7 +10,7 @@
 
 #define FONT_W 5
 #define FONT_H 7
-#define FONT_SCALE 2
+#define FONT_SCALE 1
 #define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
 #define TEXT_Z 10
 #define BG_Z 1
@@ -30,7 +30,7 @@
 #define MODE35_LOGO_X_FROM_CENTER 0
 #define MODE35_LOGO_Y_FROM_CENTER -5
 #define MODE35_HOTKEYS_X_FROM_CENTER 0
-#define MODE35_HOTKEYS_Y_FROM_CENTER 0
+#define MODE35_HOTKEYS_Y_FROM_CENTER -10
 
 typedef struct
 {
@@ -320,6 +320,8 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     g_gs->DoubleBuffering = GS_SETTING_ON;
     g_gs->ZBuffering = GS_SETTING_OFF;
+    g_gs->PrimAlphaEnable = GS_SETTING_ON;
+    gsKit_set_primalpha(g_gs, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
     gsKit_init_screen(g_gs);
     gsKit_display_buffer(g_gs);
     gsKit_mode_switch(g_gs, GS_ONESHOT);
