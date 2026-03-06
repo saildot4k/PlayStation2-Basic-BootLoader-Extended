@@ -12,7 +12,7 @@
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
 #define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 50
-#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 2
+#define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 10
 #define HOTKEY_TEXT_LINE_SPACING 21
 #define HK_MAX_CHARS 70
 
