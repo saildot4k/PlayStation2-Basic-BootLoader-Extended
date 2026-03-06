@@ -8,10 +8,14 @@
 #include "splash_assets.h"
 #include "splash_render.h"
 
-#define FONT_W 5
-#define FONT_H 7
-#define FONT_SCALE 2
-#define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
+#define FONT_ATLAS_COLS 19
+#define FONT_ATLAS_CELL_W 30
+#define FONT_ATLAS_CELL_H 30
+#define FONT_DRAW_ADVANCE 16
+#define FONT_DRAW_OFFSET_X 7
+#define FONT_DRAW_OFFSET_Y 7
+#define FONT_ASCII_FIRST 32
+#define FONT_ASCII_LAST 126
 #define TEXT_Z 10
 #define BG_Z 1
 #define FG_Z 2
@@ -34,12 +38,6 @@
 
 typedef struct
 {
-    char ch;
-    unsigned char rows[FONT_H];
-} GLYPH;
-
-typedef struct
-{
     GSTEXTURE tex;
     int ready;
 } SPLASH_LAYER;
@@ -49,6 +47,7 @@ enum
     LAYER_BG = 0,
     LAYER_LOGO,
     LAYER_HOTKEYS,
+    LAYER_FONT,
     LAYER_COUNT
 };
 
@@ -59,66 +58,55 @@ static int g_screen_h = 0;
 static int g_hotkeys_x = -1;
 static int g_hotkeys_y = -1;
 
-// 5x7 uppercase glyphs for splash labels.
-static const GLYPH g_font[] = {
-    {' ', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}},
-    {'-', {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00}},
-    {'.', {0x00, 0x00, 0x00, 0x00, 0x00, 0x06, 0x06}},
-    {':', {0x00, 0x06, 0x06, 0x00, 0x06, 0x06, 0x00}},
-    {'/', {0x01, 0x02, 0x04, 0x08, 0x10, 0x00, 0x00}},
-    {'0', {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E}},
-    {'1', {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E}},
-    {'2', {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F}},
-    {'3', {0x1E, 0x01, 0x01, 0x0E, 0x01, 0x01, 0x1E}},
-    {'4', {0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02}},
-    {'5', {0x1F, 0x10, 0x10, 0x1E, 0x01, 0x01, 0x1E}},
-    {'6', {0x0E, 0x10, 0x10, 0x1E, 0x11, 0x11, 0x0E}},
-    {'7', {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08}},
-    {'8', {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E}},
-    {'9', {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x01, 0x0E}},
-    {'A', {0x04, 0x0A, 0x11, 0x11, 0x1F, 0x11, 0x11}},
-    {'B', {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E}},
-    {'C', {0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E}},
-    {'D', {0x1C, 0x12, 0x11, 0x11, 0x11, 0x12, 0x1C}},
-    {'E', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F}},
-    {'F', {0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10}},
-    {'G', {0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0E}},
-    {'H', {0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11}},
-    {'I', {0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E}},
-    {'J', {0x01, 0x01, 0x01, 0x01, 0x11, 0x11, 0x0E}},
-    {'K', {0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11}},
-    {'L', {0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F}},
-    {'M', {0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11}},
-    {'N', {0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11}},
-    {'O', {0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},
-    {'P', {0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10}},
-    {'Q', {0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D}},
-    {'R', {0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11}},
-    {'S', {0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E}},
-    {'T', {0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}},
-    {'U', {0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E}},
-    {'V', {0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04}},
-    {'W', {0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A}},
-    {'X', {0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11}},
-    {'Y', {0x11, 0x11, 0x0A, 0x04, 0x04, 0x04, 0x04}},
-    {'Z', {0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F}},
-    {'_', {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F}},
-};
-
-static const GLYPH *find_glyph(char ch)
+static int font_char_index(char ch)
 {
-    int i;
-    char uc = ch;
+    unsigned char uc = (unsigned char)ch;
+    int idx = (int)uc - FONT_ASCII_FIRST;
+    int max = FONT_ASCII_LAST - FONT_ASCII_FIRST;
 
-    if (uc >= 'a' && uc <= 'z')
-        uc = (char)(uc - ('a' - 'A'));
+    if (idx < 0 || idx > max)
+        return 0;
 
-    for (i = 0; i < (int)(sizeof(g_font) / sizeof(g_font[0])); i++) {
-        if (g_font[i].ch == uc)
-            return &g_font[i];
-    }
+    return idx;
+}
 
-    return &g_font[0];
+static void draw_font_char(int x, int y, int char_idx, u64 gs_color)
+{
+    const SPLASH_LAYER *font = &g_layers[LAYER_FONT];
+    int src_col;
+    int src_row;
+    int src_x;
+    int src_y;
+    float draw_x1;
+    float draw_y1;
+    float draw_x2;
+    float draw_y2;
+
+    if (!font->ready)
+        return;
+
+    src_col = char_idx % FONT_ATLAS_COLS;
+    src_row = char_idx / FONT_ATLAS_COLS;
+    src_x = src_col * FONT_ATLAS_CELL_W;
+    src_y = src_row * FONT_ATLAS_CELL_H;
+
+    draw_x1 = (float)(x - FONT_DRAW_OFFSET_X);
+    draw_y1 = (float)(y - FONT_DRAW_OFFSET_Y);
+    draw_x2 = draw_x1 + (float)FONT_ATLAS_CELL_W;
+    draw_y2 = draw_y1 + (float)FONT_ATLAS_CELL_H;
+
+    gsKit_prim_sprite_texture(g_gs,
+                              (GSTEXTURE *)&font->tex,
+                              draw_x1,
+                              draw_y1,
+                              (float)src_x,
+                              (float)src_y,
+                              draw_x2,
+                              draw_y2,
+                              (float)(src_x + FONT_ATLAS_CELL_W),
+                              (float)(src_y + FONT_ATLAS_CELL_H),
+                              TEXT_Z,
+                              gs_color);
 }
 
 static u64 color_to_gs(u32 color)
@@ -278,6 +266,7 @@ static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
 int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
     const SPLASH_IMAGE *bg;
+    const SPLASH_IMAGE *font_bitmap;
     const SPLASH_IMAGE *logo;
     int logo_y_offset;
     int center_x;
@@ -317,6 +306,12 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     logo = SplashGetLogoImage(is_psx_desr);
     if (!upload_layer_texture(&g_layers[LAYER_LOGO], logo, GS_FILTER_NEAREST)) {
+        destroy_frame_state();
+        return 0;
+    }
+
+    font_bitmap = SplashGetFontBitmapImage();
+    if (!upload_layer_texture(&g_layers[LAYER_FONT], font_bitmap, GS_FILTER_NEAREST)) {
         destroy_frame_state();
         return 0;
     }
@@ -366,28 +361,13 @@ void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
 
     gs_color = color_to_gs(color);
 
+    if (!g_layers[LAYER_FONT].ready)
+        return;
+
     cx = x;
     for (i = 0; text[i] != '\0'; i++) {
-        int row;
-        const GLYPH *glyph = find_glyph(text[i]);
-        for (row = 0; row < FONT_H; row++) {
-            unsigned char bits = glyph->rows[row];
-            int col;
-            for (col = 0; col < FONT_W; col++) {
-                if (bits & (1u << (FONT_W - 1 - col))) {
-                    int px = cx + (col * FONT_SCALE);
-                    int py = y + (row * FONT_SCALE);
-                    gsKit_prim_sprite(g_gs,
-                                      (float)px,
-                                      (float)py,
-                                      (float)(px + FONT_SCALE),
-                                      (float)(py + FONT_SCALE),
-                                      TEXT_Z,
-                                      gs_color);
-                }
-            }
-        }
-        cx += FONT_ADVANCE;
+        draw_font_char(cx, y, font_char_index(text[i]), gs_color);
+        cx += FONT_DRAW_ADVANCE;
     }
 }
 

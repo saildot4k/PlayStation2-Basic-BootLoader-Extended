@@ -11,5 +11,6 @@ typedef struct
 const SPLASH_IMAGE *SplashGetBackgroundImage(int is_psx_desr);
 const SPLASH_IMAGE *SplashGetLogoImage(int is_psx_desr);
 const SPLASH_IMAGE *SplashGetHotkeysImage(void);
+const SPLASH_IMAGE *SplashGetFontBitmapImage(void);
 
 #endif

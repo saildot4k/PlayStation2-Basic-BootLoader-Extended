@@ -20,6 +20,10 @@ extern const unsigned int splash_hotkeys_width;
 extern const unsigned int splash_hotkeys_height;
 extern const unsigned char splash_hotkeys_rbga[];
 
+extern const unsigned int splash_font2bitmap_width;
+extern const unsigned int splash_font2bitmap_height;
+extern const unsigned char splash_font2bitmap_rbga[];
+
 const SPLASH_IMAGE *SplashGetBackgroundImage(int is_psx_desr)
 {
     static SPLASH_IMAGE bg_ps2;
@@ -61,4 +65,15 @@ const SPLASH_IMAGE *SplashGetHotkeysImage(void)
     hotkeys.height = splash_hotkeys_height;
 
     return &hotkeys;
+}
+
+const SPLASH_IMAGE *SplashGetFontBitmapImage(void)
+{
+    static SPLASH_IMAGE font_bitmap;
+
+    font_bitmap.pixels_rbga = splash_font2bitmap_rbga;
+    font_bitmap.width = splash_font2bitmap_width;
+    font_bitmap.height = splash_font2bitmap_height;
+
+    return &font_bitmap;
 }
