@@ -322,32 +322,46 @@ static int IsCdvdCommandToken(const char *path)
     return (!strcmp(path, "$CDVD") || !strcmp(path, "$CDVD_NO_PS2LOGO"));
 }
 
-static void ShowLaunchStatus(const char *path)
+static void SplashDrawCenteredStatus(const char *text, u32 color)
 {
-    char loading_line[160];
-    const char *safe_path = (path != NULL) ? path : "";
+    int line_width;
+    int x;
+    int y;
 
-    scr_setfontcolor(0x00ff00);
-    scr_printf("  Loading %s\n", safe_path);
-
-    if (!IsCdvdCommandToken(safe_path))
-        return;
-
-    if (!SplashRenderIsActive())
+    if (text == NULL || !SplashRenderIsActive())
         return;
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
-    snprintf(loading_line, sizeof(loading_line), "Loading %s", safe_path);
-    {
-        int line_width = (int)strlen(loading_line) * 6;
-        int x = SplashRenderGetScreenCenterX() - (line_width / 2);
-        int y = SplashRenderGetScreenCenterY() + 205;
-        if (x < 8)
-            x = 8;
-        SplashRenderDrawTextPxScaled(x, y, 0x00ff00, loading_line, 1);
-    }
+    line_width = (int)strlen(text) * 6;
+    x = SplashRenderGetScreenCenterX() - (line_width / 2);
+    y = SplashRenderGetScreenCenterY() - 4;
+    if (x < 8)
+        x = 8;
+    SplashRenderDrawTextPxScaled(x, y, color, text, 1);
     SplashRenderPresent();
+}
+
+static void ShowLaunchStatus(const char *path)
+{
+    char loading_line[160];
+    const char *safe_path = (path != NULL) ? path : "";
+    int is_cdvd = IsCdvdCommandToken(safe_path);
+
+    if (!is_cdvd) {
+        scr_setfontcolor(0x00ff00);
+        scr_printf("  Loading %s\n", safe_path);
+        return;
+    }
+
+    if (!SplashRenderIsActive()) {
+        scr_setfontcolor(0x00ff00);
+        scr_printf("  Loading %s\n", safe_path);
+        return;
+    }
+
+    snprintf(loading_line, sizeof(loading_line), "Loading %s", safe_path);
+    SplashDrawCenteredStatus(loading_line, 0x00ff00);
 }
 
 static int device_available_for_path_cached(const char *path, const int *dev_ok)
@@ -1771,25 +1785,32 @@ void poweroffCallback(void *arg)
 int dischandler(int skip_ps2logo)
 {
     int OldDiscType, DiscType, ValidDiscInserted, result, first_run = 1;
+    int use_splash_ui;
+    char disc_status[64];
     u32 STAT;
 
-    scr_clear();
-    scr_printf("\n\t%s: Activated\n", __func__);
+    use_splash_ui = SplashRenderIsActive();
+    if (use_splash_ui)
+        SplashDrawCenteredStatus("CDVD: Waiting for disc...", 0x00ffff);
+    else {
+        scr_clear();
+        scr_printf("\n\t%s: Activated\n", __func__);
+        scr_printf("\t\tEnabling Diagnosis...\n");
+    }
 
-    scr_printf("\t\tEnabling Diagnosis...\n");
     do { // 0 = enable, 1 = disable.
         result = sceCdAutoAdjustCtrl(0, &STAT);
     } while ((STAT & 0x08) || (result == 0));
 
     // For this demo, wait for a valid disc to be inserted.
-    scr_printf("\tWaiting for disc to be inserted...\n\n");
+    if (!use_splash_ui)
+        scr_printf("\tWaiting for disc to be inserted...\n\n");
 
     ValidDiscInserted = 0;
     OldDiscType = -1;
     while (!ValidDiscInserted) {
         DiscType = sceCdGetDiskType();
         if (DiscType != OldDiscType) {
-            scr_printf("\tNew Disc:\t");
             OldDiscType = DiscType;
 
             switch (DiscType) {
@@ -1799,51 +1820,87 @@ int dischandler(int skip_ps2logo)
                             sceCdTrayReq(0, NULL);
                         first_run = 0;
                     }
-                    scr_setfontcolor(0x0000ff);
-                    scr_printf("No Disc\n");
-                    scr_setfontcolor(0xffffff);
+                    if (use_splash_ui)
+                        SplashDrawCenteredStatus("No Disc", 0x8080ff);
+                    else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_setfontcolor(0x0000ff);
+                        scr_printf("No Disc\n");
+                        scr_setfontcolor(0xffffff);
+                    }
                     break;
 
                 case SCECdDETCT:
                 case SCECdDETCTCD:
                 case SCECdDETCTDVDS:
                 case SCECdDETCTDVDD:
-                    scr_printf("Reading...\n");
+                    if (use_splash_ui)
+                        SplashDrawCenteredStatus("Reading Disc...", 0xffffff);
+                    else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_printf("Reading...\n");
+                    }
                     break;
 
                 case SCECdPSCD:
                 case SCECdPSCDDA:
-                    scr_setfontcolor(0x00ff00);
-                    scr_printf("PlayStation\n");
-                    scr_setfontcolor(0xffffff);
+                    if (use_splash_ui)
+                        SplashDrawCenteredStatus("PlayStation Disc", 0x00ff00);
+                    else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_setfontcolor(0x00ff00);
+                        scr_printf("PlayStation\n");
+                        scr_setfontcolor(0xffffff);
+                    }
                     ValidDiscInserted = 1;
                     break;
 
                 case SCECdPS2CD:
                 case SCECdPS2CDDA:
                 case SCECdPS2DVD:
-                    scr_setfontcolor(0x00ff00);
-                    scr_printf("PlayStation 2\n");
-                    scr_setfontcolor(0xffffff);
+                    if (use_splash_ui)
+                        SplashDrawCenteredStatus("PlayStation 2 Disc", 0x00ff00);
+                    else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_setfontcolor(0x00ff00);
+                        scr_printf("PlayStation 2\n");
+                        scr_setfontcolor(0xffffff);
+                    }
                     ValidDiscInserted = 1;
                     break;
 
                 case SCECdCDDA:
-                    scr_setfontcolor(0xffff00);
-                    scr_printf("Audio Disc (not supported by this program)\n");
-                    scr_setfontcolor(0xffffff);
+                    if (use_splash_ui)
+                        SplashDrawCenteredStatus("Audio Disc Not Supported", 0xffff00);
+                    else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_setfontcolor(0xffff00);
+                        scr_printf("Audio Disc (not supported by this program)\n");
+                        scr_setfontcolor(0xffffff);
+                    }
                     break;
 
                 case SCECdDVDV:
-                    scr_setfontcolor(0x00ff00);
-                    scr_printf("DVD Video\n");
-                    scr_setfontcolor(0xffffff);
+                    if (use_splash_ui)
+                        SplashDrawCenteredStatus("DVD Video", 0x00ff00);
+                    else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_setfontcolor(0x00ff00);
+                        scr_printf("DVD Video\n");
+                        scr_setfontcolor(0xffffff);
+                    }
                     ValidDiscInserted = 1;
                     break;
                 default:
-                    scr_setfontcolor(0x0000ff);
-                    scr_printf("Unknown (%d)\n", DiscType);
-                    scr_setfontcolor(0xffffff);
+                    if (use_splash_ui) {
+                        snprintf(disc_status, sizeof(disc_status), "Unknown Disc (%d)", DiscType);
+                        SplashDrawCenteredStatus(disc_status, 0x8080ff);
+                    } else {
+                        scr_printf("\tNew Disc:\t");
+                        scr_setfontcolor(0x0000ff);
+                        scr_printf("Unknown (%d)\n", DiscType);
+                        scr_setfontcolor(0xffffff);
+                    }
             }
         }
 
@@ -1851,6 +1908,23 @@ int dischandler(int skip_ps2logo)
         // The NTSC/PAL H-sync is approximately 16kHz. Hence approximately 16 ticks will pass every millisecond.
         SetAlarm(1000 * 16, &AlarmCallback, (void *)GetThreadId());
         SleepThread();
+    }
+
+    if (use_splash_ui) {
+        switch (DiscType) {
+            case SCECdPSCD:
+            case SCECdPSCDDA:
+                SplashDrawCenteredStatus("Booting PlayStation Disc...", 0x00ff00);
+                break;
+            case SCECdPS2CD:
+            case SCECdPS2CDDA:
+            case SCECdPS2DVD:
+                SplashDrawCenteredStatus("Booting PlayStation 2 Disc...", 0x00ff00);
+                break;
+            case SCECdDVDV:
+                SplashDrawCenteredStatus("Booting DVD Video...", 0x00ff00);
+                break;
+        }
     }
 
     // Now that a valid disc is inserted, do something.
