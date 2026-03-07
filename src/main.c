@@ -315,6 +315,41 @@ static void build_device_available_cache(int *dev_ok, int count)
         dev_ok[dev] = device_available_for_dev(dev) ? 1 : 0;
 }
 
+static int IsCdvdCommandToken(const char *path)
+{
+    if (path == NULL)
+        return 0;
+    return (!strcmp(path, "$CDVD") || !strcmp(path, "$CDVD_NO_PS2LOGO"));
+}
+
+static void ShowLaunchStatus(const char *path)
+{
+    char loading_line[160];
+    const char *safe_path = (path != NULL) ? path : "";
+
+    scr_setfontcolor(0x00ff00);
+    scr_printf("  Loading %s\n", safe_path);
+
+    if (!IsCdvdCommandToken(safe_path))
+        return;
+
+    if (!SplashRenderIsActive())
+        return;
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
+    snprintf(loading_line, sizeof(loading_line), "Loading %s", safe_path);
+    {
+        int line_width = (int)strlen(loading_line) * 6;
+        int x = SplashRenderGetScreenCenterX() - (line_width / 2);
+        int y = SplashRenderGetScreenCenterY() + 205;
+        if (x < 8)
+            x = 8;
+        SplashRenderDrawTextPxScaled(x, y, 0x00ff00, loading_line, 1);
+    }
+    SplashRenderPresent();
+}
+
 static int device_available_for_path_cached(const char *path, const int *dev_ok)
 {
     int dev;
@@ -1210,8 +1245,7 @@ int main(int argc, char *argv[])
                     if (GLOBCFG.KEYPATHS[x + 1][j] == NULL || *GLOBCFG.KEYPATHS[x + 1][j] == '\0')
                         continue;
                     if (g_pre_scanned && !is_command_token(GLOBCFG.KEYPATHS[x + 1][j])) {
-                        scr_setfontcolor(0x00ff00);
-                        scr_printf("  Loading %s\n", GLOBCFG.KEYPATHS[x + 1][j]);
+                        ShowLaunchStatus(GLOBCFG.KEYPATHS[x + 1][j]);
                         CleanUp();
                         RunLoaderElf(GLOBCFG.KEYPATHS[x + 1][j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         break;
@@ -1237,6 +1271,8 @@ int main(int argc, char *argv[])
                         }
 #endif
                     } else {
+                        if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]))
+                            ShowLaunchStatus(GLOBCFG.KEYPATHS[x + 1][j]);
                         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
                         if (!allow_virtual_patinfo_entry(x + 1, j, EXECPATHS[j]) && !exist(EXECPATHS[j])) {
                             scr_setfontcolor(0x00ffff);
@@ -1246,8 +1282,8 @@ int main(int argc, char *argv[])
                         }
                     }
                     if (EXECPATHS[j] != NULL && *EXECPATHS[j] != '\0') {
-                        scr_setfontcolor(0x00ff00);
-                        scr_printf("  Loading %s\n", EXECPATHS[j]);
+                        if (!is_command_token(GLOBCFG.KEYPATHS[x + 1][j]))
+                            ShowLaunchStatus(EXECPATHS[j]);
                         CleanUp();
                         RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                     }
@@ -1271,8 +1307,7 @@ int main(int argc, char *argv[])
         if (is_command_token(GLOBCFG.KEYPATHS[0][j]))
             continue; // Don't execute commands without a key press.
         if (g_pre_scanned && !is_command_token(GLOBCFG.KEYPATHS[0][j])) {
-            scr_setfontcolor(0x00ff00);
-            scr_printf("  Loading %s\n", GLOBCFG.KEYPATHS[0][j]);
+            ShowLaunchStatus(GLOBCFG.KEYPATHS[0][j]);
             CleanUp();
             RunLoaderElf(GLOBCFG.KEYPATHS[0][j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
             break;
@@ -1301,8 +1336,7 @@ int main(int argc, char *argv[])
             }
         }
         if (EXECPATHS[j] != NULL && *EXECPATHS[j] != '\0') {
-            scr_setfontcolor(0x00ff00);
-            scr_printf("  Loading %s\n", EXECPATHS[j]);
+            ShowLaunchStatus(EXECPATHS[j]);
             CleanUp();
             RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
         }

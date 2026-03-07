@@ -361,6 +361,11 @@ void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h)
                               GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
 }
 
+void SplashRenderSetHotkeysVisible(int visible)
+{
+    g_hotkeys_visible = (visible != 0);
+}
+
 static void draw_static_layers(void)
 {
     draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
@@ -375,7 +380,7 @@ void SplashRenderBeginFrame(void)
     if (g_gs == NULL)
         return;
 
-    gsKit_clear(g_gs, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x00, 0x00));
+    gsKit_clear(g_gs, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
     draw_static_layers();
 }
 
@@ -396,6 +401,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     int logo_y_offset;
     int center_x;
     int center_y;
+    int pass;
 
     destroy_frame_state();
 
@@ -413,7 +419,13 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     gsKit_init_screen(g_gs);
     gsKit_display_buffer(g_gs);
     gsKit_mode_switch(g_gs, GS_ONESHOT);
-    gsKit_clear(g_gs, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x00, 0x00));
+    // Prime both framebuffers to opaque black to avoid mode-switch garbage flashes.
+    for (pass = 0; pass < 2; pass++) {
+        gsKit_clear(g_gs, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
+        gsKit_queue_exec(g_gs);
+        gsKit_finish();
+        gsKit_sync_flip(g_gs);
+    }
 
     g_screen_w = (int)g_gs->Width;
     g_screen_h = (int)g_gs->Height;
@@ -439,6 +451,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_logo_visible = 1;
         g_hotkeys_visible = 0;
         SplashRenderBeginFrame();
+        SplashRenderPresent();
         return 1;
     }
 
@@ -467,6 +480,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_hotkeys_visible = 1;
 
         SplashRenderBeginFrame();
+        SplashRenderPresent();
     }
 
     return 1;
