@@ -107,9 +107,9 @@ static void format_clock_time(char *dst, size_t dst_size, int hour, int minute, 
         int hour12 = hour % 12;
         if (hour12 == 0)
             hour12 = 12;
-        snprintf(dst, dst_size, "%d:%02d:%02d %s", hour12, minute, second, suffix);
+        snprintf(dst, dst_size, "%02d:%02d:%02d %s", hour12, minute, second, suffix);
     } else {
-        snprintf(dst, dst_size, "%d:%02d:%02d", hour, minute, second);
+        snprintf(dst, dst_size, "%02d:%02d:%02d", hour, minute, second);
     }
 }
 
@@ -117,13 +117,13 @@ static void format_clock_date(char *dst, size_t dst_size, int year, int month, i
 {
     switch (date_format) {
         case 1:
-            snprintf(dst, dst_size, "%d/%d/%04d", month, day, year);
+            snprintf(dst, dst_size, "%02d/%02d/%04d", month, day, year);
             break;
         case 2:
-            snprintf(dst, dst_size, "%d/%d/%04d", day, month, year);
+            snprintf(dst, dst_size, "%02d/%02d/%04d", day, month, year);
             break;
         default:
-            snprintf(dst, dst_size, "%04d/%d/%d", year, month, day);
+            snprintf(dst, dst_size, "%04d/%02d/%02d", year, month, day);
             break;
     }
 }
@@ -382,6 +382,7 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     int time_x;
     int date_x;
     int clear_right_x;
+    int clear_left_anchor_x;
     int clear_time_x;
     int clear_date_x;
     int clear_time_w;
@@ -471,13 +472,18 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
         date_y = screen_h - GLYPH_HEIGHT_PX;
 
     clear_right_x = right_anchor_x;
-    if (g_hotkey_clock_last_right_anchor > clear_right_x)
-        clear_right_x = g_hotkey_clock_last_right_anchor;
+    clear_left_anchor_x = right_anchor_x;
+    if (g_hotkey_clock_last_right_anchor >= 0) {
+        if (g_hotkey_clock_last_right_anchor > clear_right_x)
+            clear_right_x = g_hotkey_clock_last_right_anchor;
+        if (g_hotkey_clock_last_right_anchor < clear_left_anchor_x)
+            clear_left_anchor_x = g_hotkey_clock_last_right_anchor;
+    }
 
-    clear_time_x = clear_right_x - (HOTKEY_CLOCK_TIME_MAX_CHARS * GLYPH_ADVANCE_PX);
+    clear_time_x = clear_left_anchor_x - (HOTKEY_CLOCK_TIME_MAX_CHARS * GLYPH_ADVANCE_PX);
     if (clear_time_x < 0)
         clear_time_x = 0;
-    clear_date_x = clear_right_x - (HOTKEY_CLOCK_DATE_MAX_CHARS * GLYPH_ADVANCE_PX);
+    clear_date_x = clear_left_anchor_x - (HOTKEY_CLOCK_DATE_MAX_CHARS * GLYPH_ADVANCE_PX);
     if (clear_date_x < 0)
         clear_date_x = 0;
 
