@@ -2,7 +2,7 @@
 <br />
 <p align="center">
   <a href="https://israpps.github.io/PlayStation2-Basic-BootLoader/">
-    <img src="https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended/blob/main/assets/ps2bble-logo.png" alt="Logo" width="100%" height="auto">
+    <img src="https://github.com/saildot4k/PlayStation2-Basic-BootLoader-Extended/blob/main/assets/embedded/logo_ps2bble.png" alt="Logo" width="100%" height="auto">
   </a>
 
   <p align="center">
