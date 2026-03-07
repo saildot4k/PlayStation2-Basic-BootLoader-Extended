@@ -50,3 +50,13 @@ $(EE_ASM_DIR)icon_sys_J.c: embed/icons/icon_J.sys | $(EE_ASM_DIR)
 
 $(EE_ASM_DIR)icon_sys_C.c: embed/icons/icon_C.sys | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ icon_sys_C
+
+SPLASH_IMAGE_INPUTS = \
+	assets/embedded/bg_ps2bble.png \
+	assets/embedded/bg_psxbble.png \
+	assets/embedded/logo_ps2bble.png \
+	assets/embedded/logo_psxbble.png \
+	assets/embedded/hotkeys.png
+
+$(EE_ASM_DIR)splash_images_rbg.c: $(SPLASH_IMAGE_INPUTS) tools/png_rgba_to_rbg_c.py | $(EE_ASM_DIR)
+	$(PYTHON) tools/png_rgba_to_rbg_c.py --output $@ $(SPLASH_IMAGE_INPUTS)

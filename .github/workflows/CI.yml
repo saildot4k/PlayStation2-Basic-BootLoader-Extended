@@ -36,7 +36,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apk add build-base git p7zip
+          apk add build-base git p7zip python3
 
       - uses: actions/checkout@v4
       - run: |
@@ -134,3 +134,4 @@ jobs:
           title: "Latest development build"
           files: |
             PS2BBL.7z
+

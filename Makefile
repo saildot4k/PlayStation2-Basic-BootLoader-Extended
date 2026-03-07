@@ -13,8 +13,6 @@ export HEADER
 # ---{BUILD CFG}--- #
 HAS_EMBED_IRX ?= 1# whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
-CHAINLOAD ?= 0 # Only inits the system and boots CHAINLOAD_PATH from the memory card. If specified file doesn't exist, attempts to boot RESCUE.ELF from USB
-CHAINLOAD_PATH ?= "mc?:BOOT/PAYLOAD.ELF"
 PSX ?= 0 # PSX DESR support
 HDD ?= 0 # Internal HDD support
 MMCE ?= 0
@@ -25,6 +23,8 @@ UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
+EGSM_BUILD ?= 0 # build embedded eGSM runtime (0=disabled, 1=enabled)
+EGSM_TRACE ?= 0 # verbose eGSM runtime tracing (used only when EGSM_BUILD=1)
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -41,6 +41,9 @@ VERSION = 1
 SUBVERSION = 3
 PATCHLEVEL = 0
 STATUS = Beta
+
+# Prefer python3, fall back to python for CI images that don't ship python3 binary name.
+PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
 
 # ---{ EXECUTABLES }--- #
 
@@ -60,30 +63,41 @@ EE_ASM_DIR = asm/
 
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
-          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o \
+          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash_screen.o splash_assets.o splash_render.o \
+          xparam_irx.o \
           $(EMBEDDED_STUFF) \
-		      $(IOP_OBJS)
+			      $(IOP_OBJS)
 
-EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o
+ifeq ($(EGSM_BUILD), 1)
+  $(info --- building with eGSM runtime enabled)
+  EE_OBJS += egsm.o ee_exception_l2.o
+  EE_CFLAGS += -DEGSM_BUILD=1 -DEGSM_TRACE=$(EGSM_TRACE)
+else
+  $(info --- building with eGSM runtime disabled)
+  EE_OBJS += egsm_stub.o
+  EE_CFLAGS += -DEGSM_BUILD=0 -DEGSM_TRACE=0
+endif
+
+EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o splash_images_rbg.o
 
 EE_CFLAGS = -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
 EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib
 EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
+# Keep default PS2SDK linkfile for runtime stability.
 EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
-EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2DEV)/gsKit/include
+EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2SDK)/common/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
+
+# Keep eGSM object layout predictable (matches OSDMenu's use of -G0).
+$(EE_OBJS_DIR)egsm.o: EE_CFLAGS += -G0 -Os
+$(EE_OBJS_DIR)ee_exception_l2.o: EE_CFLAGS += -G0 -Os
+$(EE_OBJS_DIR)ps2.o: EE_CFLAGS += -G0 -Os
 
 # ---{ CONDITIONS }--- #
 
 ifneq ($(VERBOSE), 1)
    .SILENT:
-endif
-
-ifeq ($(CHAINLOAD), 1)
-  HAS_EMBED_IRX = 1
-  EE_CFLAGS += -DCHAINLOAD -DCHAINLOAD_PATH=\"$(CHAINLOAD_PATH)\"
-  undefine EMBEDDED_STUFF
 endif
 
 ifeq ($(MX4SIO), 1)
@@ -337,6 +351,12 @@ ifneq ($(VERBOSE),1)
 	@echo "  - $@"
 endif
 	$(EE_AS) $(EE_ASFLAGS) $< -o $@
+
+$(EE_OBJS_DIR)%.o: $(EE_SRC_DIR)%.S | $(EE_OBJS_DIR)
+ifneq ($(VERBOSE),1)
+	@echo "  - $@"
+endif
+	$(EE_CC) $(EE_CFLAGS) $(EE_INCS) -c $< -o $@
 #
 analize:
 	$(MAKE) rebuild DEBUG=1

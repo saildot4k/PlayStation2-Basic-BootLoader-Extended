@@ -70,7 +70,7 @@ void TimerEnd(void);
 /// check path for processing pseudo-devices like `mc?:/`
 char *CheckPath(char *path);
 static void AlarmCallback(s32 alarm_id, u16 time, void *common);
-int dischandler();
+int dischandler(int skip_ps2logo);
 // there is no need to call this on a PSX DESR since OSDSYS performs it at boot
 void CDVDBootCertify(u8 romver[16]);
 void credits(void);
