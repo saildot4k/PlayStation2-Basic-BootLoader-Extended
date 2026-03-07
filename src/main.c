@@ -342,6 +342,129 @@ static void SplashDrawCenteredStatus(const char *text, u32 color)
     SplashRenderPresent();
 }
 
+static void SplashDrawCenteredStatusWithInfo(const char *text,
+                                             u32 color,
+                                             const char *model,
+                                             const char *rom_fmt,
+                                             const char *dvdver,
+                                             const char *ps1ver,
+                                             const char *temp_celsius,
+                                             const char *source)
+{
+    int line_width;
+    int x;
+    int y;
+
+    if (text == NULL || !SplashRenderIsActive())
+        return;
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
+    SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                model,
+                                rom_fmt,
+                                dvdver,
+                                ps1ver,
+                                temp_celsius,
+                                "",
+                                source);
+    line_width = (int)strlen(text) * 6;
+    x = SplashRenderGetScreenCenterX() - (line_width / 2);
+    y = SplashRenderGetScreenCenterY() - 4;
+    if (x < 8)
+        x = 8;
+    SplashRenderDrawTextPxScaled(x, y, color, text, 1);
+    SplashRenderPresent();
+}
+
+static void SplashDrawNoDiscPromptWithInfo(int dots,
+                                           const char *model,
+                                           const char *rom_fmt,
+                                           const char *dvdver,
+                                           const char *ps1ver,
+                                           const char *temp_celsius,
+                                           const char *source)
+{
+    const char *line1 = "NO DISC FOUND!";
+    const char *base2 = "INSERT DISC OR PRESS START TO RETRY HOTKEYS";
+    char line2[96];
+    int i;
+    int line1_w;
+    int line2_w;
+    int x1;
+    int x2;
+    int y1;
+    int y2;
+
+    if (!SplashRenderIsActive())
+        return;
+
+    if (dots < 0)
+        dots = 0;
+    if (dots > 3)
+        dots = 3;
+
+    snprintf(line2, sizeof(line2), "%s", base2);
+    for (i = 0; i < dots && (int)strlen(line2) + 1 < (int)sizeof(line2); i++)
+        strcat(line2, ".");
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
+    SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                model,
+                                rom_fmt,
+                                dvdver,
+                                ps1ver,
+                                temp_celsius,
+                                "",
+                                source);
+
+    line1_w = (int)strlen(line1) * 6;
+    line2_w = (int)strlen(line2) * 6;
+    x1 = SplashRenderGetScreenCenterX() - (line1_w / 2);
+    x2 = SplashRenderGetScreenCenterX() - (line2_w / 2);
+    y1 = SplashRenderGetScreenCenterY() - 16;
+    y2 = SplashRenderGetScreenCenterY() + 2;
+    if (x1 < 8)
+        x1 = 8;
+    if (x2 < 8)
+        x2 = 8;
+
+    SplashRenderDrawTextPxScaled(x1, y1, 0xffff00, line1, 1);
+    SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, line2, 1);
+    SplashRenderPresent();
+}
+
+static void RestoreSplashInteractiveUi(int logo_disp,
+                                       const char *const hotkey_lines[17],
+                                       const char *model,
+                                       const char *rom_fmt,
+                                       const char *dvdver,
+                                       const char *ps1ver,
+                                       const char *temp_celsius,
+                                       const char *source)
+{
+    int pass;
+
+    if (!SplashRenderIsActive())
+        return;
+
+    SplashRenderSetHotkeysVisible(logo_disp >= 3);
+    for (pass = 0; pass < 2; pass++) {
+        SplashRenderBeginFrame();
+        SplashRenderHotkeyLines(logo_disp, hotkey_lines);
+        SplashRenderConsoleInfoLine(logo_disp,
+                                    model,
+                                    rom_fmt,
+                                    dvdver,
+                                    ps1ver,
+                                    temp_celsius,
+                                    "",
+                                    source);
+        SplashRenderPresent();
+    }
+}
+
 static void ShowLaunchStatus(const char *path)
 {
     char loading_line[160];
@@ -678,6 +801,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
 static int g_is_psx_desr = 0;
+static int g_cdvd_cancelled = 0;
 #define ROMVER_MODEL_PREFIX_LEN 5
 static const char *const g_psx_desr_rom_prefixes[] = {
     "0180J",
@@ -1252,6 +1376,7 @@ int main(int argc, char *argv[])
         PAD = ReadCombinedPadStatus_raw();
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
             if (PAD & button) {
+                int command_cancelled = 0;
                 DPRINTF("PAD detected\n");
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
@@ -1288,6 +1413,19 @@ int main(int argc, char *argv[])
                         if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]))
                             ShowLaunchStatus(GLOBCFG.KEYPATHS[x + 1][j]);
                         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
+                        if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]) && g_cdvd_cancelled) {
+                            g_cdvd_cancelled = 0;
+                            command_cancelled = 1;
+                            RestoreSplashInteractiveUi(GLOBCFG.LOGO_DISP,
+                                                       hotkey_lines,
+                                                       model,
+                                                       rom_fmt,
+                                                       dvdver,
+                                                       ps1ver,
+                                                       temp_celsius,
+                                                       source);
+                            break;
+                        }
                         if (!allow_virtual_patinfo_entry(x + 1, j, EXECPATHS[j]) && !exist(EXECPATHS[j])) {
                             scr_setfontcolor(0x00ffff);
                             DPRINTF("%s not found\n", EXECPATHS[j]);
@@ -1302,6 +1440,8 @@ int main(int argc, char *argv[])
                         RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                     }
                 }
+                if (command_cancelled)
+                    deadline = Timer() + GLOBCFG.DELAY;
                 break;
             }
             button = button << 1; // sll of 1 cleared bit to move to next pad button
@@ -1410,10 +1550,11 @@ char *CheckPath(char *path)
 {
     if (path[0] == '$') // we found a program command
     {
+        g_cdvd_cancelled = 0;
         if (!strcmp("$CDVD", path))
-            dischandler(0);
+            g_cdvd_cancelled = (dischandler(0) < 0);
         if (!strcmp("$CDVD_NO_PS2LOGO", path))
-            dischandler(1);
+            g_cdvd_cancelled = (dischandler(1) < 0);
 #ifdef HDD
         if (!strcmp("$HDDCHECKER", path))
             HDDChecker();
@@ -1785,14 +1926,59 @@ void poweroffCallback(void *arg)
 int dischandler(int skip_ps2logo)
 {
     int OldDiscType, DiscType, ValidDiscInserted, result, first_run = 1;
+    int cancel_requested = 0;
+    int cancel_armed = 0;
+    int nodisc_dots = 0;
+    u64 nodisc_next_tick = 0;
     int use_splash_ui;
+    char model_buf[64];
+    char ps1_buf[64];
+    char dvd_buf[64];
+    char src_buf[32];
+    char rom_raw[ROMVER_MAX_LEN + 1];
+    char rom_buf[32];
+    char rom_fmt[8];
+#ifndef NO_TEMP_DISP
+    char temp_buf[16];
+#endif
+    const char *model = "";
+    const char *ps1ver = "";
+    const char *dvdver = "";
+    const char *source = "";
+    const char *temp_celsius = NULL;
     char disc_status[64];
     u32 STAT;
 
     use_splash_ui = SplashRenderIsActive();
-    if (use_splash_ui)
-        SplashDrawCenteredStatus("CDVD: Waiting for disc...", 0x00ffff);
-    else {
+
+    if (use_splash_ui && GLOBCFG.LOGO_DISP > 0) {
+        model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
+        ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
+        dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
+        source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
+        memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
+        rom_raw[ROMVER_MAX_LEN] = '\0';
+        {
+            const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
+            char major = (romver[1] != '\0') ? romver[1] : '?';
+            char minor1 = (romver[2] != '\0') ? romver[2] : '?';
+            char minor2 = (romver[3] != '\0') ? romver[3] : '?';
+            char region = (romver[4] != '\0') ? romver[4] : '?';
+            snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
+        }
+#ifndef NO_TEMP_DISP
+        if (QueryTemperatureCelsius(temp_buf, sizeof(temp_buf)))
+            temp_celsius = temp_buf;
+#endif
+        SplashDrawCenteredStatusWithInfo("CDVD: Waiting for disc (START=Back)",
+                                         0x00ffff,
+                                         model,
+                                         rom_fmt,
+                                         dvdver,
+                                         ps1ver,
+                                         temp_celsius,
+                                         source);
+    } else {
         scr_clear();
         scr_printf("\n\t%s: Activated\n", __func__);
         scr_printf("\t\tEnabling Diagnosis...\n");
@@ -1809,6 +1995,14 @@ int dischandler(int skip_ps2logo)
     ValidDiscInserted = 0;
     OldDiscType = -1;
     while (!ValidDiscInserted) {
+        PAD = ReadCombinedPadStatus_raw();
+        if ((PAD & PAD_START) == 0)
+            cancel_armed = 1;
+        else if (cancel_armed) {
+            cancel_requested = 1;
+            break;
+        }
+
         DiscType = sceCdGetDiskType();
         if (DiscType != OldDiscType) {
             OldDiscType = DiscType;
@@ -1820,9 +2014,17 @@ int dischandler(int skip_ps2logo)
                             sceCdTrayReq(0, NULL);
                         first_run = 0;
                     }
-                    if (use_splash_ui)
-                        SplashDrawCenteredStatus("No Disc", 0x8080ff);
-                    else {
+                    if (use_splash_ui) {
+                        nodisc_dots = 0;
+                        nodisc_next_tick = Timer() + 1000;
+                        SplashDrawNoDiscPromptWithInfo(nodisc_dots,
+                                                       model,
+                                                       rom_fmt,
+                                                       dvdver,
+                                                       ps1ver,
+                                                       temp_celsius,
+                                                       source);
+                    } else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x0000ff);
                         scr_printf("No Disc\n");
@@ -1835,7 +2037,14 @@ int dischandler(int skip_ps2logo)
                 case SCECdDETCTDVDS:
                 case SCECdDETCTDVDD:
                     if (use_splash_ui)
-                        SplashDrawCenteredStatus("Reading Disc...", 0xffffff);
+                        SplashDrawCenteredStatusWithInfo("Reading Disc...",
+                                                         0xffffff,
+                                                         model,
+                                                         rom_fmt,
+                                                         dvdver,
+                                                         ps1ver,
+                                                         temp_celsius,
+                                                         source);
                     else {
                         scr_printf("\tNew Disc:\t");
                         scr_printf("Reading...\n");
@@ -1845,7 +2054,14 @@ int dischandler(int skip_ps2logo)
                 case SCECdPSCD:
                 case SCECdPSCDDA:
                     if (use_splash_ui)
-                        SplashDrawCenteredStatus("PlayStation Disc", 0x00ff00);
+                        SplashDrawCenteredStatusWithInfo("PlayStation Disc",
+                                                         0x00ff00,
+                                                         model,
+                                                         rom_fmt,
+                                                         dvdver,
+                                                         ps1ver,
+                                                         temp_celsius,
+                                                         source);
                     else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x00ff00);
@@ -1859,7 +2075,14 @@ int dischandler(int skip_ps2logo)
                 case SCECdPS2CDDA:
                 case SCECdPS2DVD:
                     if (use_splash_ui)
-                        SplashDrawCenteredStatus("PlayStation 2 Disc", 0x00ff00);
+                        SplashDrawCenteredStatusWithInfo("PlayStation 2 Disc",
+                                                         0x00ff00,
+                                                         model,
+                                                         rom_fmt,
+                                                         dvdver,
+                                                         ps1ver,
+                                                         temp_celsius,
+                                                         source);
                     else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x00ff00);
@@ -1871,7 +2094,14 @@ int dischandler(int skip_ps2logo)
 
                 case SCECdCDDA:
                     if (use_splash_ui)
-                        SplashDrawCenteredStatus("Audio Disc Not Supported", 0xffff00);
+                        SplashDrawCenteredStatusWithInfo("Audio Disc Not Supported",
+                                                         0xffff00,
+                                                         model,
+                                                         rom_fmt,
+                                                         dvdver,
+                                                         ps1ver,
+                                                         temp_celsius,
+                                                         source);
                     else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0xffff00);
@@ -1882,7 +2112,14 @@ int dischandler(int skip_ps2logo)
 
                 case SCECdDVDV:
                     if (use_splash_ui)
-                        SplashDrawCenteredStatus("DVD Video", 0x00ff00);
+                        SplashDrawCenteredStatusWithInfo("DVD Video",
+                                                         0x00ff00,
+                                                         model,
+                                                         rom_fmt,
+                                                         dvdver,
+                                                         ps1ver,
+                                                         temp_celsius,
+                                                         source);
                     else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x00ff00);
@@ -1894,7 +2131,14 @@ int dischandler(int skip_ps2logo)
                 default:
                     if (use_splash_ui) {
                         snprintf(disc_status, sizeof(disc_status), "Unknown Disc (%d)", DiscType);
-                        SplashDrawCenteredStatus(disc_status, 0x8080ff);
+                        SplashDrawCenteredStatusWithInfo(disc_status,
+                                                         0x8080ff,
+                                                         model,
+                                                         rom_fmt,
+                                                         dvdver,
+                                                         ps1ver,
+                                                         temp_celsius,
+                                                         source);
                     } else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x0000ff);
@@ -1904,25 +2148,84 @@ int dischandler(int skip_ps2logo)
             }
         }
 
+        if (use_splash_ui && DiscType == SCECdNODISC && Timer() >= nodisc_next_tick) {
+            nodisc_dots = (nodisc_dots + 1) % 4;
+            nodisc_next_tick = Timer() + 1000;
+            SplashDrawNoDiscPromptWithInfo(nodisc_dots,
+                                           model,
+                                           rom_fmt,
+                                           dvdver,
+                                           ps1ver,
+                                           temp_celsius,
+                                           source);
+        }
+
         // Avoid spamming the IOP with sceCdGetDiskType(), or there may be a deadlock.
         // The NTSC/PAL H-sync is approximately 16kHz. Hence approximately 16 ticks will pass every millisecond.
         SetAlarm(1000 * 16, &AlarmCallback, (void *)GetThreadId());
         SleepThread();
     }
 
+    if (cancel_requested) {
+        if (use_splash_ui)
+            SplashDrawCenteredStatusWithInfo("CDVD Canceled",
+                                             0xffff00,
+                                             model,
+                                             rom_fmt,
+                                             dvdver,
+                                             ps1ver,
+                                             temp_celsius,
+                                             source);
+        else {
+            scr_setfontcolor(0xffff00);
+            scr_printf("\tCDVD canceled\n");
+            scr_setfontcolor(0xffffff);
+        }
+
+        while (ReadCombinedPadStatus_raw() & PAD_START) {
+            SetAlarm(16 * 16, &AlarmCallback, (void *)GetThreadId());
+            SleepThread();
+        }
+        SetAlarm(160 * 16, &AlarmCallback, (void *)GetThreadId());
+        SleepThread();
+
+        return -1;
+    }
+
     if (use_splash_ui) {
         switch (DiscType) {
             case SCECdPSCD:
             case SCECdPSCDDA:
-                SplashDrawCenteredStatus("Booting PlayStation Disc...", 0x00ff00);
+                SplashDrawCenteredStatusWithInfo("Booting PlayStation Disc...",
+                                                 0x00ff00,
+                                                 model,
+                                                 rom_fmt,
+                                                 dvdver,
+                                                 ps1ver,
+                                                 temp_celsius,
+                                                 source);
                 break;
             case SCECdPS2CD:
             case SCECdPS2CDDA:
             case SCECdPS2DVD:
-                SplashDrawCenteredStatus("Booting PlayStation 2 Disc...", 0x00ff00);
+                SplashDrawCenteredStatusWithInfo("Booting PlayStation 2 Disc...",
+                                                 0x00ff00,
+                                                 model,
+                                                 rom_fmt,
+                                                 dvdver,
+                                                 ps1ver,
+                                                 temp_celsius,
+                                                 source);
                 break;
             case SCECdDVDV:
-                SplashDrawCenteredStatus("Booting DVD Video...", 0x00ff00);
+                SplashDrawCenteredStatusWithInfo("Booting DVD Video...",
+                                                 0x00ff00,
+                                                 model,
+                                                 rom_fmt,
+                                                 dvdver,
+                                                 ps1ver,
+                                                 temp_celsius,
+                                                 source);
                 break;
         }
     }
