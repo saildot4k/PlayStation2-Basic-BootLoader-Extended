@@ -64,8 +64,9 @@ EE_ASM_DIR = asm/
 EE_OBJS = main.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o \
           modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash_screen.o splash_assets.o splash_render.o \
+          xparam_irx.o \
           $(EMBEDDED_STUFF) \
-		      $(IOP_OBJS)
+			      $(IOP_OBJS)
 
 ifeq ($(EGSM_BUILD), 1)
   $(info --- building with eGSM runtime enabled)

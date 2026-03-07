@@ -20,6 +20,7 @@
 #include "game_id.h"
 #include "egsm_api.h"
 #include "debugprintf.h"
+#include "irx_import.h"
 
 void CleanUp(void);
 void BootError(void)
@@ -390,6 +391,24 @@ static void PS2ApplyEGSMIfNeeded(uint32_t flags)
 
     DPRINTF("%s: applying eGSM flags 0x%08x\n", __func__, flags);
     enableGSM(flags);
+}
+
+static void PS2ApplyDeckardXParamIfNeeded(const char *title_id)
+{
+    int mod_ret = 0;
+    int ret;
+
+    if (title_id == NULL || title_id[0] == '\0') {
+        DPRINTF("%s: no title id available, skipping XPARAM\n", __func__);
+        return;
+    }
+
+    /*
+     * OSDMenu behavior: load PS2SDK xparam.irx with the current title ID.
+     * On non-Deckard consoles this module exits without applying flags.
+     */
+    ret = SifExecModuleBuffer(xparam_irx, size_xparam_irx, (int)strlen(title_id) + 1, title_id, &mod_ret);
+    DPRINTF("%s: title_id=%s ret=%d mod_ret=%d\n", __func__, title_id, ret, mod_ret);
 }
 
 static FILE *PS2OpenOSDGSMConfig(void)
@@ -836,6 +855,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
     CleanUp();
     if (skip_PS2LOGO) {
+        PS2ApplyDeckardXParamIfNeeded(ps2disc_boot);
         SifExitCmd();
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)

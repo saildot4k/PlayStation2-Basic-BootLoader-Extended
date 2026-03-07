@@ -10,6 +10,7 @@ IMPORT_BIN2C(sio2man_irx);
 IMPORT_BIN2C(mcman_irx);
 IMPORT_BIN2C(mcserv_irx);
 IMPORT_BIN2C(padman_irx);
+IMPORT_BIN2C(xparam_irx);
 
 #ifdef PSX
 IMPORT_BIN2C(psx_ioprp);
