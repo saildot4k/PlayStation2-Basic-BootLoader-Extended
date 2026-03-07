@@ -30,7 +30,7 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 ### PS2LOGO patching (PS2 discs only)
 - `$CDVD` Runs disc with logo.  PS2BBL gets the target video mode from the disc's SYSTEM.CNF and patches PS2LOGO to always use the disc region instead of the console region, removing logo checksum check.
 - `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
-- `SKIP_PS2LOGO` Global config is deprecated from PS2BBL because the above 2 options cover with and wthout logo.
+- ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBL because the above 2 options cover with and wthout logo.
 
 ### PS1DRV options (PS1 discs only)
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
