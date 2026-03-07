@@ -462,7 +462,6 @@ static void RestoreSplashInteractiveUi(int logo_disp,
     for (pass = 0; pass < 2; pass++) {
         SplashRenderBeginFrame();
         SplashRenderHotkeyLines(logo_disp, hotkey_lines);
-        SplashRenderHotkeyClockDate(logo_disp, Timer());
         SplashRenderConsoleInfoLine(logo_disp,
                                     model,
                                     rom_fmt,
@@ -471,6 +470,7 @@ static void RestoreSplashInteractiveUi(int logo_disp,
                                     temp_celsius,
                                     "",
                                     source);
+        SplashRenderHotkeyClockDate(logo_disp, 0);
         SplashRenderPresent();
     }
 }
@@ -1343,7 +1343,6 @@ int main(int argc, char *argv[])
             for (pass = 0; pass < 2; pass++) {
                 SplashRenderBeginFrame();
                 SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
-                SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, 0);
                 SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
                                             model,
                                             rom_fmt,
@@ -1352,6 +1351,7 @@ int main(int argc, char *argv[])
                                             temp_celsius,
                                             "",
                                             source);
+                SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, 0);
                 SplashRenderPresent();
             }
         }

@@ -47,6 +47,8 @@ static int g_hotkey_clock_second = 0;
 static int g_hotkey_clock_use_12h = 0;
 static int g_hotkey_clock_date_format = 0;
 static u64 g_hotkey_clock_last_tick_ms = 0;
+static char g_hotkey_last_time_text[24] = "";
+static char g_hotkey_last_date_text[24] = "";
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
@@ -93,6 +95,8 @@ static void clear_hotkey_clock_date(void)
     g_hotkey_clock_visible = 0;
     g_hotkey_time_width = 0;
     g_hotkey_date_width = 0;
+    g_hotkey_last_time_text[0] = '\0';
+    g_hotkey_last_date_text[0] = '\0';
 }
 
 static void format_clock_time(char *dst, size_t dst_size, int hour, int minute, int second, int use_12h)
@@ -304,8 +308,6 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
         return;
     }
 
-    clear_hotkey_clock_date();
-
     if (!g_hotkey_clock_initialized) {
         if (!seed_hotkey_clock_from_ps2(tick_ms))
             return;
@@ -373,6 +375,19 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     if (date_y > screen_h - GLYPH_HEIGHT_PX)
         date_y = screen_h - GLYPH_HEIGHT_PX;
 
+    if (tick_ms != 0 &&
+        g_hotkey_clock_visible &&
+        g_hotkey_time_x == time_x &&
+        g_hotkey_time_y == time_y &&
+        g_hotkey_date_x == date_x &&
+        g_hotkey_date_y == date_y &&
+        strcmp(g_hotkey_last_time_text, time_text) == 0 &&
+        strcmp(g_hotkey_last_date_text, date_text) == 0) {
+        return;
+    }
+
+    clear_hotkey_clock_date();
+
     SplashRenderDrawTextPxScaled(time_x, time_y, INFO_TEXT_COLOR, time_text, 1);
     SplashRenderDrawTextPxScaled(date_x, date_y, INFO_TEXT_COLOR, date_text, 1);
 
@@ -382,6 +397,10 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     g_hotkey_date_x = date_x;
     g_hotkey_date_y = date_y;
     g_hotkey_date_width = date_width;
+    strncpy(g_hotkey_last_time_text, time_text, sizeof(g_hotkey_last_time_text) - 1);
+    g_hotkey_last_time_text[sizeof(g_hotkey_last_time_text) - 1] = '\0';
+    strncpy(g_hotkey_last_date_text, date_text, sizeof(g_hotkey_last_date_text) - 1);
+    g_hotkey_last_date_text[sizeof(g_hotkey_last_date_text) - 1] = '\0';
     g_hotkey_clock_visible = 1;
 }
 
