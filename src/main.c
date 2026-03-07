@@ -462,6 +462,7 @@ static void RestoreSplashInteractiveUi(int logo_disp,
     for (pass = 0; pass < 2; pass++) {
         SplashRenderBeginFrame();
         SplashRenderHotkeyLines(logo_disp, hotkey_lines);
+        SplashRenderHotkeyClockDate(logo_disp, Timer());
         SplashRenderConsoleInfoLine(logo_disp,
                                     model,
                                     rom_fmt,
@@ -1342,6 +1343,7 @@ int main(int argc, char *argv[])
             for (pass = 0; pass < 2; pass++) {
                 SplashRenderBeginFrame();
                 SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+                SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, 0);
                 SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
                                             model,
                                             rom_fmt,
@@ -1378,6 +1380,7 @@ int main(int argc, char *argv[])
 
                 snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%uS", remaining_sec, remaining_tenths);
                 SplashRenderConsoleInfoCountdownOnly(autoboot_text);
+                SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, now);
                 SplashRenderPresent();
             }
 

@@ -8,6 +8,7 @@ void SplashRenderTextBody(int logo_disp,
 
 void SplashRenderHotkeyLines(int logo_disp,
                              const char *const hotkey_lines[17]);
+void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms);
 
 void SplashRenderConsoleInfoLine(int logo_disp,
                                  const char *model,

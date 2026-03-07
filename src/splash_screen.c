@@ -1,6 +1,8 @@
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>
+#include <libcdvd.h>
+#include "OSDConfig.h"
 #include "splash_render.h"
 #include "splash_screen.h"
 
@@ -18,6 +20,8 @@
 #define AUTOBOOT_VALUE_DEFAULT_WIDTH 5
 #define TEMP_TAG " TEMP: "
 #define TEMP_VALUE_WIDTH_CHARS 5
+#define HOTKEY_CLOCK_DATE_LINE_SPACING HOTKEY_TEXT_LINE_SPACING
+#define HOTKEY_CLOCK_DATE_YEAR_BASE 2000
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;
@@ -26,6 +30,23 @@ static int g_last_countdown_chars = 0;
 static int g_temp_x = 0;
 static int g_temp_y = 0;
 static int g_temp_visible = 0;
+static int g_hotkey_time_x = 0;
+static int g_hotkey_time_y = 0;
+static int g_hotkey_time_width = 0;
+static int g_hotkey_date_x = 0;
+static int g_hotkey_date_y = 0;
+static int g_hotkey_date_width = 0;
+static int g_hotkey_clock_visible = 0;
+static int g_hotkey_clock_initialized = 0;
+static int g_hotkey_clock_year = HOTKEY_CLOCK_DATE_YEAR_BASE;
+static int g_hotkey_clock_month = 1;
+static int g_hotkey_clock_day = 1;
+static int g_hotkey_clock_hour = 0;
+static int g_hotkey_clock_minute = 0;
+static int g_hotkey_clock_second = 0;
+static int g_hotkey_clock_use_12h = 0;
+static int g_hotkey_clock_date_format = 0;
+static u64 g_hotkey_clock_last_tick_ms = 0;
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
@@ -49,6 +70,164 @@ static void copy_clamped(char *dst, size_t dst_size, const char *src, int max_ch
         i++;
     }
     dst[i] = '\0';
+}
+
+static void clear_hotkey_clock_date(void)
+{
+    if (g_hotkey_clock_visible && SplashRenderIsActive()) {
+        if (g_hotkey_time_width > 0) {
+            SplashRenderRestoreBackgroundRect(g_hotkey_time_x,
+                                              g_hotkey_time_y,
+                                              g_hotkey_time_width + GLYPH_SHADOW_PAD_X,
+                                              GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
+        }
+
+        if (g_hotkey_date_width > 0) {
+            SplashRenderRestoreBackgroundRect(g_hotkey_date_x,
+                                              g_hotkey_date_y,
+                                              g_hotkey_date_width + GLYPH_SHADOW_PAD_X,
+                                              GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
+        }
+    }
+
+    g_hotkey_clock_visible = 0;
+    g_hotkey_time_width = 0;
+    g_hotkey_date_width = 0;
+}
+
+static void format_clock_time(char *dst, size_t dst_size, int hour, int minute, int second, int use_12h)
+{
+    if (use_12h) {
+        const char *suffix = (hour >= 12) ? "PM" : "AM";
+        int hour12 = hour % 12;
+        if (hour12 == 0)
+            hour12 = 12;
+        snprintf(dst, dst_size, "%02d:%02d:%02d %s", hour12, minute, second, suffix);
+    } else {
+        snprintf(dst, dst_size, "%02d:%02d:%02d", hour, minute, second);
+    }
+}
+
+static void format_clock_date(char *dst, size_t dst_size, int year, int month, int day, int date_format)
+{
+    switch (date_format) {
+        case 1:
+            snprintf(dst, dst_size, "%02d/%02d/%04d", month, day, year);
+            break;
+        case 2:
+            snprintf(dst, dst_size, "%02d/%02d/%04d", day, month, year);
+            break;
+        default:
+            snprintf(dst, dst_size, "%04d/%02d/%02d", year, month, day);
+            break;
+    }
+}
+
+static int is_leap_year(int year)
+{
+    if ((year % 400) == 0)
+        return 1;
+    if ((year % 100) == 0)
+        return 0;
+    return ((year % 4) == 0);
+}
+
+static int days_in_month(int year, int month)
+{
+    static const int month_days[12] = {
+        31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+    if (month < 1 || month > 12)
+        return 31;
+
+    if (month == 2 && is_leap_year(year))
+        return 29;
+
+    return month_days[month - 1];
+}
+
+static void normalize_hotkey_clock_date(void)
+{
+    int dim;
+
+    if (g_hotkey_clock_month < 1)
+        g_hotkey_clock_month = 1;
+    if (g_hotkey_clock_month > 12)
+        g_hotkey_clock_month = 12;
+    if (g_hotkey_clock_day < 1)
+        g_hotkey_clock_day = 1;
+
+    dim = days_in_month(g_hotkey_clock_year, g_hotkey_clock_month);
+    if (g_hotkey_clock_day > dim)
+        g_hotkey_clock_day = dim;
+}
+
+static void advance_hotkey_clock_seconds(u64 seconds)
+{
+    while (seconds > 0) {
+        int dim;
+
+        g_hotkey_clock_second++;
+        if (g_hotkey_clock_second < 60) {
+            seconds--;
+            continue;
+        }
+
+        g_hotkey_clock_second = 0;
+        g_hotkey_clock_minute++;
+        if (g_hotkey_clock_minute < 60) {
+            seconds--;
+            continue;
+        }
+
+        g_hotkey_clock_minute = 0;
+        g_hotkey_clock_hour++;
+        if (g_hotkey_clock_hour < 24) {
+            seconds--;
+            continue;
+        }
+
+        g_hotkey_clock_hour = 0;
+        g_hotkey_clock_day++;
+        dim = days_in_month(g_hotkey_clock_year, g_hotkey_clock_month);
+        if (g_hotkey_clock_day <= dim) {
+            seconds--;
+            continue;
+        }
+
+        g_hotkey_clock_day = 1;
+        g_hotkey_clock_month++;
+        if (g_hotkey_clock_month <= 12) {
+            seconds--;
+            continue;
+        }
+
+        g_hotkey_clock_month = 1;
+        g_hotkey_clock_year++;
+        seconds--;
+    }
+}
+
+static int seed_hotkey_clock_from_ps2(u64 tick_ms)
+{
+    sceCdCLOCK clock_data;
+
+    if (!sceCdReadClock(&clock_data))
+        return 0;
+
+    g_hotkey_clock_year = HOTKEY_CLOCK_DATE_YEAR_BASE + btoi(clock_data.year);
+    g_hotkey_clock_month = btoi(clock_data.month & 0x7F);
+    g_hotkey_clock_day = btoi(clock_data.day);
+    g_hotkey_clock_hour = btoi(clock_data.hour);
+    g_hotkey_clock_minute = btoi(clock_data.minute);
+    g_hotkey_clock_second = btoi(clock_data.second);
+    g_hotkey_clock_use_12h = (OSDConfigGetTimeFormat() != 0);
+    g_hotkey_clock_date_format = OSDConfigGetDateFormat();
+    normalize_hotkey_clock_date();
+    g_hotkey_clock_initialized = 1;
+    g_hotkey_clock_last_tick_ms = tick_ms;
+
+    return 1;
 }
 
 void SplashRenderTextBody(int logo_disp,
@@ -89,6 +268,110 @@ void SplashRenderHotkeyLines(int logo_disp,
             continue;
         SplashRenderDrawTextPxScaled(x, y + (i * HOTKEY_TEXT_LINE_SPACING), 0xffffff, clamped, 1);
     }
+}
+
+void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
+{
+    char time_text[24];
+    char date_text[24];
+    int hotkeys_x;
+    int hotkeys_y;
+    int screen_w;
+    int screen_h;
+    int left_anchor_x;
+    int right_anchor_x;
+    int time_y;
+    int date_y;
+    int time_width;
+    int date_width;
+    int time_x;
+    int date_x;
+    u64 elapsed_ms;
+    u64 elapsed_seconds;
+
+    if (!SplashRenderIsActive() || logo_disp < 3) {
+        clear_hotkey_clock_date();
+        g_hotkey_clock_initialized = 0;
+        g_hotkey_clock_last_tick_ms = 0;
+        return;
+    }
+
+    hotkeys_x = SplashRenderGetHotkeysX();
+    hotkeys_y = SplashRenderGetHotkeysY();
+    if (hotkeys_x < 0 || hotkeys_y < 0) {
+        clear_hotkey_clock_date();
+        return;
+    }
+
+    clear_hotkey_clock_date();
+
+    if (!g_hotkey_clock_initialized) {
+        if (!seed_hotkey_clock_from_ps2(tick_ms))
+            return;
+    } else {
+        if (tick_ms < g_hotkey_clock_last_tick_ms) {
+            if (!seed_hotkey_clock_from_ps2(tick_ms))
+                return;
+        } else {
+            elapsed_ms = tick_ms - g_hotkey_clock_last_tick_ms;
+            elapsed_seconds = elapsed_ms / 1000u;
+            if (elapsed_seconds > 0) {
+                advance_hotkey_clock_seconds(elapsed_seconds);
+                g_hotkey_clock_last_tick_ms += elapsed_seconds * 1000u;
+            }
+        }
+    }
+
+    format_clock_time(time_text,
+                      sizeof(time_text),
+                      g_hotkey_clock_hour,
+                      g_hotkey_clock_minute,
+                      g_hotkey_clock_second,
+                      g_hotkey_clock_use_12h);
+    format_clock_date(date_text,
+                      sizeof(date_text),
+                      g_hotkey_clock_year,
+                      g_hotkey_clock_month,
+                      g_hotkey_clock_day,
+                      g_hotkey_clock_date_format);
+
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    left_anchor_x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
+    right_anchor_x = screen_w - left_anchor_x;
+    if (right_anchor_x < 0)
+        right_anchor_x = 0;
+
+    time_width = (int)strlen(time_text) * GLYPH_ADVANCE_PX;
+    date_width = (int)strlen(date_text) * GLYPH_ADVANCE_PX;
+    time_x = right_anchor_x - time_width;
+    if (time_x < 0)
+        time_x = 0;
+    date_x = time_x + ((time_width - date_width) / 2);
+    if (date_x < 0)
+        date_x = 0;
+
+    time_y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP;
+    date_y = time_y + HOTKEY_CLOCK_DATE_LINE_SPACING;
+    if (time_y < 0)
+        time_y = 0;
+    if (date_y < 0)
+        date_y = 0;
+    if (time_y > screen_h - GLYPH_HEIGHT_PX)
+        time_y = screen_h - GLYPH_HEIGHT_PX;
+    if (date_y > screen_h - GLYPH_HEIGHT_PX)
+        date_y = screen_h - GLYPH_HEIGHT_PX;
+
+    SplashRenderDrawTextPxScaled(time_x, time_y, INFO_TEXT_COLOR, time_text, 1);
+    SplashRenderDrawTextPxScaled(date_x, date_y, INFO_TEXT_COLOR, date_text, 1);
+
+    g_hotkey_time_x = time_x;
+    g_hotkey_time_y = time_y;
+    g_hotkey_time_width = time_width;
+    g_hotkey_date_x = date_x;
+    g_hotkey_date_y = date_y;
+    g_hotkey_date_width = date_width;
+    g_hotkey_clock_visible = 1;
 }
 
 void SplashRenderConsoleInfoLine(int logo_disp,
