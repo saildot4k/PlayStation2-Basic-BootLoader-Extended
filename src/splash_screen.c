@@ -102,9 +102,9 @@ static void format_clock_time(char *dst, size_t dst_size, int hour, int minute, 
         int hour12 = hour % 12;
         if (hour12 == 0)
             hour12 = 12;
-        snprintf(dst, dst_size, "%02d:%02d:%02d %s", hour12, minute, second, suffix);
+        snprintf(dst, dst_size, "%d:%02d:%02d %s", hour12, minute, second, suffix);
     } else {
-        snprintf(dst, dst_size, "%02d:%02d:%02d", hour, minute, second);
+        snprintf(dst, dst_size, "%d:%02d:%02d", hour, minute, second);
     }
 }
 
@@ -112,13 +112,13 @@ static void format_clock_date(char *dst, size_t dst_size, int year, int month, i
 {
     switch (date_format) {
         case 1:
-            snprintf(dst, dst_size, "%02d/%02d/%04d", month, day, year);
+            snprintf(dst, dst_size, "%d/%d/%04d", month, day, year);
             break;
         case 2:
-            snprintf(dst, dst_size, "%02d/%02d/%04d", day, month, year);
+            snprintf(dst, dst_size, "%d/%d/%04d", day, month, year);
             break;
         default:
-            snprintf(dst, dst_size, "%04d/%02d/%02d", year, month, day);
+            snprintf(dst, dst_size, "%04d/%d/%d", year, month, day);
             break;
     }
 }
@@ -280,6 +280,7 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     int screen_h;
     int left_anchor_x;
     int right_anchor_x;
+    int countdown_chars;
     int time_y;
     int date_y;
     int time_width;
@@ -337,8 +338,18 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
 
     screen_w = SplashRenderGetScreenWidth();
     screen_h = SplashRenderGetScreenHeight();
-    left_anchor_x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
-    right_anchor_x = screen_w - left_anchor_x;
+    if (g_countdown_visible) {
+        countdown_chars = g_last_countdown_chars;
+        if (countdown_chars < AUTOBOOT_VALUE_DEFAULT_WIDTH)
+            countdown_chars = AUTOBOOT_VALUE_DEFAULT_WIDTH;
+        right_anchor_x = g_countdown_x + (countdown_chars * GLYPH_ADVANCE_PX);
+    } else {
+        left_anchor_x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
+        right_anchor_x = screen_w - left_anchor_x;
+    }
+
+    if (right_anchor_x > screen_w)
+        right_anchor_x = screen_w;
     if (right_anchor_x < 0)
         right_anchor_x = 0;
 
@@ -347,7 +358,7 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     time_x = right_anchor_x - time_width;
     if (time_x < 0)
         time_x = 0;
-    date_x = time_x + ((time_width - date_width) / 2);
+    date_x = right_anchor_x - date_width;
     if (date_x < 0)
         date_x = 0;
 
