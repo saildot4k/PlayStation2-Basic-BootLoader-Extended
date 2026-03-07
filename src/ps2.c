@@ -393,24 +393,6 @@ static void PS2ApplyEGSMIfNeeded(uint32_t flags)
     enableGSM(flags);
 }
 
-static void PS2ApplyDeckardXParamIfNeeded(const char *title_id)
-{
-    int mod_ret = 0;
-    int ret;
-
-    if (title_id == NULL || title_id[0] == '\0') {
-        DPRINTF("%s: no title id available, skipping XPARAM\n", __func__);
-        return;
-    }
-
-    /*
-     * OSDMenu behavior: load PS2SDK xparam.irx with the current title ID.
-     * On non-Deckard consoles this module exits without applying flags.
-     */
-    ret = SifExecModuleBuffer(xparam_irx, size_xparam_irx, (int)strlen(title_id) + 1, title_id, &mod_ret);
-    DPRINTF("%s: title_id=%s ret=%d mod_ret=%d\n", __func__, title_id, ret, mod_ret);
-}
-
 static FILE *PS2OpenOSDGSMConfig(void)
 {
     FILE *gsm_conf = NULL;
@@ -530,6 +512,24 @@ static void PS2ApplyEGSMIfNeeded(uint32_t flags)
     (void)flags;
 }
 #endif
+
+static void PS2ApplyDeckardXParamIfNeeded(const char *title_id)
+{
+    int mod_ret = 0;
+    int ret;
+
+    if (title_id == NULL || title_id[0] == '\0') {
+        DPRINTF("%s: no title id available, skipping XPARAM\n", __func__);
+        return;
+    }
+
+    /*
+     * OSDMenu behavior: load PS2SDK xparam.irx with the current title ID.
+     * On non-Deckard consoles this module exits without applying flags.
+     */
+    ret = SifExecModuleBuffer(xparam_irx, size_xparam_irx, (int)strlen(title_id) + 1, title_id, &mod_ret);
+    DPRINTF("%s: title_id=%s ret=%d mod_ret=%d\n", __func__, title_id, ret, mod_ret);
+}
 
 #define CNF_PATH_LEN_MAX 64
 #define CNF_LEN_MAX      1024
