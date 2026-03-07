@@ -212,70 +212,6 @@ static void advance_hotkey_clock_seconds(u64 seconds)
     }
 }
 
-static void rewind_hotkey_clock_seconds(u64 seconds)
-{
-    while (seconds > 0) {
-        if (g_hotkey_clock_second > 0) {
-            g_hotkey_clock_second--;
-            seconds--;
-            continue;
-        }
-
-        g_hotkey_clock_second = 59;
-        if (g_hotkey_clock_minute > 0) {
-            g_hotkey_clock_minute--;
-            seconds--;
-            continue;
-        }
-
-        g_hotkey_clock_minute = 59;
-        if (g_hotkey_clock_hour > 0) {
-            g_hotkey_clock_hour--;
-            seconds--;
-            continue;
-        }
-
-        g_hotkey_clock_hour = 23;
-        if (g_hotkey_clock_day > 1) {
-            g_hotkey_clock_day--;
-            seconds--;
-            continue;
-        }
-
-        g_hotkey_clock_month--;
-        if (g_hotkey_clock_month < 1) {
-            g_hotkey_clock_month = 12;
-            g_hotkey_clock_year--;
-        }
-        g_hotkey_clock_day = days_in_month(g_hotkey_clock_year, g_hotkey_clock_month);
-        seconds--;
-    }
-}
-
-static int decode_timezone_offset_minutes(int raw_offset)
-{
-    int value = raw_offset & 0x7FF;
-
-    // The OSD stores timezoneOffset in an 11-bit field.
-    if (value & 0x400)
-        value -= 0x800;
-
-    return value;
-}
-
-static void apply_hotkey_clock_timezone_offset(void)
-{
-    int offset_minutes = decode_timezone_offset_minutes(OSDConfigGetTimezoneOffset());
-
-    if (OSDConfigGetDaylightSaving() != 0)
-        offset_minutes += 60;
-
-    if (offset_minutes > 0)
-        advance_hotkey_clock_seconds((u64)offset_minutes * 60u);
-    else if (offset_minutes < 0)
-        rewind_hotkey_clock_seconds((u64)(-offset_minutes) * 60u);
-}
-
 static int seed_hotkey_clock_from_ps2(u64 tick_ms)
 {
     sceCdCLOCK clock_data;
@@ -292,7 +228,6 @@ static int seed_hotkey_clock_from_ps2(u64 tick_ms)
     g_hotkey_clock_use_12h = (OSDConfigGetTimeFormat() != 0);
     g_hotkey_clock_date_format = OSDConfigGetDateFormat();
     normalize_hotkey_clock_date();
-    apply_hotkey_clock_timezone_offset();
     g_hotkey_clock_initialized = 1;
     g_hotkey_clock_last_tick_ms = tick_ms;
 
