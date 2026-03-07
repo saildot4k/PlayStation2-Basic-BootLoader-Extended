@@ -387,12 +387,13 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
 {
     const char *line1 = "NO DISC FOUND!";
     const char *base2 = "INSERT DISC OR PRESS START TO RETRY HOTKEYS";
-    char line2[96];
-    int i;
+    char dots_buf[4];
+    int i, dot_count;
     int line1_w;
-    int line2_w;
+    int base2_w;
     int x1;
     int x2;
+    int dot_x;
     int y1;
     int y2;
 
@@ -404,9 +405,14 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
     if (dots > 3)
         dots = 3;
 
-    snprintf(line2, sizeof(line2), "%s", base2);
-    for (i = 0; i < dots && (int)strlen(line2) + 1 < (int)sizeof(line2); i++)
-        strcat(line2, ".");
+    dot_count = dots;
+    if (dot_count < 0)
+        dot_count = 0;
+    if (dot_count > 3)
+        dot_count = 3;
+    for (i = 0; i < dot_count; i++)
+        dots_buf[i] = '.';
+    dots_buf[dot_count] = '\0';
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
@@ -420,18 +426,21 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
                                 source);
 
     line1_w = (int)strlen(line1) * 6;
-    line2_w = (int)strlen(line2) * 6;
+    base2_w = (int)strlen(base2) * 6;
     x1 = SplashRenderGetScreenCenterX() - (line1_w / 2);
-    x2 = SplashRenderGetScreenCenterX() - (line2_w / 2);
+    x2 = SplashRenderGetScreenCenterX() - (base2_w / 2);
     y1 = SplashRenderGetScreenCenterY() - 16;
     y2 = SplashRenderGetScreenCenterY() + 2;
     if (x1 < 8)
         x1 = 8;
     if (x2 < 8)
         x2 = 8;
+    dot_x = x2 + base2_w;
 
     SplashRenderDrawTextPxScaled(x1, y1, 0xffff00, line1, 1);
-    SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, line2, 1);
+    SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, base2, 1);
+    if (dots_buf[0] != '\0')
+        SplashRenderDrawTextPxScaled(dot_x, y2, 0xffffff, dots_buf, 1);
     SplashRenderPresent();
 }
 
@@ -1927,7 +1936,8 @@ int dischandler(int skip_ps2logo)
 {
     int OldDiscType, DiscType, ValidDiscInserted, result, first_run = 1;
     int cancel_requested = 0;
-    int cancel_armed = 0;
+    int start_was_down;
+    u64 start_hold_deadline = 0;
     int nodisc_dots = 0;
     u64 nodisc_next_tick = 0;
     int use_splash_ui;
@@ -1994,13 +2004,23 @@ int dischandler(int skip_ps2logo)
 
     ValidDiscInserted = 0;
     OldDiscType = -1;
+    start_was_down = (ReadCombinedPadStatus_raw() & PAD_START) ? 1 : 0;
+    if (start_was_down)
+        start_hold_deadline = Timer() + 150;
     while (!ValidDiscInserted) {
         PAD = ReadCombinedPadStatus_raw();
-        if ((PAD & PAD_START) == 0)
-            cancel_armed = 1;
-        else if (cancel_armed) {
-            cancel_requested = 1;
-            break;
+        if (PAD & PAD_START) {
+            if (!start_was_down) {
+                cancel_requested = 1;
+                break;
+            }
+            if (start_hold_deadline != 0 && Timer() >= start_hold_deadline) {
+                cancel_requested = 1;
+                break;
+            }
+        } else {
+            start_was_down = 0;
+            start_hold_deadline = 0;
         }
 
         DiscType = sceCdGetDiskType();
@@ -2186,7 +2206,7 @@ int dischandler(int skip_ps2logo)
             SetAlarm(16 * 16, &AlarmCallback, (void *)GetThreadId());
             SleepThread();
         }
-        SetAlarm(160 * 16, &AlarmCallback, (void *)GetThreadId());
+        SetAlarm(80 * 16, &AlarmCallback, (void *)GetThreadId());
         SleepThread();
 
         return -1;
