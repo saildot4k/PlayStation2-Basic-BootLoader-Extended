@@ -4,13 +4,16 @@
 #include "splash_render.h"
 #include "splash_screen.h"
 
-// Console info text anchor for LOGO_DISPLAY = 2-5, in center-relative pixels.
+// Console info text anchor for LOGO_DISPLAY = 2-5.
 #define INFO_CENTER_ADJUST_X 0
-#define INFO_Y_FROM_CENTER (205)
+#define INFO_BOTTOM_MARGIN_PERCENT 10
+#define INFO_Y_ADJUST 0
 #define INFO_TEXT_COLOR 0x707070
 #define INFO_AUTOBOOT_COLOR 0xffff00
 #define GLYPH_ADVANCE_PX 6
 #define GLYPH_HEIGHT_PX 7
+#define GLYPH_SHADOW_PAD_X 1
+#define GLYPH_SHADOW_PAD_Y 1
 #define AUTOBOOT_PREFIX "  AUTO: "
 #define AUTOBOOT_VALUE_DEFAULT_WIDTH 5
 #define TEMP_TAG " TEMP: "
@@ -143,7 +146,9 @@ void SplashRenderConsoleInfoLine(int logo_disp,
         int suffix_x;
         int prefix_width_px;
         int x;
-        int y = SplashRenderGetScreenCenterY() + INFO_Y_FROM_CENTER;
+        int screen_h = SplashRenderGetScreenHeight();
+        int bottom_margin_px = ((screen_h * INFO_BOTTOM_MARGIN_PERCENT) + 50) / 100;
+        int y = screen_h - bottom_margin_px - GLYPH_HEIGHT_PX + INFO_Y_ADJUST;
 
         countdown_layout_chars = AUTOBOOT_VALUE_DEFAULT_WIDTH;
         if (autoboot_countdown != NULL && autoboot_countdown[0] != '\0') {
@@ -204,8 +209,8 @@ void SplashRenderConsoleInfoCountdownOnly(const char *autoboot_countdown)
     if (clear_chars > 0) {
         SplashRenderRestoreBackgroundRect(g_countdown_x,
                                           g_countdown_y,
-                                          clear_chars * GLYPH_ADVANCE_PX,
-                                          GLYPH_HEIGHT_PX);
+                                          clear_chars * GLYPH_ADVANCE_PX + GLYPH_SHADOW_PAD_X,
+                                          GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
     }
 
     if (countdown_chars > 0)
@@ -227,7 +232,7 @@ void SplashRenderConsoleInfoTemperatureOnly(const char *temp_celsius)
     snprintf(temp_padded, sizeof(temp_padded), "%-*s", TEMP_VALUE_WIDTH_CHARS, temp_celsius);
     SplashRenderRestoreBackgroundRect(g_temp_x,
                                       g_temp_y,
-                                      TEMP_VALUE_WIDTH_CHARS * GLYPH_ADVANCE_PX,
-                                      GLYPH_HEIGHT_PX);
+                                      TEMP_VALUE_WIDTH_CHARS * GLYPH_ADVANCE_PX + GLYPH_SHADOW_PAD_X,
+                                      GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
     SplashRenderDrawTextPxScaled(g_temp_x, g_temp_y, INFO_TEXT_COLOR, temp_padded, 1);
 }

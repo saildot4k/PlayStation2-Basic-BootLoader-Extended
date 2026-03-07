@@ -13,24 +13,33 @@
 #define FONT_SCALE 2
 #define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
 #define TEXT_Z 10
+#define TEXT_SHADOW_Z (TEXT_Z - 1)
 #define BG_Z 1
 #define FG_Z 2
+#define GS_ALPHA_OPAQUE 0x80
+#define LOGO_TRANSPARENCY_PERCENT 8
+#define GLYPH_SHADOW_TRANSPARENCY_PERCENT 80
+#define GLYPH_SHADOW_OFFSET_X 1
+#define GLYPH_SHADOW_OFFSET_Y 1
 
 // LOGO_DISPLAY = 2 centered logo fine tuning.
 #define MODE2_LOGO_X_FROM_CENTER 0
 #define MODE2_LOGO_Y_FROM_CENTER 0
 
 // LOGO_DISPLAY = 3-5 layout:
-// - Logo top-center with overscan margin.
-// - Hotkeys image left aligned and stacked under the logo.
-// X/Y values are center-relative tuning offsets in pixels.
-#define MODE35_TOP_MARGIN_PX 10
-#define MODE35_LEFT_MARGIN_PX 10
-#define MODE35_STACK_GAP_PX 0
+// - Logo centered using the logo visual-center ratio.
+// - Hotkeys image left aligned and vertically centered on screen.
+// Logo Y and hotkeys Y values are center-relative tuning offsets in pixels.
+#define MODE35_HOTKEYS_LEFT_PERCENT 10
 #define MODE35_LOGO_X_FROM_CENTER 0
-#define MODE35_LOGO_Y_FROM_CENTER -5
-#define MODE35_HOTKEYS_X_FROM_CENTER 10
-#define MODE35_HOTKEYS_Y_FROM_CENTER -15
+#define MODE35_LOGO_Y_FROM_CENTER 0
+#define MODE35_HOTKEYS_X_ADJUST 0
+#define MODE35_HOTKEYS_Y_FROM_CENTER 0
+
+// Visual center of the logo graphic from the top, expressed as a ratio of logo height.
+// 21/64 keeps the visual center consistent if the logo is scaled later.
+#define LOGO_VISUAL_CENTER_Y_NUMERATOR 21
+#define LOGO_VISUAL_CENTER_Y_DENOMINATOR 64
 
 typedef struct
 {
@@ -62,6 +71,24 @@ static int g_logo_visible = 0;
 static int g_hotkeys_x = -1;
 static int g_hotkeys_y = -1;
 static int g_hotkeys_visible = 0;
+
+static int logo_visual_center_y(unsigned int logo_height)
+{
+    return (int)(((logo_height * LOGO_VISUAL_CENTER_Y_NUMERATOR) +
+                  (LOGO_VISUAL_CENTER_Y_DENOMINATOR / 2)) /
+                 LOGO_VISUAL_CENTER_Y_DENOMINATOR);
+}
+
+static unsigned char transparency_percent_to_gs_alpha(unsigned int transparency_percent)
+{
+    unsigned int opacity_percent;
+
+    if (transparency_percent > 100u)
+        transparency_percent = 100u;
+
+    opacity_percent = 100u - transparency_percent;
+    return (unsigned char)((opacity_percent * GS_ALPHA_OPAQUE + 50u) / 100u);
+}
 
 // 5x7 glyphs for splash labels.
 static const GLYPH g_font[] = {
@@ -157,7 +184,7 @@ static u64 color_to_gs(u32 color)
     int r = (color >> 16) & 0xff;
     int g = (color >> 8) & 0xff;
     int b = color & 0xff;
-    return GS_SETREG_RGBAQ(r, g, b, 0x80, 0x00);
+    return GS_SETREG_RGBAQ(r, g, b, GS_ALPHA_OPAQUE, 0x00);
 }
 
 static unsigned char png_alpha_to_gs_alpha(unsigned char alpha)
@@ -272,7 +299,7 @@ static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img, in
     return 1;
 }
 
-static void draw_layer(const SPLASH_LAYER *layer, int x, int y, int z)
+static void draw_layer(const SPLASH_LAYER *layer, int x, int y, int z, unsigned char alpha)
 {
     if (layer == NULL || !layer->ready)
         return;
@@ -288,7 +315,7 @@ static void draw_layer(const SPLASH_LAYER *layer, int x, int y, int z)
                               (float)layer->tex.Width,
                               (float)layer->tex.Height,
                               z,
-                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
+                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, alpha, 0x00));
 }
 
 static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
@@ -307,7 +334,7 @@ static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
                               (float)layer->tex.Width,
                               (float)layer->tex.Height,
                               z,
-                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
+                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, GS_ALPHA_OPAQUE, 0x00));
 }
 
 void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h)
@@ -358,7 +385,7 @@ void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h)
                               u1,
                               v1,
                               FG_Z,
-                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, 0x80, 0x00));
+                              GS_SETREG_RGBAQ(0x80, 0x80, 0x80, GS_ALPHA_OPAQUE, 0x00));
 }
 
 void SplashRenderSetHotkeysVisible(int visible)
@@ -368,11 +395,13 @@ void SplashRenderSetHotkeysVisible(int visible)
 
 static void draw_static_layers(void)
 {
+    const unsigned char logo_alpha = transparency_percent_to_gs_alpha(LOGO_TRANSPARENCY_PERCENT);
+
     draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
     if (g_logo_visible)
-        draw_layer(&g_layers[LAYER_LOGO], g_logo_x, g_logo_y, FG_Z);
+        draw_layer(&g_layers[LAYER_LOGO], g_logo_x, g_logo_y, FG_Z, logo_alpha);
     if (g_hotkeys_visible)
-        draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z);
+        draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z, GS_ALPHA_OPAQUE);
 }
 
 void SplashRenderBeginFrame(void)
@@ -398,7 +427,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
     const SPLASH_IMAGE *bg;
     const SPLASH_IMAGE *logo;
-    int logo_y_offset;
+    int logo_center_y;
     int center_x;
     int center_y;
     int pass;
@@ -429,7 +458,6 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     g_screen_w = (int)g_gs->Width;
     g_screen_h = (int)g_gs->Height;
-    logo_y_offset = 6;
     center_x = g_screen_w / 2;
     center_y = g_screen_h / 2;
 
@@ -444,10 +472,11 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         destroy_frame_state();
         return 0;
     }
+    logo_center_y = logo_visual_center_y(logo->height);
 
     if (logo_disp == 2) {
         g_logo_x = center_x - ((int)logo->width / 2) + MODE2_LOGO_X_FROM_CENTER;
-        g_logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER + logo_y_offset;
+        g_logo_y = center_y - logo_center_y + MODE2_LOGO_Y_FROM_CENTER;
         g_logo_visible = 1;
         g_hotkeys_visible = 0;
         SplashRenderBeginFrame();
@@ -468,10 +497,10 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         }
 
         logo_x = center_x - ((int)logo->width / 2) + MODE35_LOGO_X_FROM_CENTER;
-        logo_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + MODE35_LOGO_Y_FROM_CENTER + logo_y_offset);
+        logo_y = center_y - logo_center_y + MODE35_LOGO_Y_FROM_CENTER;
 
-        hotkeys_x = center_x + (-(g_screen_w / 2) + MODE35_LEFT_MARGIN_PX + MODE35_HOTKEYS_X_FROM_CENTER);
-        hotkeys_y = center_y + (-(g_screen_h / 2) + MODE35_TOP_MARGIN_PX + (int)logo->height + MODE35_STACK_GAP_PX + MODE35_HOTKEYS_Y_FROM_CENTER);
+        hotkeys_x = ((g_screen_w * MODE35_HOTKEYS_LEFT_PERCENT) + 50) / 100 + MODE35_HOTKEYS_X_ADJUST;
+        hotkeys_y = center_y - ((int)hotkeys->height / 2) + MODE35_HOTKEYS_Y_FROM_CENTER;
         g_logo_x = logo_x;
         g_logo_y = logo_y;
         g_logo_visible = 1;
@@ -492,15 +521,51 @@ void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int
     int advance;
     int i;
     int cx;
+    int shadow_offset_x;
+    int shadow_offset_y;
     u64 gs_color;
+    u64 shadow_color;
 
     if (g_gs == NULL || text == NULL)
         return;
 
     gs_color = color_to_gs(color);
+    shadow_color = GS_SETREG_RGBAQ(0x00,
+                                   0x00,
+                                   0x00,
+                                   transparency_percent_to_gs_alpha(GLYPH_SHADOW_TRANSPARENCY_PERCENT),
+                                   0x00);
     draw_scale = (scale > 0) ? scale : 1;
     advance = (FONT_W + 1) * draw_scale;
+    shadow_offset_x = GLYPH_SHADOW_OFFSET_X;
+    shadow_offset_y = GLYPH_SHADOW_OFFSET_Y;
 
+    // Pass 1: draw all shadows so glyph pixels can always render above them.
+    cx = x;
+    for (i = 0; text[i] != '\0'; i++) {
+        int row;
+        const GLYPH *glyph = find_glyph(text[i]);
+        for (row = 0; row < FONT_H; row++) {
+            unsigned char bits = glyph->rows[row];
+            int col;
+            for (col = 0; col < FONT_W; col++) {
+                if (bits & (1u << (FONT_W - 1 - col))) {
+                    int px = cx + (col * draw_scale);
+                    int py = y + (row * draw_scale);
+                    gsKit_prim_sprite(g_gs,
+                                      (float)(px + shadow_offset_x),
+                                      (float)(py + shadow_offset_y),
+                                      (float)(px + shadow_offset_x + draw_scale),
+                                      (float)(py + shadow_offset_y + draw_scale),
+                                      TEXT_SHADOW_Z,
+                                      shadow_color);
+                }
+            }
+        }
+        cx += advance;
+    }
+
+    // Pass 2: draw glyph pixels on top of all shadow pixels.
     cx = x;
     for (i = 0; text[i] != '\0'; i++) {
         int row;
