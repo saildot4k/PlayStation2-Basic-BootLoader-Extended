@@ -17,7 +17,8 @@
 #define BG_Z 1
 #define FG_Z 2
 #define GS_ALPHA_OPAQUE 0x80
-#define LOGO_TRANSPARENCY_PERCENT 8
+#define LOGO_TRANSPARENCY_PERCENT_DEFAULT 0
+#define LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS 70
 #define GLYPH_SHADOW_TRANSPARENCY_PERCENT 80
 #define GLYPH_SHADOW_OFFSET_X 1
 #define GLYPH_SHADOW_OFFSET_Y 1
@@ -395,7 +396,10 @@ void SplashRenderSetHotkeysVisible(int visible)
 
 static void draw_static_layers(void)
 {
-    const unsigned char logo_alpha = transparency_percent_to_gs_alpha(LOGO_TRANSPARENCY_PERCENT);
+    const unsigned int logo_transparency_percent = g_hotkeys_visible
+                                                       ? LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS
+                                                       : LOGO_TRANSPARENCY_PERCENT_DEFAULT;
+    const unsigned char logo_alpha = transparency_percent_to_gs_alpha(logo_transparency_percent);
 
     draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
     if (g_logo_visible)
