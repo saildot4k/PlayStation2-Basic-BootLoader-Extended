@@ -25,6 +25,7 @@
 #define HOTKEY_CLOCK_PS2_RTC_BASE_OFFSET_MINUTES 540
 #define HOTKEY_CLOCK_TIME_MAX_CHARS 11
 #define HOTKEY_CLOCK_DATE_MAX_CHARS 10
+#define HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT 1
 
 static int g_countdown_x = 0;
 static int g_countdown_y = 0;
@@ -50,7 +51,8 @@ static int g_hotkey_clock_second = 0;
 static int g_hotkey_clock_use_12h = 0;
 static int g_hotkey_clock_date_format = 0;
 static u64 g_hotkey_clock_last_tick_ms = 0;
-static int g_hotkey_clock_last_right_anchor = -1;
+static int g_hotkey_clock_last_right_anchor[2] = {-1, -1};
+static int g_hotkey_clock_anchor_slot = 0;
 
 // Hotkey text layout for LOGO_DISPLAY = 3-5.
 // AUTO line anchors from the hotkeys image top-left.
@@ -97,7 +99,9 @@ static void clear_hotkey_clock_date(void)
     g_hotkey_clock_visible = 0;
     g_hotkey_time_width = 0;
     g_hotkey_date_width = 0;
-    g_hotkey_clock_last_right_anchor = -1;
+    g_hotkey_clock_last_right_anchor[0] = -1;
+    g_hotkey_clock_last_right_anchor[1] = -1;
+    g_hotkey_clock_anchor_slot = 0;
 }
 
 static void format_clock_time(char *dst, size_t dst_size, int hour, int minute, int second, int use_12h)
@@ -387,6 +391,7 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     int clear_date_x;
     int clear_time_w;
     int clear_date_w;
+    int i;
     u64 elapsed_ms;
     u64 elapsed_seconds;
 
@@ -473,17 +478,19 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
 
     clear_right_x = right_anchor_x;
     clear_left_anchor_x = right_anchor_x;
-    if (g_hotkey_clock_last_right_anchor >= 0) {
-        if (g_hotkey_clock_last_right_anchor > clear_right_x)
-            clear_right_x = g_hotkey_clock_last_right_anchor;
-        if (g_hotkey_clock_last_right_anchor < clear_left_anchor_x)
-            clear_left_anchor_x = g_hotkey_clock_last_right_anchor;
+    for (i = 0; i < 2; i++) {
+        if (g_hotkey_clock_last_right_anchor[i] >= 0) {
+            if (g_hotkey_clock_last_right_anchor[i] > clear_right_x)
+                clear_right_x = g_hotkey_clock_last_right_anchor[i];
+            if (g_hotkey_clock_last_right_anchor[i] < clear_left_anchor_x)
+                clear_left_anchor_x = g_hotkey_clock_last_right_anchor[i];
+        }
     }
 
-    clear_time_x = clear_left_anchor_x - (HOTKEY_CLOCK_TIME_MAX_CHARS * GLYPH_ADVANCE_PX);
+    clear_time_x = clear_left_anchor_x - ((HOTKEY_CLOCK_TIME_MAX_CHARS + HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT) * GLYPH_ADVANCE_PX);
     if (clear_time_x < 0)
         clear_time_x = 0;
-    clear_date_x = clear_left_anchor_x - (HOTKEY_CLOCK_DATE_MAX_CHARS * GLYPH_ADVANCE_PX);
+    clear_date_x = clear_left_anchor_x - ((HOTKEY_CLOCK_DATE_MAX_CHARS + HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT) * GLYPH_ADVANCE_PX);
     if (clear_date_x < 0)
         clear_date_x = 0;
 
@@ -511,7 +518,8 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     g_hotkey_date_x = date_x;
     g_hotkey_date_y = date_y;
     g_hotkey_date_width = date_width;
-    g_hotkey_clock_last_right_anchor = right_anchor_x;
+    g_hotkey_clock_last_right_anchor[g_hotkey_clock_anchor_slot] = right_anchor_x;
+    g_hotkey_clock_anchor_slot ^= 1;
     g_hotkey_clock_visible = 1;
 }
 
