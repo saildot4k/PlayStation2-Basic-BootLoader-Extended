@@ -22,6 +22,7 @@
 #define TEMP_VALUE_WIDTH_CHARS 5
 #define HOTKEY_CLOCK_DATE_LINE_SPACING HOTKEY_TEXT_LINE_SPACING
 #define HOTKEY_CLOCK_DATE_YEAR_BASE 2000
+#define HOTKEY_CLOCK_PS2_RTC_BASE_OFFSET_MINUTES 540
 #define HOTKEY_CLOCK_TIME_MAX_CHARS 11
 #define HOTKEY_CLOCK_DATE_MAX_CHARS 10
 
@@ -212,9 +213,91 @@ static void advance_hotkey_clock_seconds(u64 seconds)
     }
 }
 
+static int decode_timezone_offset_minutes(int raw_offset)
+{
+    int value = raw_offset & 0x7FF;
+
+    // The OSD stores timezoneOffset in an 11-bit signed field.
+    if (value & 0x400)
+        value -= 0x800;
+
+    return value;
+}
+
+static void shift_hotkey_clock_minutes(int delta_minutes)
+{
+    while (delta_minutes > 0) {
+        int dim;
+
+        g_hotkey_clock_minute++;
+        if (g_hotkey_clock_minute < 60) {
+            delta_minutes--;
+            continue;
+        }
+
+        g_hotkey_clock_minute = 0;
+        g_hotkey_clock_hour++;
+        if (g_hotkey_clock_hour < 24) {
+            delta_minutes--;
+            continue;
+        }
+
+        g_hotkey_clock_hour = 0;
+        g_hotkey_clock_day++;
+        dim = days_in_month(g_hotkey_clock_year, g_hotkey_clock_month);
+        if (g_hotkey_clock_day <= dim) {
+            delta_minutes--;
+            continue;
+        }
+
+        g_hotkey_clock_day = 1;
+        g_hotkey_clock_month++;
+        if (g_hotkey_clock_month <= 12) {
+            delta_minutes--;
+            continue;
+        }
+
+        g_hotkey_clock_month = 1;
+        g_hotkey_clock_year++;
+        delta_minutes--;
+    }
+
+    while (delta_minutes < 0) {
+        g_hotkey_clock_minute--;
+        if (g_hotkey_clock_minute >= 0) {
+            delta_minutes++;
+            continue;
+        }
+
+        g_hotkey_clock_minute = 59;
+        g_hotkey_clock_hour--;
+        if (g_hotkey_clock_hour >= 0) {
+            delta_minutes++;
+            continue;
+        }
+
+        g_hotkey_clock_hour = 23;
+        g_hotkey_clock_day--;
+        if (g_hotkey_clock_day >= 1) {
+            delta_minutes++;
+            continue;
+        }
+
+        g_hotkey_clock_month--;
+        if (g_hotkey_clock_month < 1) {
+            g_hotkey_clock_month = 12;
+            g_hotkey_clock_year--;
+        }
+        g_hotkey_clock_day = days_in_month(g_hotkey_clock_year, g_hotkey_clock_month);
+        delta_minutes++;
+    }
+}
+
 static int seed_hotkey_clock_from_ps2(u64 tick_ms)
 {
     sceCdCLOCK clock_data;
+    int local_offset_minutes;
+    int delta_minutes;
 
     if (!sceCdReadClock(&clock_data))
         return 0;
@@ -228,6 +311,13 @@ static int seed_hotkey_clock_from_ps2(u64 tick_ms)
     g_hotkey_clock_use_12h = (OSDConfigGetTimeFormat() != 0);
     g_hotkey_clock_date_format = OSDConfigGetDateFormat();
     normalize_hotkey_clock_date();
+
+    local_offset_minutes = decode_timezone_offset_minutes(OSDConfigGetTimezoneOffset());
+    if (OSDConfigGetDaylightSaving() != 0)
+        local_offset_minutes += 60;
+    delta_minutes = local_offset_minutes - HOTKEY_CLOCK_PS2_RTC_BASE_OFFSET_MINUTES;
+    shift_hotkey_clock_minutes(delta_minutes);
+
     g_hotkey_clock_initialized = 1;
     g_hotkey_clock_last_tick_ms = tick_ms;
 
