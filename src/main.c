@@ -885,6 +885,7 @@ u8 ROMVER[16];
 static int g_is_psx_desr = 0;
 static int g_cdvd_cancelled = 0;
 static int g_boot_progress_active = 0;
+#define BOOT_PROGRESS_VISUAL 0
 #define ROMVER_MODEL_PREFIX_LEN 5
 static const char *const g_psx_desr_rom_prefixes[] = {
     "0180J",
@@ -963,6 +964,7 @@ static void BootProgressInit(void)
 {
     g_boot_progress_active = 0;
 
+#if BOOT_PROGRESS_VISUAL
     // Bring up a lightweight logo splash early while module loads are in progress.
     SplashRenderSetVideoMode(CFG_VIDEO_MODE_AUTO, g_native_video_mode);
     SplashRenderTextBody(2, g_is_psx_desr);
@@ -971,21 +973,30 @@ static void BootProgressInit(void)
 
     g_boot_progress_active = 1;
     SplashDrawCenteredStatus("Initializing...", 0x00ffff);
+#endif
 }
 
 static void BootProgressStep(const char *text)
 {
+#if BOOT_PROGRESS_VISUAL
     if (!g_boot_progress_active || text == NULL)
         return;
 
     SplashDrawCenteredStatus(text, 0xffffff);
+#else
+    (void)text;
+#endif
 }
 
 static void BootProgressEnd(void)
 {
+#if BOOT_PROGRESS_VISUAL
     g_boot_progress_active = 0;
     if (SplashRenderIsActive())
         SplashRenderEnd();
+#else
+    g_boot_progress_active = 0;
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -1010,7 +1021,6 @@ int main(int argc, char *argv[])
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
     LogDetectedPlatform();
-    g_native_video_mode = detect_native_video_mode();
     scr_setfontcolor(0x101010);
     scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
     scr_setfontcolor(0xffffff);
