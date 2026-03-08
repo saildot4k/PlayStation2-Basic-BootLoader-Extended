@@ -470,6 +470,7 @@ static void RestoreSplashInteractiveUi(int logo_disp,
                                     temp_celsius,
                                     "",
                                     source);
+        SplashRenderHotkeyClockDate(logo_disp, 0);
         SplashRenderPresent();
     }
 }
@@ -1350,6 +1351,7 @@ int main(int argc, char *argv[])
                                             temp_celsius,
                                             "",
                                             source);
+                SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, 0);
                 SplashRenderPresent();
             }
         }
@@ -1378,6 +1380,7 @@ int main(int argc, char *argv[])
 
                 snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%uS", remaining_sec, remaining_tenths);
                 SplashRenderConsoleInfoCountdownOnly(autoboot_text);
+                SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, now);
                 SplashRenderPresent();
             }
 
