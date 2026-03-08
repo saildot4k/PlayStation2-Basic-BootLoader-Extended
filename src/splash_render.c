@@ -19,6 +19,7 @@
 #define GS_ALPHA_OPAQUE 0x80
 #define LOGO_TRANSPARENCY_PERCENT_DEFAULT 0
 #define LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS 80
+#define INTRO_FADE_DURATION_MS 250
 #define LOGO_SHIMMER_ENABLED 1
 #define LOGO_SHIMMER_WIDTH_PERCENT 12
 #define LOGO_SHIMMER_MIN_WIDTH_PX 8
@@ -94,6 +95,8 @@ static int g_logo_shimmer_left = 0;
 static int g_logo_shimmer_band_width = 0;
 static int g_logo_shimmer_visible_left = 0;
 static int g_logo_shimmer_visible_right = 0;
+static int g_intro_fade_frame = 0;
+static int g_intro_fade_total_frames = 1;
 static int g_video_cfg_mode = SPLASH_CFG_VIDEO_MODE_AUTO;
 static int g_video_native_mode = SPLASH_CFG_VIDEO_MODE_NTSC;
 
@@ -102,6 +105,37 @@ static int resolve_video_mode_for_splash(void)
     if (g_video_cfg_mode == SPLASH_CFG_VIDEO_MODE_AUTO)
         return g_video_native_mode;
     return g_video_cfg_mode;
+}
+
+static int compute_intro_fade_total_frames(void)
+{
+    int refresh_hz = 60;
+    int mode = resolve_video_mode_for_splash();
+    int total_frames;
+
+    if (mode == SPLASH_CFG_VIDEO_MODE_PAL)
+        refresh_hz = 50;
+    total_frames = ((INTRO_FADE_DURATION_MS * refresh_hz) + 500) / 1000;
+    if (total_frames < 1)
+        total_frames = 1;
+
+    return total_frames;
+}
+
+static void reset_intro_fade_state(void)
+{
+    g_intro_fade_total_frames = compute_intro_fade_total_frames();
+    g_intro_fade_frame = 0;
+}
+
+static unsigned char get_intro_fade_alpha(void)
+{
+    if (g_intro_fade_total_frames <= 1 || g_intro_fade_frame >= g_intro_fade_total_frames)
+        return GS_ALPHA_OPAQUE;
+
+    return (unsigned char)((((unsigned int)(g_intro_fade_frame + 1) * GS_ALPHA_OPAQUE) +
+                            (unsigned int)(g_intro_fade_total_frames / 2)) /
+                           (unsigned int)g_intro_fade_total_frames);
 }
 
 static void configure_gskit_video_mode(GSGLOBAL *gs)
@@ -180,8 +214,10 @@ static unsigned char get_logo_base_alpha(void)
     const unsigned int logo_transparency_percent = g_hotkeys_visible
                                                        ? LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS
                                                        : LOGO_TRANSPARENCY_PERCENT_DEFAULT;
+    unsigned char base_alpha = transparency_percent_to_gs_alpha(logo_transparency_percent);
+    unsigned char intro_alpha = get_intro_fade_alpha();
 
-    return transparency_percent_to_gs_alpha(logo_transparency_percent);
+    return (unsigned char)(((unsigned int)base_alpha * (unsigned int)intro_alpha + (GS_ALPHA_OPAQUE / 2)) / GS_ALPHA_OPAQUE);
 }
 
 static int compute_logo_shimmer_band_width(int logo_width)
@@ -472,6 +508,8 @@ static void destroy_frame_state(void)
     g_hotkeys_y = -1;
     g_hotkeys_visible = 0;
     reset_logo_shimmer_state();
+    g_intro_fade_frame = 0;
+    g_intro_fade_total_frames = 1;
 }
 
 static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img, int filter)
@@ -841,6 +879,7 @@ void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms)
 static void draw_static_layers(void)
 {
     const unsigned char logo_alpha = get_logo_base_alpha();
+    const unsigned char hotkeys_alpha = get_intro_fade_alpha();
 
     draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
     if (g_logo_visible) {
@@ -848,7 +887,7 @@ static void draw_static_layers(void)
         draw_logo_shimmer_overlay();
     }
     if (g_hotkeys_visible)
-        draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z, GS_ALPHA_OPAQUE);
+        draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z, hotkeys_alpha);
 }
 
 void SplashRenderBeginFrame(void)
@@ -868,6 +907,8 @@ void SplashRenderPresent(void)
     gsKit_queue_exec(g_gs);
     gsKit_finish();
     gsKit_sync_flip(g_gs);
+    if (g_intro_fade_frame < g_intro_fade_total_frames)
+        g_intro_fade_frame++;
 }
 
 int SplashRenderBegin(int logo_disp, int is_psx_desr)
@@ -892,6 +933,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     g_gs->ZBuffering = GS_SETTING_OFF;
     g_gs->PrimAlphaEnable = GS_SETTING_ON;
     configure_gskit_video_mode(g_gs);
+    reset_intro_fade_state();
     gsKit_set_primalpha(g_gs, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
     gsKit_init_screen(g_gs);
     gsKit_display_buffer(g_gs);
