@@ -1314,6 +1314,9 @@ int main(int argc, char *argv[])
         GLOBCFG.LOGO_DISP = normalize_logo_display(GLOBCFG.LOGO_DISP);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
+        // Apply configured video mode as early as possible so displays/scalers
+        // can re-sync before splash/countdown work starts.
+        apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
@@ -1328,13 +1331,14 @@ int main(int argc, char *argv[])
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
+        // Keep behavior consistent when no config exists (AUTO/native default).
+        apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
         sleep(1);
     }
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
-    apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
     SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
     int dev_ok[DEV_COUNT];
 
