@@ -884,6 +884,7 @@ char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
 static int g_is_psx_desr = 0;
 static int g_cdvd_cancelled = 0;
+static int g_boot_progress_active = 0;
 #define ROMVER_MODEL_PREFIX_LEN 5
 static const char *const g_psx_desr_rom_prefixes[] = {
     "0180J",
@@ -958,6 +959,35 @@ static void LogDetectedPlatform(void)
     DPRINTF("Detected platform: %s (ROMVER prefix: %s)\n", platform_name, rom_prefix);
 }
 
+static void BootProgressInit(void)
+{
+    g_boot_progress_active = 0;
+
+    // Bring up a lightweight logo splash early while module loads are in progress.
+    SplashRenderSetVideoMode(CFG_VIDEO_MODE_AUTO, g_native_video_mode);
+    SplashRenderTextBody(2, g_is_psx_desr);
+    if (!SplashRenderIsActive())
+        return;
+
+    g_boot_progress_active = 1;
+    SplashDrawCenteredStatus("Initializing...", 0x00ffff);
+}
+
+static void BootProgressStep(const char *text)
+{
+    if (!g_boot_progress_active || text == NULL)
+        return;
+
+    SplashDrawCenteredStatus(text, 0xffffff);
+}
+
+static void BootProgressEnd(void)
+{
+    g_boot_progress_active = 0;
+    if (SplashRenderIsActive())
+        SplashRenderEnd();
+}
+
 int main(int argc, char *argv[])
 {
     u32 STAT;
@@ -980,6 +1010,7 @@ int main(int argc, char *argv[])
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
     LogDetectedPlatform();
+    g_native_video_mode = detect_native_video_mode();
     scr_setfontcolor(0x101010);
     scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
     scr_setfontcolor(0xffffff);
@@ -990,15 +1021,20 @@ int main(int argc, char *argv[])
     DPRINTF("disabling MODLOAD device blacklist/whitelist\n");
     sbv_patch_disable_prefix_check(); /* disable the MODLOAD module black/white list, allowing executables to be freely loaded from any device. */
 
+    BootProgressInit();
+
 #ifdef PPCTTY
+    BootProgressStep("Loading PPCTTY...");
     //no error handling bc nothing to do in this case
     SifExecModuleBuffer(ppctty_irx, size_ppctty_irx, 0, NULL, NULL);
 #endif
 #ifdef UDPTTY
+    BootProgressStep("Loading DEV9/UDPTTY...");
     if (loadDEV9())
         loadUDPTTY();
 #endif
 
+    BootProgressStep("Loading SIO2MAN...");
 #ifdef USE_ROM_SIO2MAN
     j = SifLoadStartModule("rom0:SIO2MAN", 0, NULL, &x);
     DPRINTF(" [SIO2MAN]: ID=%d, ret=%d\n", j, x);
@@ -1006,6 +1042,7 @@ int main(int argc, char *argv[])
     j = SifExecModuleBuffer(sio2man_irx, size_sio2man_irx, 0, NULL, &x);
     DPRINTF(" [SIO2MAN]: ID=%d, ret=%d\n", j, x);
 #endif
+    BootProgressStep("Loading MCMAN/MCSERV...");
 #ifdef USE_ROM_MCMAN
     j = SifLoadStartModule("rom0:MCMAN", 0, NULL, &x);
     DPRINTF(" [MCMAN]: ID=%d, ret=%d\n", j, x);
@@ -1019,6 +1056,7 @@ int main(int argc, char *argv[])
     DPRINTF(" [MCSERV]: ID=%d, ret=%d\n", j, x);
     mcInit(MC_TYPE_XMC);
 #endif
+    BootProgressStep("Loading PADMAN...");
 #ifdef USE_ROM_PADMAN
     j = SifLoadStartModule("rom0:PADMAN", 0, NULL, &x);
     DPRINTF(" [PADMAN]: ID=%d, ret=%d\n", j, x);
@@ -1027,6 +1065,7 @@ int main(int argc, char *argv[])
     DPRINTF(" [PADMAN]: ID=%d, ret=%d\n", j, x);
 #endif
 
+    BootProgressStep("Loading USB modules...");
     j = LoadUSBIRX();
     g_usb_modules_loaded = (j == 0);
     if (j != 0) {
@@ -1039,6 +1078,7 @@ int main(int argc, char *argv[])
     }
 
 #ifdef FILEXIO
+    BootProgressStep("Loading file I/O modules...");
     if (LoadFIO() < 0) {
         scr_setbgcolor(0xff0000);
         scr_clear();
@@ -1047,12 +1087,14 @@ int main(int argc, char *argv[])
 #endif
 
 #ifdef MMCE
+    BootProgressStep("Loading MMCEMAN...");
     j = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &x);
     DPRINTF(" [MMCEMAN]: ID=%d, ret=%d\n", j, x);
     g_mmce_modules_loaded = (j >= 0);
 #endif
 
 #ifdef MX4SIO
+    BootProgressStep("Loading MX4SIO...");
     j = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &x);
     DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", j, x);
     g_mx4sio_modules_loaded = (j >= 0);
@@ -1060,6 +1102,7 @@ int main(int argc, char *argv[])
 
 #ifdef HDD
     else {
+        BootProgressStep("Loading HDD modules...");
         int hdd_ret = LoadHDDIRX(); // only load HDD crap if filexio and iomanx are up and running
         if (hdd_ret < 0) {
             scr_setbgcolor(0x0000ff);
@@ -1071,13 +1114,16 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    BootProgressStep("Loading ADDDRV...");
     j = SifLoadModule("rom0:ADDDRV", 0, NULL); // Load ADDDRV. The OSD has it listed in rom0:OSDCNF/IOPBTCONF, but it is otherwise not loaded automatically.
     DPRINTF(" [ADDDRV]: %d\n", j);
 
     // Initialize libcdvd & supplement functions (which are not part of the ancient libcdvd library we use).
+    BootProgressStep("Initializing CDVD...");
     sceCdInit(SCECdINoD);
     cdInitAdd();
 
+    BootProgressStep("Initializing OSD...");
     DPRINTF("init OSD system paths\n");
     OSDInitSystemPaths();
 
@@ -1091,6 +1137,7 @@ int main(int argc, char *argv[])
     CDVDBootCertify(ROMVER); /* This is not required for the PSX, as its OSDSYS will do it before booting the update. */
 #endif
 
+    BootProgressStep("Loading system metadata...");
     DPRINTF("init OSD\n");
     InitOsd(); // Initialize OSD so kernel patches can do their magic
 
@@ -1126,6 +1173,7 @@ int main(int argc, char *argv[])
     } while ((STAT & 0x80) || (result == 0));
 
     // Remember to set the video output option (RGB or Y Cb/Pb Cr/Pr) accordingly, before SetGsCrt() is called.
+    BootProgressStep("Applying display settings...");
     DPRINTF("Setting vmode\n");
     SetGsVParam(OSDConfigGetVideoOutput() == VIDEO_OUTPUT_RGB ? VIDEO_OUTPUT_RGB : VIDEO_OUTPUT_COMPONENT);
     g_native_video_mode = detect_native_video_mode();
@@ -1140,6 +1188,7 @@ int main(int argc, char *argv[])
             EMERGENCY();
     }
     TimerEnd();
+    BootProgressStep("Loading configuration...");
     DPRINTF("load default settings\n");
     SetDefaultSettings();
     FILE *fp;
@@ -1337,6 +1386,7 @@ int main(int argc, char *argv[])
         sleep(1);
     }
 
+    BootProgressEnd();
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
     SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
