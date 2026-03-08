@@ -101,7 +101,6 @@ enum {
 };
 
 static int g_native_video_mode = CFG_VIDEO_MODE_NTSC;
-static int g_active_video_mode = CFG_VIDEO_MODE_NTSC;
 
 static int parse_video_mode_value(const char *value, int *out_mode)
 {
@@ -157,15 +156,6 @@ static void apply_loader_video_mode(int cfg_mode)
     }
 
     SetGsCrt(interlace, gs_mode, ffmd);
-    g_active_video_mode = effective_mode;
-}
-
-static void restore_native_video_mode_for_launch(void)
-{
-    if (g_active_video_mode == g_native_video_mode)
-        return;
-
-    apply_loader_video_mode(g_native_video_mode);
 }
 
 #ifndef NO_TEMP_DISP
@@ -1139,7 +1129,6 @@ int main(int argc, char *argv[])
     DPRINTF("Setting vmode\n");
     SetGsVParam(OSDConfigGetVideoOutput() == VIDEO_OUTPUT_RGB ? VIDEO_OUTPUT_RGB : VIDEO_OUTPUT_COMPONENT);
     g_native_video_mode = detect_native_video_mode();
-    g_active_video_mode = g_native_video_mode;
     DPRINTF("Init pads\n");
     PadInitPads();
     DPRINTF("Init timer and wait for rescue mode key\n");
@@ -1660,7 +1649,6 @@ void runKELF(const char *kelfpath)
     sprintf(arg3, "-x %s", kelfpath);
 
     PadDeinitPads();
-    restore_native_video_mode_for_launch();
     LoadExecPS2("moduleload", 4, args);
 }
 
@@ -2489,7 +2477,6 @@ void CleanUp(void)
     if (SplashRenderIsActive())
         SplashRenderEnd();
 
-    restore_native_video_mode_for_launch();
     sceCdInit(SCECdEXIT);
     // Keep config_buf alive so argv pointers remain valid during ELF load.
     PadDeinitPads();
