@@ -30,15 +30,11 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 ### PS2LOGO patching (PS2 discs only)
 - `$CDVD` Runs disc with logo.  PS2BBL gets the target video mode from the disc's SYSTEM.CNF and patches PS2LOGO to always use the disc region instead of the console region, removing logo checksum check.
 - `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
-- ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBL because the above 2 options cover with and wthout logo.
+  - DECKARD IE 75K and later: Logo Patches are applied via PS2SDK XPARAM.IRX
+- ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBLE because the above 2 options cover with and wthout logo.
 
-### Loader video mode
-- `VIDEO_MODE = AUTO` (default if missing) uses the console native mode from ROM region.
-- `VIDEO_MODE = NTSC` forces PS2BBL/PSXBBL runtime UI to NTSC.
-- `VIDEO_MODE = PAL` forces PS2BBL/PSXBBL runtime UI to PAL.
-- `VIDEO_MODE = 480p` forces PS2BBL/PSXBBL runtime UI to 480p progressive scan.
-- Value matching is case-insensitive (`480p` and `480P` are equivalent).
-- PS2BBL does not restore native mode before handoff; launched apps/discs inherit the current mode until they change it.
+### Video Mode
+- `VIDEO_MODE = AUTO, NTSC, PAL, 480P` Will use PS2 default or force either of the other 3 modes.
 
 ### PS1DRV options (PS1 discs only)
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
@@ -51,11 +47,11 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
 - `-dev9=<mode>` sets DEV9/HDD policy before launching the target ELF.
-- supported values:
-  - `NICHDD` keeps both DEV9 (network adapter) and HDD powered/on.
-  - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
-  - if omitted, PS2BBL does not force a DEV9 policy override.
-  - note: on non-HDD builds this option has no effect.
+  - supported modes:
+    - `NICHDD` keeps both DEV9 (network adapter) and HDD powered/on.
+    - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
+    - if omitted, PS2BBL does not force a DEV9 policy override.
+    - note: on non-HDD builds this option has no effect.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
   This is mainly for HDD builds.
 You can pass up to 8 args per entry. Args are processed in the same order they are written in the INI.
@@ -67,6 +63,16 @@ ARG_R1_E1 = -video=480p
 ARG_R1_E1 = -mode=mmce
 ARG_R1_E1 = -mode=ata
 ```
+
+### Hotkey names
+Use `LOGO_DISPLAY = 3` or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
+Use `NAME_<BUTTON> =` to set the label displayed for a hotkey when `LOGO_DISPLAY = 3` (banner + names).
+Example:
+```
+NAME_SQUARE = POPSLOADER
+```
+
+### NOT YET IMPLEMENTED
 __eGSM NOT YET IMPLEMENTED__
 - `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
   - eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
@@ -98,15 +104,6 @@ ARG_AUTO_E1 = -gsm=fp2:1
 ARG_AUTO_E1 = -dev9=NIC
 ARG_AUTO_E1 = pfs:/APPS/APP.ELF
 ```
-
-### Hotkey names
-Use `LOGO_DISPLAY = 3` or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
-Use `NAME_<BUTTON> =` to set the label displayed for a hotkey when `LOGO_DISPLAY = 3` (banner + names).
-Example:
-```
-NAME_SQUARE = POPSLOADER
-```
-
 
 ## Known bugs/issues
 
