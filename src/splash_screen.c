@@ -59,6 +59,7 @@ static int g_hotkey_clock_anchor_slot = 0;
 #define HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT 50
 #define HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP 6
 #define HOTKEY_TEXT_LINE_SPACING 21
+#define HOTKEY_TEXT_START_LINE_INDEX 16
 #define HK_MAX_CHARS 70
 
 static void copy_clamped(char *dst, size_t dst_size, const char *src, int max_chars)
@@ -581,6 +582,21 @@ void SplashRenderConsoleInfoLine(int logo_disp,
         int screen_h = SplashRenderGetScreenHeight();
         int bottom_margin_px = ((screen_h * INFO_BOTTOM_MARGIN_PERCENT) + 50) / 100;
         int y = screen_h - bottom_margin_px - GLYPH_HEIGHT_PX + INFO_Y_ADJUST;
+
+        if (logo_disp >= 3) {
+            int hotkeys_y = SplashRenderGetHotkeysY();
+            if (hotkeys_y >= 0) {
+                int start_hotkey_y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP + (HOTKEY_TEXT_START_LINE_INDEX * HOTKEY_TEXT_LINE_SPACING);
+                int min_info_y = start_hotkey_y + HOTKEY_TEXT_LINE_SPACING;
+                if (y < min_info_y)
+                    y = min_info_y;
+            }
+        }
+
+        if (y < 0)
+            y = 0;
+        if (y > screen_h - GLYPH_HEIGHT_PX)
+            y = screen_h - GLYPH_HEIGHT_PX;
 
         countdown_layout_chars = AUTOBOOT_VALUE_DEFAULT_WIDTH;
         if (autoboot_countdown != NULL && autoboot_countdown[0] != '\0') {
