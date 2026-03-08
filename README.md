@@ -32,6 +32,14 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 - `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
 - ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBL because the above 2 options cover with and wthout logo.
 
+### Loader video mode
+- `VIDEO_MODE = AUTO` (default if missing) uses the console native mode from ROM region.
+- `VIDEO_MODE = NTSC` forces PS2BBL/PSXBBL runtime UI to NTSC.
+- `VIDEO_MODE = PAL` forces PS2BBL/PSXBBL runtime UI to PAL.
+- `VIDEO_MODE = 480p` forces PS2BBL/PSXBBL runtime UI to 480p progressive scan.
+- Value matching is case-insensitive (`480p` and `480P` are equivalent).
+- PS2BBL does not restore native mode before handoff; launched apps/discs inherit the current mode until they change it.
+
 ### PS1DRV options (PS1 discs only)
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 - `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.

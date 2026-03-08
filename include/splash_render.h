@@ -4,11 +4,13 @@
 #include <tamtypes.h>
 
 int SplashRenderBegin(int logo_disp, int is_psx_desr);
+void SplashRenderSetVideoMode(int cfg_mode, int native_mode);
 void SplashRenderBeginFrame(void);
 void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text);
 void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int scale);
 void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h);
 void SplashRenderSetHotkeysVisible(int visible);
+void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms);
 void SplashRenderPresent(void);
 int SplashRenderIsActive(void);
 void SplashRenderEnd(void);

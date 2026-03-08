@@ -19,6 +19,15 @@
 #define GS_ALPHA_OPAQUE 0x80
 #define LOGO_TRANSPARENCY_PERCENT_DEFAULT 0
 #define LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS 80
+#define LOGO_SHIMMER_ENABLED 1
+#define LOGO_SHIMMER_WIDTH_PERCENT 12
+#define LOGO_SHIMMER_MIN_WIDTH_PX 8
+#define LOGO_SHIMMER_SPEED_PX_PER_FRAME 1
+#define LOGO_SHIMMER_SLICE_COUNT 18
+#define LOGO_SHIMMER_HIGHLIGHT_OPACITY_PERCENT 5
+#define LOGO_SHIMMER_HALO_OPACITY_PERCENT 3
+#define LOGO_SHIMMER_DISTORT_OPACITY_PERCENT 16
+#define LOGO_SHIMMER_DISTORT_MAX_SHIFT_PX 16
 #define GLYPH_SHADOW_TRANSPARENCY_PERCENT 40
 #define GLYPH_SHADOW_OFFSET_X 1
 #define GLYPH_SHADOW_OFFSET_Y 1
@@ -62,6 +71,13 @@ enum
     LAYER_COUNT
 };
 
+enum {
+    SPLASH_CFG_VIDEO_MODE_AUTO = 0,
+    SPLASH_CFG_VIDEO_MODE_NTSC,
+    SPLASH_CFG_VIDEO_MODE_PAL,
+    SPLASH_CFG_VIDEO_MODE_480P
+};
+
 static GSGLOBAL *g_gs = NULL;
 static SPLASH_LAYER g_layers[LAYER_COUNT];
 static int g_screen_w = 0;
@@ -72,6 +88,64 @@ static int g_logo_visible = 0;
 static int g_hotkeys_x = -1;
 static int g_hotkeys_y = -1;
 static int g_hotkeys_visible = 0;
+static int g_logo_shimmer_left = 0;
+static int g_logo_shimmer_band_width = 0;
+static int g_logo_shimmer_visible_left = 0;
+static int g_logo_shimmer_visible_right = 0;
+static int g_video_cfg_mode = SPLASH_CFG_VIDEO_MODE_AUTO;
+static int g_video_native_mode = SPLASH_CFG_VIDEO_MODE_NTSC;
+
+static int resolve_video_mode_for_splash(void)
+{
+    if (g_video_cfg_mode == SPLASH_CFG_VIDEO_MODE_AUTO)
+        return g_video_native_mode;
+    return g_video_cfg_mode;
+}
+
+static void configure_gskit_video_mode(GSGLOBAL *gs)
+{
+    int mode;
+
+    if (gs == NULL)
+        return;
+
+    mode = resolve_video_mode_for_splash();
+    switch (mode) {
+        case SPLASH_CFG_VIDEO_MODE_PAL:
+            gs->Mode = GS_MODE_PAL;
+            gs->Interlace = GS_INTERLACED;
+            gs->Field = GS_FIELD;
+            gs->Width = 640;
+            gs->Height = 512;
+            break;
+        case SPLASH_CFG_VIDEO_MODE_480P:
+            gs->Mode = GS_MODE_DTV_480P;
+            gs->Interlace = GS_NONINTERLACED;
+            gs->Field = GS_FRAME;
+            gs->Width = 640;
+            gs->Height = 448;
+            break;
+        case SPLASH_CFG_VIDEO_MODE_NTSC:
+        default:
+            gs->Mode = GS_MODE_NTSC;
+            gs->Interlace = GS_INTERLACED;
+            gs->Field = GS_FIELD;
+            gs->Width = 640;
+            gs->Height = 448;
+            break;
+    }
+}
+
+void SplashRenderSetVideoMode(int cfg_mode, int native_mode)
+{
+    if (native_mode != SPLASH_CFG_VIDEO_MODE_PAL)
+        native_mode = SPLASH_CFG_VIDEO_MODE_NTSC;
+    g_video_native_mode = native_mode;
+
+    if (cfg_mode < SPLASH_CFG_VIDEO_MODE_AUTO || cfg_mode > SPLASH_CFG_VIDEO_MODE_480P)
+        cfg_mode = SPLASH_CFG_VIDEO_MODE_AUTO;
+    g_video_cfg_mode = cfg_mode;
+}
 
 static int logo_visual_center_y(unsigned int logo_height)
 {
@@ -89,6 +163,139 @@ static unsigned char transparency_percent_to_gs_alpha(unsigned int transparency_
 
     opacity_percent = 100u - transparency_percent;
     return (unsigned char)((opacity_percent * GS_ALPHA_OPAQUE + 50u) / 100u);
+}
+
+static unsigned char opacity_percent_to_gs_alpha(unsigned int opacity_percent)
+{
+    if (opacity_percent > 100u)
+        opacity_percent = 100u;
+
+    return (unsigned char)((opacity_percent * GS_ALPHA_OPAQUE + 50u) / 100u);
+}
+
+static unsigned char get_logo_base_alpha(void)
+{
+    const unsigned int logo_transparency_percent = g_hotkeys_visible
+                                                       ? LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS
+                                                       : LOGO_TRANSPARENCY_PERCENT_DEFAULT;
+
+    return transparency_percent_to_gs_alpha(logo_transparency_percent);
+}
+
+static int compute_logo_shimmer_band_width(int logo_width)
+{
+    int band_width;
+
+    if (logo_width <= 0)
+        return 0;
+
+    band_width = ((logo_width * LOGO_SHIMMER_WIDTH_PERCENT) + 50) / 100;
+    if (band_width < LOGO_SHIMMER_MIN_WIDTH_PX)
+        band_width = LOGO_SHIMMER_MIN_WIDTH_PX;
+    if (band_width > logo_width)
+        band_width = logo_width;
+
+    return band_width;
+}
+
+static void compute_logo_visible_bounds_from_image(const SPLASH_IMAGE *logo_image,
+                                                   int *visible_left,
+                                                   int *visible_right)
+{
+    int min_x;
+    int max_x;
+    unsigned int y;
+    unsigned int x;
+
+    if (visible_left == NULL || visible_right == NULL)
+        return;
+
+    *visible_left = 0;
+    *visible_right = 0;
+    if (logo_image == NULL || logo_image->pixels_rbga == NULL || logo_image->width == 0 || logo_image->height == 0)
+        return;
+
+    min_x = (int)logo_image->width;
+    max_x = -1;
+    for (y = 0; y < logo_image->height; y++) {
+        size_t row_base = ((size_t)y * (size_t)logo_image->width * 4u);
+        for (x = 0; x < logo_image->width; x++) {
+            size_t pixel_index = row_base + ((size_t)x * 4u);
+            if (logo_image->pixels_rbga[pixel_index + 3] == 0)
+                continue;
+
+            if ((int)x < min_x)
+                min_x = (int)x;
+            if ((int)x > max_x)
+                max_x = (int)x;
+        }
+    }
+
+    if (max_x < min_x) {
+        *visible_left = 0;
+        *visible_right = (int)logo_image->width;
+        return;
+    }
+
+    *visible_left = min_x;
+    *visible_right = max_x + 1;
+}
+
+static void get_logo_shimmer_sweep_bounds(const SPLASH_LAYER *logo,
+                                          int *shimmer_min_left,
+                                          int *shimmer_max_left)
+{
+    int visible_left;
+    int visible_right;
+    int logo_width;
+
+    if (shimmer_min_left == NULL || shimmer_max_left == NULL)
+        return;
+
+    *shimmer_min_left = 0;
+    *shimmer_max_left = 0;
+    if (logo == NULL || logo->tex.Width == 0 || g_logo_shimmer_band_width <= 0)
+        return;
+
+    logo_width = (int)logo->tex.Width;
+    visible_left = g_logo_shimmer_visible_left;
+    visible_right = g_logo_shimmer_visible_right;
+    if (visible_left < 0)
+        visible_left = 0;
+    if (visible_right <= visible_left || visible_right > logo_width) {
+        visible_left = 0;
+        visible_right = logo_width;
+    }
+
+    *shimmer_min_left = visible_left - g_logo_shimmer_band_width;
+    *shimmer_max_left = visible_right + g_logo_shimmer_band_width;
+    if (*shimmer_max_left < *shimmer_min_left)
+        *shimmer_max_left = *shimmer_min_left;
+}
+
+static void reset_logo_shimmer_state(void)
+{
+    g_logo_shimmer_band_width = 0;
+    g_logo_shimmer_left = 0;
+    g_logo_shimmer_visible_left = 0;
+    g_logo_shimmer_visible_right = 0;
+}
+
+static void init_logo_shimmer_state(void)
+{
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+    int shimmer_min_left;
+    int shimmer_max_left;
+
+    if (!logo->ready || logo->tex.Width <= 0) {
+        reset_logo_shimmer_state();
+        return;
+    }
+
+    g_logo_shimmer_band_width = compute_logo_shimmer_band_width((int)logo->tex.Width);
+    get_logo_shimmer_sweep_bounds(logo, &shimmer_min_left, &shimmer_max_left);
+    g_logo_shimmer_left = shimmer_min_left;
+    (void)shimmer_max_left;
 }
 
 // 5x7 glyphs for splash labels.
@@ -255,6 +462,7 @@ static void destroy_frame_state(void)
     g_hotkeys_x = -1;
     g_hotkeys_y = -1;
     g_hotkeys_visible = 0;
+    reset_logo_shimmer_state();
 }
 
 static int upload_layer_texture(SPLASH_LAYER *layer, const SPLASH_IMAGE *img, int filter)
@@ -338,6 +546,189 @@ static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
                               GS_SETREG_RGBAQ(0x80, 0x80, 0x80, GS_ALPHA_OPAQUE, 0x00));
 }
 
+static void draw_logo_subrect(int rel_x,
+                              int rel_w,
+                              int z,
+                              unsigned char alpha,
+                              unsigned char rgb)
+{
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+
+    if (!g_logo_visible || !logo->ready || rel_w <= 0 || alpha == 0)
+        return;
+
+    if (rel_x < 0) {
+        rel_w += rel_x;
+        rel_x = 0;
+    }
+    if (rel_x >= (int)logo->tex.Width)
+        return;
+    if (rel_x + rel_w > (int)logo->tex.Width)
+        rel_w = (int)logo->tex.Width - rel_x;
+    if (rel_w <= 0)
+        return;
+
+    gsKit_prim_sprite_texture(g_gs,
+                              (GSTEXTURE *)&logo->tex,
+                              (float)(g_logo_x + rel_x),
+                              (float)g_logo_y,
+                              (float)rel_x,
+                              0.0f,
+                              (float)(g_logo_x + rel_x + rel_w),
+                              (float)(g_logo_y + (int)logo->tex.Height),
+                              (float)(rel_x + rel_w),
+                              (float)logo->tex.Height,
+                              z,
+                              GS_SETREG_RGBAQ(rgb, rgb, rgb, alpha, 0x00));
+}
+
+static void draw_logo_subrect_shifted(int rel_x,
+                                      int rel_w,
+                                      int src_shift_x,
+                                      int z,
+                                      unsigned char alpha,
+                                      unsigned char rgb)
+{
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+    int dst_x0;
+    int dst_x1;
+    int src_x0;
+    int src_x1;
+
+    if (!g_logo_visible || !logo->ready || rel_w <= 0 || alpha == 0)
+        return;
+
+    dst_x0 = rel_x;
+    dst_x1 = rel_x + rel_w;
+    if (dst_x1 <= 0 || dst_x0 >= (int)logo->tex.Width)
+        return;
+
+    if (dst_x0 < 0)
+        dst_x0 = 0;
+    if (dst_x1 > (int)logo->tex.Width)
+        dst_x1 = (int)logo->tex.Width;
+    if (dst_x0 >= dst_x1)
+        return;
+
+    src_x0 = dst_x0 + src_shift_x;
+    src_x1 = dst_x1 + src_shift_x;
+
+    if (src_x0 < 0) {
+        dst_x0 += -src_x0;
+        src_x0 = 0;
+    }
+    if (src_x1 > (int)logo->tex.Width) {
+        dst_x1 -= (src_x1 - (int)logo->tex.Width);
+        src_x1 = (int)logo->tex.Width;
+    }
+    if (dst_x0 >= dst_x1 || src_x0 >= src_x1)
+        return;
+
+    gsKit_prim_sprite_texture(g_gs,
+                              (GSTEXTURE *)&logo->tex,
+                              (float)(g_logo_x + dst_x0),
+                              (float)g_logo_y,
+                              (float)src_x0,
+                              0.0f,
+                              (float)(g_logo_x + dst_x1),
+                              (float)(g_logo_y + (int)logo->tex.Height),
+                              (float)src_x1,
+                              (float)logo->tex.Height,
+                              z,
+                              GS_SETREG_RGBAQ(rgb, rgb, rgb, alpha, 0x00));
+}
+
+static void draw_logo_shimmer_band_lens(int band_left,
+                                        int band_width,
+                                        unsigned char highlight_peak_alpha,
+                                        unsigned char halo_peak_alpha,
+                                        unsigned char distort_peak_alpha)
+{
+    int i;
+
+    if (band_width <= 0)
+        return;
+
+    for (i = 0; i < LOGO_SHIMMER_SLICE_COUNT; i++) {
+        int slice_left = band_left + ((band_width * i) / LOGO_SHIMMER_SLICE_COUNT);
+        int slice_right = band_left + ((band_width * (i + 1)) / LOGO_SHIMMER_SLICE_COUNT);
+        int slice_width = slice_right - slice_left;
+        int center_numer = (2 * i + 1) - LOGO_SHIMMER_SLICE_COUNT;
+        int abs_center_numer = abs(center_numer);
+        int edge_scale_numer = LOGO_SHIMMER_SLICE_COUNT - abs_center_numer;
+        int edge_scale_sq_numer;
+        int edge_soft_numer;
+        int distort_profile_numer;
+        int distort_shift;
+        unsigned char highlight_alpha;
+        unsigned char halo_alpha;
+        unsigned char distort_alpha;
+
+        if (slice_width <= 0 || edge_scale_numer <= 0)
+            continue;
+
+        edge_scale_sq_numer = edge_scale_numer * edge_scale_numer;
+        edge_soft_numer = (edge_scale_sq_numer * edge_scale_sq_numer);
+        highlight_alpha = (unsigned char)((highlight_peak_alpha * edge_soft_numer + 5000) / 10000);
+        halo_alpha = (unsigned char)((halo_peak_alpha * edge_scale_sq_numer + 50) / 100);
+        distort_profile_numer = 100 - ((abs_center_numer * abs_center_numer * 100) /
+                                       (LOGO_SHIMMER_SLICE_COUNT * LOGO_SHIMMER_SLICE_COUNT));
+        if (distort_profile_numer < 0)
+            distort_profile_numer = 0;
+        distort_alpha = (unsigned char)((distort_peak_alpha * edge_scale_numer + (LOGO_SHIMMER_SLICE_COUNT / 2)) /
+                                        LOGO_SHIMMER_SLICE_COUNT);
+        distort_shift = (center_numer * distort_profile_numer * LOGO_SHIMMER_DISTORT_MAX_SHIFT_PX) /
+                        (LOGO_SHIMMER_SLICE_COUNT * 100);
+
+        if (distort_alpha > 0)
+            draw_logo_subrect_shifted(slice_left, slice_width, distort_shift, FG_Z + 1, distort_alpha, 0x80);
+        if (halo_alpha > 0)
+            draw_logo_subrect(slice_left, slice_width, FG_Z + 2, halo_alpha, 0xFF);
+        if (highlight_alpha == 0)
+            continue;
+        draw_logo_subrect(slice_left, slice_width, FG_Z + 3, highlight_alpha, 0xFF);
+    }
+}
+
+static void draw_logo_shimmer_overlay(void)
+{
+#if LOGO_SHIMMER_ENABLED
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+    unsigned char base_logo_alpha;
+    unsigned char highlight_peak_alpha;
+    unsigned char halo_peak_alpha;
+    unsigned char distort_peak_alpha;
+    int shimmer_min_left;
+    int shimmer_max_left;
+
+    if (!g_logo_visible || !logo->ready || logo->tex.Width == 0)
+        return;
+
+    if (g_logo_shimmer_band_width <= 0 || g_logo_shimmer_band_width > (int)logo->tex.Width)
+        g_logo_shimmer_band_width = compute_logo_shimmer_band_width((int)logo->tex.Width);
+    if (g_logo_shimmer_band_width <= 0)
+        return;
+
+    base_logo_alpha = get_logo_base_alpha();
+    highlight_peak_alpha = opacity_percent_to_gs_alpha(LOGO_SHIMMER_HIGHLIGHT_OPACITY_PERCENT);
+    halo_peak_alpha = opacity_percent_to_gs_alpha(LOGO_SHIMMER_HALO_OPACITY_PERCENT);
+    distort_peak_alpha = opacity_percent_to_gs_alpha(LOGO_SHIMMER_DISTORT_OPACITY_PERCENT);
+    highlight_peak_alpha = (unsigned char)(((unsigned int)highlight_peak_alpha * (unsigned int)base_logo_alpha + (GS_ALPHA_OPAQUE / 2)) / GS_ALPHA_OPAQUE);
+    halo_peak_alpha = (unsigned char)(((unsigned int)halo_peak_alpha * (unsigned int)base_logo_alpha + (GS_ALPHA_OPAQUE / 2)) / GS_ALPHA_OPAQUE);
+    distort_peak_alpha = (unsigned char)(((unsigned int)distort_peak_alpha * (unsigned int)base_logo_alpha + (GS_ALPHA_OPAQUE / 2)) / GS_ALPHA_OPAQUE);
+    draw_logo_shimmer_band_lens(g_logo_shimmer_left,
+                                g_logo_shimmer_band_width,
+                                highlight_peak_alpha,
+                                halo_peak_alpha,
+                                distort_peak_alpha);
+
+    get_logo_shimmer_sweep_bounds(logo, &shimmer_min_left, &shimmer_max_left);
+    g_logo_shimmer_left += LOGO_SHIMMER_SPEED_PX_PER_FRAME;
+    if (g_logo_shimmer_left > shimmer_max_left)
+        g_logo_shimmer_left = shimmer_min_left;
+#endif
+}
+
 void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h)
 {
     int x0;
@@ -394,16 +785,49 @@ void SplashRenderSetHotkeysVisible(int visible)
     g_hotkeys_visible = (visible != 0);
 }
 
+void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms)
+{
+#if LOGO_SHIMMER_ENABLED
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+    int shimmer_min_left;
+    int shimmer_max_left;
+    int shimmer_travel;
+    u64 elapsed_ms;
+
+    if (!g_logo_visible || !logo->ready || logo->tex.Width == 0 || total_ms == 0)
+        return;
+
+    if (g_logo_shimmer_band_width <= 0 || g_logo_shimmer_band_width > (int)logo->tex.Width)
+        g_logo_shimmer_band_width = compute_logo_shimmer_band_width((int)logo->tex.Width);
+    if (g_logo_shimmer_band_width <= 0)
+        return;
+
+    if (remaining_ms > total_ms)
+        remaining_ms = total_ms;
+    elapsed_ms = total_ms - remaining_ms;
+
+    get_logo_shimmer_sweep_bounds(logo, &shimmer_min_left, &shimmer_max_left);
+    shimmer_travel = shimmer_max_left - shimmer_min_left;
+    g_logo_shimmer_left = shimmer_min_left + (int)((elapsed_ms * (u64)shimmer_travel + (total_ms / 2)) / total_ms);
+    if (g_logo_shimmer_left < shimmer_min_left)
+        g_logo_shimmer_left = shimmer_min_left;
+    if (g_logo_shimmer_left > shimmer_max_left)
+        g_logo_shimmer_left = shimmer_max_left;
+#else
+    (void)remaining_ms;
+    (void)total_ms;
+#endif
+}
+
 static void draw_static_layers(void)
 {
-    const unsigned int logo_transparency_percent = g_hotkeys_visible
-                                                       ? LOGO_TRANSPARENCY_PERCENT_WITH_HOTKEYS
-                                                       : LOGO_TRANSPARENCY_PERCENT_DEFAULT;
-    const unsigned char logo_alpha = transparency_percent_to_gs_alpha(logo_transparency_percent);
+    const unsigned char logo_alpha = get_logo_base_alpha();
 
     draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
-    if (g_logo_visible)
+    if (g_logo_visible) {
         draw_layer(&g_layers[LAYER_LOGO], g_logo_x, g_logo_y, FG_Z, logo_alpha);
+        draw_logo_shimmer_overlay();
+    }
     if (g_hotkeys_visible)
         draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z, GS_ALPHA_OPAQUE);
 }
@@ -448,6 +872,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     g_gs->DoubleBuffering = GS_SETTING_ON;
     g_gs->ZBuffering = GS_SETTING_OFF;
     g_gs->PrimAlphaEnable = GS_SETTING_ON;
+    configure_gskit_video_mode(g_gs);
     gsKit_set_primalpha(g_gs, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
     gsKit_init_screen(g_gs);
     gsKit_display_buffer(g_gs);
@@ -476,6 +901,9 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         destroy_frame_state();
         return 0;
     }
+    compute_logo_visible_bounds_from_image(logo,
+                                           &g_logo_shimmer_visible_left,
+                                           &g_logo_shimmer_visible_right);
     logo_center_y = logo_visual_center_y(logo->height);
 
     if (logo_disp == 2) {
@@ -483,6 +911,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_logo_y = center_y - logo_center_y + MODE2_LOGO_Y_FROM_CENTER;
         g_logo_visible = 1;
         g_hotkeys_visible = 0;
+        init_logo_shimmer_state();
         SplashRenderBeginFrame();
         SplashRenderPresent();
         return 1;
@@ -511,9 +940,10 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_hotkeys_x = hotkeys_x;
         g_hotkeys_y = hotkeys_y;
         g_hotkeys_visible = 1;
+        init_logo_shimmer_state();
 
-        SplashRenderBeginFrame();
-        SplashRenderPresent();
+        // For LOGO_DISPLAY 3-5, defer the first present until the caller draws
+        // hotkey text lines so the image/text appear together.
     }
 
     return 1;
