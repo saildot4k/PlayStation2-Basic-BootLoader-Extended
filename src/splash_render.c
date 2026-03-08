@@ -27,7 +27,7 @@
 #define LOGO_SHIMMER_HIGHLIGHT_OPACITY_PERCENT 5
 #define LOGO_SHIMMER_HALO_OPACITY_PERCENT 3
 #define LOGO_SHIMMER_DISTORT_OPACITY_PERCENT 16
-#define LOGO_SHIMMER_DISTORT_MAX_SHIFT_PX 10
+#define LOGO_SHIMMER_DISTORT_MAX_SHIFT_PX 12
 #define GLYPH_SHADOW_TRANSPARENCY_PERCENT 40
 #define GLYPH_SHADOW_OFFSET_X 1
 #define GLYPH_SHADOW_OFFSET_Y 1
@@ -636,6 +636,41 @@ void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h)
 void SplashRenderSetHotkeysVisible(int visible)
 {
     g_hotkeys_visible = (visible != 0);
+}
+
+void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms)
+{
+#if LOGO_SHIMMER_ENABLED
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+    int shimmer_min_left;
+    int shimmer_max_left;
+    int shimmer_travel;
+    u64 elapsed_ms;
+
+    if (!g_logo_visible || !logo->ready || logo->tex.Width == 0 || total_ms == 0)
+        return;
+
+    if (g_logo_shimmer_band_width <= 0 || g_logo_shimmer_band_width > (int)logo->tex.Width)
+        g_logo_shimmer_band_width = compute_logo_shimmer_band_width((int)logo->tex.Width);
+    if (g_logo_shimmer_band_width <= 0)
+        return;
+
+    if (remaining_ms > total_ms)
+        remaining_ms = total_ms;
+    elapsed_ms = total_ms - remaining_ms;
+
+    shimmer_min_left = -g_logo_shimmer_band_width;
+    shimmer_max_left = (int)logo->tex.Width + g_logo_shimmer_band_width;
+    shimmer_travel = shimmer_max_left - shimmer_min_left;
+    g_logo_shimmer_left = shimmer_min_left + (int)((elapsed_ms * (u64)shimmer_travel + (total_ms / 2)) / total_ms);
+    if (g_logo_shimmer_left < shimmer_min_left)
+        g_logo_shimmer_left = shimmer_min_left;
+    if (g_logo_shimmer_left > shimmer_max_left)
+        g_logo_shimmer_left = shimmer_max_left;
+#else
+    (void)remaining_ms;
+    (void)total_ms;
+#endif
 }
 
 static void draw_static_layers(void)

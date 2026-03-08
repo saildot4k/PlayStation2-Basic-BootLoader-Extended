@@ -9,6 +9,7 @@ void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text);
 void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int scale);
 void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h);
 void SplashRenderSetHotkeysVisible(int visible);
+void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms);
 void SplashRenderPresent(void);
 int SplashRenderIsActive(void);
 void SplashRenderEnd(void);

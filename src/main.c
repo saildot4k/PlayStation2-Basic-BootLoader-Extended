@@ -1380,6 +1380,8 @@ int main(int argc, char *argv[])
                 unsigned int remaining_tenths = (unsigned int)((remaining_ms % 1000u) / 100u);
 
                 snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%uS", remaining_sec, remaining_tenths);
+                if (GLOBCFG.DELAY > 0)
+                    SplashRenderSetLogoShimmerCountdown(remaining_ms, (u64)GLOBCFG.DELAY);
                 SplashRenderBeginFrame();
                 SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
                 SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
