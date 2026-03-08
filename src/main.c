@@ -87,6 +87,87 @@ static int ci_starts_with(const char *s, const char *prefix)
     return 1;
 }
 
+enum {
+    CFG_VIDEO_MODE_AUTO = 0,
+    CFG_VIDEO_MODE_NTSC,
+    CFG_VIDEO_MODE_PAL,
+    CFG_VIDEO_MODE_480P
+};
+
+enum {
+    GS_VIDEO_MODE_NTSC = 2,
+    GS_VIDEO_MODE_PAL = 3,
+    GS_VIDEO_MODE_480P = 0x50
+};
+
+static int g_native_video_mode = CFG_VIDEO_MODE_NTSC;
+static int g_active_video_mode = CFG_VIDEO_MODE_NTSC;
+
+static int parse_video_mode_value(const char *value, int *out_mode)
+{
+    int parsed_mode;
+
+    if (value == NULL)
+        return 0;
+
+    if (ci_eq(value, "AUTO"))
+        parsed_mode = CFG_VIDEO_MODE_AUTO;
+    else if (ci_eq(value, "NTSC"))
+        parsed_mode = CFG_VIDEO_MODE_NTSC;
+    else if (ci_eq(value, "PAL"))
+        parsed_mode = CFG_VIDEO_MODE_PAL;
+    else if (ci_eq(value, "480P"))
+        parsed_mode = CFG_VIDEO_MODE_480P;
+    else
+        return 0;
+
+    if (out_mode != NULL)
+        *out_mode = parsed_mode;
+
+    return 1;
+}
+
+static int detect_native_video_mode(void)
+{
+    return (OSDGetVideoMode() != 0) ? CFG_VIDEO_MODE_PAL : CFG_VIDEO_MODE_NTSC;
+}
+
+static void apply_loader_video_mode(int cfg_mode)
+{
+    int effective_mode = cfg_mode;
+    short interlace = 1;
+    short ffmd = 1;
+    short gs_mode = GS_VIDEO_MODE_NTSC;
+
+    if (effective_mode == CFG_VIDEO_MODE_AUTO)
+        effective_mode = g_native_video_mode;
+
+    switch (effective_mode) {
+        case CFG_VIDEO_MODE_PAL:
+            gs_mode = GS_VIDEO_MODE_PAL;
+            break;
+        case CFG_VIDEO_MODE_480P:
+            interlace = 0;
+            gs_mode = GS_VIDEO_MODE_480P;
+            break;
+        case CFG_VIDEO_MODE_NTSC:
+        default:
+            gs_mode = GS_VIDEO_MODE_NTSC;
+            break;
+    }
+
+    SetGsCrt(interlace, gs_mode, ffmd);
+    g_active_video_mode = effective_mode;
+}
+
+static void restore_native_video_mode_for_launch(void)
+{
+    if (g_active_video_mode == g_native_video_mode)
+        return;
+
+    apply_loader_video_mode(g_native_video_mode);
+}
+
 #ifndef NO_TEMP_DISP
 // Query CDVD thermal sensor and return formatted Celsius string when supported.
 static int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
@@ -144,6 +225,7 @@ typedef struct
     int PS1DRV_ENABLE_FAST;
     int PS1DRV_ENABLE_SMOOTH;
     int PS1DRV_USE_PS1VN;
+    int VIDEO_MODE;
 } CONFIG;
 CONFIG GLOBCFG;
 static int g_pre_scanned = 0;
@@ -1056,6 +1138,8 @@ int main(int argc, char *argv[])
     // Remember to set the video output option (RGB or Y Cb/Pb Cr/Pr) accordingly, before SetGsCrt() is called.
     DPRINTF("Setting vmode\n");
     SetGsVParam(OSDConfigGetVideoOutput() == VIDEO_OUTPUT_RGB ? VIDEO_OUTPUT_RGB : VIDEO_OUTPUT_COMPONENT);
+    g_native_video_mode = detect_native_video_mode();
+    g_active_video_mode = g_native_video_mode;
     DPRINTF("Init pads\n");
     PadInitPads();
     DPRINTF("Init timer and wait for rescue mode key\n");
@@ -1153,6 +1237,14 @@ int main(int argc, char *argv[])
                     }
                     if (ci_eq(name, "PS1DRV_USE_PS1VN")) {
                         GLOBCFG.PS1DRV_USE_PS1VN = atoi(value);
+                        continue;
+                    }
+                    if (ci_eq(name, "VIDEO_MODE")) {
+                        int parsed_video_mode;
+                        if (parse_video_mode_value(value, &parsed_video_mode))
+                            GLOBCFG.VIDEO_MODE = parsed_video_mode;
+                        else
+                            DPRINTF("Ignoring invalid VIDEO_MODE value '%s'\n", value);
                         continue;
                     }
                     if (ci_starts_with(name, "NAME_")) {
@@ -1253,6 +1345,7 @@ int main(int argc, char *argv[])
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
+    apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
     int dev_ok[DEV_COUNT];
 
     // Stores last key during DELAY msec
@@ -1567,6 +1660,7 @@ void runKELF(const char *kelfpath)
     sprintf(arg3, "-x %s", kelfpath);
 
     PadDeinitPads();
+    restore_native_video_mode_for_launch();
     LoadExecPS2("moduleload", 4, args);
 }
 
@@ -1652,6 +1746,7 @@ void SetDefaultSettings(void)
     GLOBCFG.PS1DRV_ENABLE_FAST = PS1DRV_ENABLE_FAST_DEFAULT;
     GLOBCFG.PS1DRV_ENABLE_SMOOTH = PS1DRV_ENABLE_SMOOTH_DEFAULT;
     GLOBCFG.PS1DRV_USE_PS1VN = PS1DRV_USE_PS1VN_DEFAULT;
+    GLOBCFG.VIDEO_MODE = CFG_VIDEO_MODE_AUTO;
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
 }
 
@@ -2394,6 +2489,7 @@ void CleanUp(void)
     if (SplashRenderIsActive())
         SplashRenderEnd();
 
+    restore_native_video_mode_for_launch();
     sceCdInit(SCECdEXIT);
     // Keep config_buf alive so argv pointers remain valid during ELF load.
     PadDeinitPads();
