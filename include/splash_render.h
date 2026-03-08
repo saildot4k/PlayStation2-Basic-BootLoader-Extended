@@ -4,6 +4,7 @@
 #include <tamtypes.h>
 
 int SplashRenderBegin(int logo_disp, int is_psx_desr);
+void SplashRenderSetVideoMode(int cfg_mode, int native_mode);
 void SplashRenderBeginFrame(void);
 void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text);
 void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int scale);

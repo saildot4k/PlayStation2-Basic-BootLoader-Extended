@@ -1335,6 +1335,7 @@ int main(int argc, char *argv[])
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
     apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+    SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
     int dev_ok[DEV_COUNT];
 
     // Stores last key during DELAY msec
@@ -1379,8 +1380,6 @@ int main(int argc, char *argv[])
 #endif
 
         SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-        if (GLOBCFG.LOGO_DISP >= 1)
-            apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
 
         if (GLOBCFG.LOGO_DISP > 0) {
             model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));

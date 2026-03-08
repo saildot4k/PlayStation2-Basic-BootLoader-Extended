@@ -71,6 +71,19 @@ enum
     LAYER_COUNT
 };
 
+enum {
+    SPLASH_CFG_VIDEO_MODE_AUTO = 0,
+    SPLASH_CFG_VIDEO_MODE_NTSC,
+    SPLASH_CFG_VIDEO_MODE_PAL,
+    SPLASH_CFG_VIDEO_MODE_480P
+};
+
+enum {
+    SPLASH_GS_MODE_NTSC = 2,
+    SPLASH_GS_MODE_PAL = 3,
+    SPLASH_GS_MODE_480P = 0x50
+};
+
 static GSGLOBAL *g_gs = NULL;
 static SPLASH_LAYER g_layers[LAYER_COUNT];
 static int g_screen_w = 0;
@@ -85,6 +98,54 @@ static int g_logo_shimmer_left = 0;
 static int g_logo_shimmer_band_width = 0;
 static int g_logo_shimmer_visible_left = 0;
 static int g_logo_shimmer_visible_right = 0;
+static int g_video_cfg_mode = SPLASH_CFG_VIDEO_MODE_AUTO;
+static int g_video_native_mode = SPLASH_CFG_VIDEO_MODE_NTSC;
+
+static int resolve_video_mode_for_splash(void)
+{
+    if (g_video_cfg_mode == SPLASH_CFG_VIDEO_MODE_AUTO)
+        return g_video_native_mode;
+    return g_video_cfg_mode;
+}
+
+static void configure_gskit_video_mode(GSGLOBAL *gs)
+{
+    int mode;
+
+    if (gs == NULL)
+        return;
+
+    mode = resolve_video_mode_for_splash();
+    switch (mode) {
+        case SPLASH_CFG_VIDEO_MODE_PAL:
+            gs->Interlace = 1;
+            gs->Field = 1;
+            gs->Mode = SPLASH_GS_MODE_PAL;
+            break;
+        case SPLASH_CFG_VIDEO_MODE_480P:
+            gs->Interlace = 0;
+            gs->Field = 1;
+            gs->Mode = SPLASH_GS_MODE_480P;
+            break;
+        case SPLASH_CFG_VIDEO_MODE_NTSC:
+        default:
+            gs->Interlace = 1;
+            gs->Field = 1;
+            gs->Mode = SPLASH_GS_MODE_NTSC;
+            break;
+    }
+}
+
+void SplashRenderSetVideoMode(int cfg_mode, int native_mode)
+{
+    if (native_mode != SPLASH_CFG_VIDEO_MODE_PAL)
+        native_mode = SPLASH_CFG_VIDEO_MODE_NTSC;
+    g_video_native_mode = native_mode;
+
+    if (cfg_mode < SPLASH_CFG_VIDEO_MODE_AUTO || cfg_mode > SPLASH_CFG_VIDEO_MODE_480P)
+        cfg_mode = SPLASH_CFG_VIDEO_MODE_AUTO;
+    g_video_cfg_mode = cfg_mode;
+}
 
 static int logo_visual_center_y(unsigned int logo_height)
 {
@@ -811,6 +872,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     g_gs->DoubleBuffering = GS_SETTING_ON;
     g_gs->ZBuffering = GS_SETTING_OFF;
     g_gs->PrimAlphaEnable = GS_SETTING_ON;
+    configure_gskit_video_mode(g_gs);
     gsKit_set_primalpha(g_gs, GS_SETREG_ALPHA(0, 1, 0, 1, 0), 0);
     gsKit_init_screen(g_gs);
     gsKit_display_buffer(g_gs);
