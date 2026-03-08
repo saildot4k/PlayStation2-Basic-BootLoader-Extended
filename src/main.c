@@ -1379,6 +1379,8 @@ int main(int argc, char *argv[])
 #endif
 
         SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+        if (GLOBCFG.LOGO_DISP >= 1)
+            apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
 
         if (GLOBCFG.LOGO_DISP > 0) {
             model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
