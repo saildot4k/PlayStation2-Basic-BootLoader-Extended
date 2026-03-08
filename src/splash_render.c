@@ -78,12 +78,6 @@ enum {
     SPLASH_CFG_VIDEO_MODE_480P
 };
 
-enum {
-    SPLASH_GS_MODE_NTSC = 2,
-    SPLASH_GS_MODE_PAL = 3,
-    SPLASH_GS_MODE_480P = 0x50
-};
-
 static GSGLOBAL *g_gs = NULL;
 static SPLASH_LAYER g_layers[LAYER_COUNT];
 static int g_screen_w = 0;
@@ -118,20 +112,26 @@ static void configure_gskit_video_mode(GSGLOBAL *gs)
     mode = resolve_video_mode_for_splash();
     switch (mode) {
         case SPLASH_CFG_VIDEO_MODE_PAL:
-            gs->Interlace = 1;
-            gs->Field = 1;
-            gs->Mode = SPLASH_GS_MODE_PAL;
+            gs->Mode = GS_MODE_PAL;
+            gs->Interlace = GS_INTERLACED;
+            gs->Field = GS_FIELD;
+            gs->Width = 640;
+            gs->Height = 512;
             break;
         case SPLASH_CFG_VIDEO_MODE_480P:
-            gs->Interlace = 0;
-            gs->Field = 1;
-            gs->Mode = SPLASH_GS_MODE_480P;
+            gs->Mode = GS_MODE_DTV_480P;
+            gs->Interlace = GS_NONINTERLACED;
+            gs->Field = GS_FRAME;
+            gs->Width = 640;
+            gs->Height = 448;
             break;
         case SPLASH_CFG_VIDEO_MODE_NTSC:
         default:
-            gs->Interlace = 1;
-            gs->Field = 1;
-            gs->Mode = SPLASH_GS_MODE_NTSC;
+            gs->Mode = GS_MODE_NTSC;
+            gs->Interlace = GS_INTERLACED;
+            gs->Field = GS_FIELD;
+            gs->Width = 640;
+            gs->Height = 448;
             break;
     }
 }
