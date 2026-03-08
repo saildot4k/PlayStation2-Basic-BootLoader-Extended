@@ -64,7 +64,13 @@ ARG_R1_E1 = -mode=ata
 ```
 
 ### Hotkey names
-Use `LOGO_DISPLAY = 3` or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
+Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
+  - `0` No Logo/Console info
+  - `1` Console Info
+  - `2` PS2BBLE/PSXBBLE Logo and Console Info
+  - `3` Hotkey Graphic Display with `NAME_BUTTON = <TITLE>` displayed from config file
+  - `4` Hotkey Graphic Display with first found file as defined in config
+  - `5` Hotkey Graphic Display with first found file path as defined in config
 Use `NAME_<BUTTON> =` to set the label displayed for a hotkey when `LOGO_DISPLAY = 3` (banner + names).
 Example:
 ```
@@ -106,7 +112,6 @@ ARG_AUTO_E1 = pfs:/APPS/APP.ELF
 
 ## Known bugs/issues
 
-- Master Patched Disc logos may be inverted. No fix incmoning - PCM720
 you tell me ;)
 
 ## Credits & Thanks
