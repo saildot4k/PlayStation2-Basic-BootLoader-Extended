@@ -2,12 +2,13 @@
 #define SPLASH_SCREEN_H
 
 #include <tamtypes.h>
+#include "key_count.h"
 
 void SplashRenderTextBody(int logo_disp,
                           int is_psx_desr);
 
 void SplashRenderHotkeyLines(int logo_disp,
-                             const char *const hotkey_lines[17]);
+                             const char *const hotkey_lines[KEY_COUNT]);
 void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms);
 
 void SplashRenderConsoleInfoLine(int logo_disp,
