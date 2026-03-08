@@ -22,9 +22,9 @@
 #define LOGO_SHIMMER_ENABLED 1
 #define LOGO_SHIMMER_WIDTH_PERCENT 18
 #define LOGO_SHIMMER_MIN_WIDTH_PX 18
-#define LOGO_SHIMMER_SPEED_PX_PER_FRAME 2
+#define LOGO_SHIMMER_SPEED_PX_PER_FRAME 1
 #define LOGO_SHIMMER_SLICE_COUNT 9
-#define LOGO_SHIMMER_OPACITY_PERCENT 35
+#define LOGO_SHIMMER_OPACITY_PERCENT 70
 #define LOGO_SHIMMER_POS_INVALID (-10000)
 #define GLYPH_SHADOW_TRANSPARENCY_PERCENT 40
 #define GLYPH_SHADOW_OFFSET_X 1
@@ -561,10 +561,20 @@ static void draw_static_layers(void)
     const unsigned char logo_alpha = get_logo_base_alpha();
 
     draw_layer_stretched(&g_layers[LAYER_BG], BG_Z);
-    if (g_logo_visible)
+    if (g_logo_visible) {
         draw_layer(&g_layers[LAYER_LOGO], g_logo_x, g_logo_y, FG_Z, logo_alpha);
+        draw_logo_shimmer_overlay();
+    }
     if (g_hotkeys_visible)
         draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z, GS_ALPHA_OPAQUE);
+}
+
+void SplashRenderAnimateLogoShimmer(void)
+{
+    if (g_gs == NULL)
+        return;
+
+    draw_logo_shimmer_overlay();
 }
 
 void SplashRenderBeginFrame(void)
@@ -581,7 +591,6 @@ void SplashRenderPresent(void)
     if (g_gs == NULL)
         return;
 
-    draw_logo_shimmer_overlay();
     gsKit_queue_exec(g_gs);
     gsKit_finish();
     gsKit_sync_flip(g_gs);
@@ -674,8 +683,8 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_hotkeys_visible = 1;
         init_logo_shimmer_state();
 
-        SplashRenderBeginFrame();
-        SplashRenderPresent();
+        // For LOGO_DISPLAY 3-5, defer the first present until the caller draws
+        // hotkey text lines so the image/text appear together.
     }
 
     return 1;

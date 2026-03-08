@@ -1365,6 +1365,8 @@ int main(int argc, char *argv[])
             u64 now = Timer();
 
             if (SplashRenderIsActive()) {
+                SplashRenderAnimateLogoShimmer();
+                SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
 #ifndef NO_TEMP_DISP
                 if (temp_supported) {
                     if (QueryTemperatureCelsius(temp_query_buf, sizeof(temp_query_buf))) {
