@@ -1,6 +1,8 @@
 #ifndef COMMONDEF
 #define COMMONDEF
 
+#include "key_count.h"
+
 #define CONFIG_KEY_INDEXES 10       // number of paths to scan per hotkey, however the list below will need to match this value
 #define MAX_ARGS_PER_ENTRY 8        // max number of ARG_* entries per LK_* slot
 #define MAX_LEN     64              // max length for hotkey display names (after formatting)
@@ -116,7 +118,7 @@ enum
 } KEYS;
 
 /** string alias of dualshock keys for config file */
-const char *KEYS_ID[17] = {
+const char *KEYS_ID[KEY_COUNT] = {
     "AUTO",
     "SELECT",   // 0x0001
     "L3",       // 0x0002
@@ -138,7 +140,7 @@ const char *KEYS_ID[17] = {
 
 /** default hotkey names used when LOGO_DISPLAY = 3 */
 #ifdef PSX
-    const char *DEFAULT_KEYNAMES_PSX[17] = {
+    const char *DEFAULT_KEYNAMES_PSX[KEY_COUNT] = {
         "wLE ISR (MMCE -> MX -> exFAT",
         "DISC NO LOGO",
         "L3",
@@ -158,7 +160,7 @@ const char *KEYS_ID[17] = {
         "POPSLOADER",
     };
 #endif
-    const char *DEFAULT_KEYNAMES_PS2[17] = {
+    const char *DEFAULT_KEYNAMES_PS2[KEY_COUNT] = {
         "HACKED OSDSYS",
         "DISC NO LOGO",
         "L3",

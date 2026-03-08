@@ -130,10 +130,10 @@ static int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
 // --------------- glob stuff --------------- //
 typedef struct
 {
-    char *KEYPATHS[17][CONFIG_KEY_INDEXES];
-    char *KEYARGS[17][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
-    int KEYARGC[17][CONFIG_KEY_INDEXES];
-    const char *KEYNAMES[17];
+    char *KEYPATHS[KEY_COUNT][CONFIG_KEY_INDEXES];
+    char *KEYARGS[KEY_COUNT][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
+    int KEYARGC[KEY_COUNT][CONFIG_KEY_INDEXES];
+    const char *KEYNAMES[KEY_COUNT];
     int HOTKEY_DISPLAY; // derived from LOGO_DISP (0=off, 1=defined name, 2=filename, 3=path)
     int DELAY;
     int OSDHISTORY_READ;
@@ -445,7 +445,7 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
 }
 
 static void RestoreSplashInteractiveUi(int logo_disp,
-                                       const char *const hotkey_lines[17],
+                                       const char *const hotkey_lines[KEY_COUNT],
                                        const char *model,
                                        const char *rom_fmt,
                                        const char *dvdver,
@@ -626,7 +626,7 @@ static int entry_has_arg_ci(int key_idx, int entry_idx, const char *arg)
 
     if (arg == NULL)
         return 0;
-    if (key_idx < 0 || key_idx >= 17)
+    if (key_idx < 0 || key_idx >= KEY_COUNT)
         return 0;
     if (entry_idx < 0 || entry_idx >= CONFIG_KEY_INDEXES)
         return 0;
@@ -705,17 +705,17 @@ static int logo_to_hotkey_display(int logo_disp)
 // Validate paths, clear invalid entries, and set display names per mode.
 static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 {
-    static char name_buf[17][MAX_LEN];
+    static char name_buf[KEY_COUNT][MAX_LEN];
     int dev_ok[DEV_COUNT];
-    const char *first_valid[17];
+    const char *first_valid[KEY_COUNT];
     int i, j;
 
-    for (i = 0; i < 17; i++)
+    for (i = 0; i < KEY_COUNT; i++)
         first_valid[i] = NULL;
 
     if (scan_paths) {
         build_device_available_cache(dev_ok, DEV_COUNT);
-        for (i = 0; i < 17; i++) {
+        for (i = 0; i < KEY_COUNT; i++) {
             int found = 0;
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
@@ -784,14 +784,14 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     if (display_mode < 0 || display_mode > 3)
         display_mode = 0;
     if (display_mode == 0) {
-        for (i = 0; i < 17; i++)
+        for (i = 0; i < KEY_COUNT; i++)
             GLOBCFG.KEYNAMES[i] = "";
         return;
     }
     if (display_mode == 1)
         return; // keep user-defined names
 
-    for (i = 0; i < 17; i++) {
+    for (i = 0; i < KEY_COUNT; i++) {
         if (display_mode == 3) {
             GLOBCFG.KEYNAMES[i] = (first_valid[i] != NULL) ? first_valid[i] : "";
         } else {
@@ -1156,7 +1156,7 @@ int main(int argc, char *argv[])
                         continue;
                     }
                     if (ci_starts_with(name, "NAME_")) {
-                        for (x = 0; x < 17; x++) {
+                        for (x = 0; x < KEY_COUNT; x++) {
                             sprintf(TMP, "NAME_%s", KEYS_ID[x]);
                             if (ci_eq(name, TMP)) {
                                 if (value == NULL || *value == '\0')
@@ -1169,7 +1169,7 @@ int main(int argc, char *argv[])
                         continue;
                     }
                     if (ci_starts_with(name, "ARG_")) {
-                        for (x = 0; x < 17; x++) {
+                        for (x = 0; x < KEY_COUNT; x++) {
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                                 sprintf(TMP, "ARG_%s_E%d", KEYS_ID[x], j + 1);
                                 if (ci_eq(name, TMP)) {
@@ -1188,7 +1188,7 @@ int main(int argc, char *argv[])
                         continue;
                     }
                     if (ci_starts_with(name, "LK_")) {
-                        for (x = 0; x < 17; x++) {
+                        for (x = 0; x < KEY_COUNT; x++) {
                             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                                 sprintf(TMP, "LK_%s_E%d", KEYS_ID[x], j + 1);
                                 if (ci_eq(name, TMP)) {
@@ -1241,7 +1241,7 @@ int main(int argc, char *argv[])
         if (!g_is_psx_desr)
             default_paths = DEFPATH_PS2;
 #endif
-        for (x = 0; x < 17; x++)
+        for (x = 0; x < KEY_COUNT; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = default_paths[CONFIG_KEY_INDEXES * x + j];
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
@@ -1270,7 +1270,7 @@ int main(int argc, char *argv[])
         const char *dvdver = "";
         const char *source = "";
         const char *temp_celsius = NULL;
-        const char *hotkey_lines[17] = {
+        const char *hotkey_lines[KEY_COUNT] = {
             GLOBCFG.KEYNAMES[AUTO],
             GLOBCFG.KEYNAMES[TRIANGLE],
             GLOBCFG.KEYNAMES[CIRCLE],
@@ -1618,13 +1618,13 @@ void SetDefaultSettings(void)
 #else
     const char **default_keynames = DEFAULT_KEYNAMES;
 #endif
-    for (i = 0; i < 17; i++)
+    for (i = 0; i < KEY_COUNT; i++)
         for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             GLOBCFG.KEYPATHS[i][j] = "isra:/";
             GLOBCFG.KEYARGC[i][j] = 0;
             memset(GLOBCFG.KEYARGS[i][j], 0, sizeof(GLOBCFG.KEYARGS[i][j]));
         }
-    for (i = 0; i < 17; i++)
+    for (i = 0; i < KEY_COUNT; i++)
         GLOBCFG.KEYNAMES[i] = default_keynames[i];
     GLOBCFG.OSDHISTORY_READ = 1;
     GLOBCFG.DELAY = DEFDELAY;
