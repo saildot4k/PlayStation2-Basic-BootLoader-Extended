@@ -800,6 +800,7 @@ void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms)
     const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
     int shimmer_min_left;
     int shimmer_max_left;
+    int countdown_max_left;
     int shimmer_travel;
     u64 elapsed_ms;
 
@@ -816,6 +817,15 @@ void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms)
     elapsed_ms = total_ms - remaining_ms;
 
     get_logo_shimmer_sweep_bounds(logo, &shimmer_min_left, &shimmer_max_left);
+    if (g_logo_shimmer_visible_right > 0 && g_logo_shimmer_visible_right <= (int)logo->tex.Width)
+        countdown_max_left = g_logo_shimmer_visible_right - 1;
+    else
+        countdown_max_left = (int)logo->tex.Width - 1;
+    if (countdown_max_left < shimmer_min_left)
+        countdown_max_left = shimmer_min_left;
+    if (shimmer_max_left > countdown_max_left)
+        shimmer_max_left = countdown_max_left;
+
     shimmer_travel = shimmer_max_left - shimmer_min_left;
     g_logo_shimmer_left = shimmer_min_left + (int)((elapsed_ms * (u64)shimmer_travel + (total_ms / 2)) / total_ms);
     if (g_logo_shimmer_left < shimmer_min_left)

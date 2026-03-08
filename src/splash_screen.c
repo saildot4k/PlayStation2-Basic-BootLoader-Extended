@@ -24,12 +24,14 @@
 #define HOTKEY_CLOCK_COUNTDOWN_MAX_CHARS 16
 #define HOTKEY_CLOCK_TIME_MAX_CHARS 11
 #define HOTKEY_CLOCK_DATE_MAX_CHARS 10
+#define HOTKEY_CLOCK_BLOCK_MAX_CHARS HOTKEY_CLOCK_COUNTDOWN_MAX_CHARS
 #define HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT 1
 
 typedef struct
 {
     int visible;
     int last_chars;
+    int right_anchor_x;
     char text[HOTKEY_CLOCK_COUNTDOWN_MAX_CHARS + 1];
 } CountdownState;
 
@@ -66,7 +68,9 @@ typedef struct
     int anchor_slot;
 } HotkeyClockState;
 
-static CountdownState g_countdown = {0};
+static CountdownState g_countdown = {
+    .right_anchor_x = -1,
+};
 static TempState g_temp = {0};
 static HotkeyClockState g_hotkey_clock = {
     .year = HOTKEY_CLOCK_DATE_YEAR_BASE,
@@ -460,6 +464,8 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     int screen_h;
     int left_anchor_x;
     int right_anchor_x;
+    int max_block_width;
+    int block_x;
     int has_countdown;
     int countdown_y;
     int time_y;
@@ -472,12 +478,8 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     int date_x;
     int clear_right_x;
     int clear_left_anchor_x;
-    int clear_countdown_x;
-    int clear_time_x;
-    int clear_date_x;
-    int clear_countdown_w;
-    int clear_time_w;
-    int clear_date_w;
+    int clear_block_x;
+    int clear_block_w;
     int text_bottom_y;
     int i;
     u64 elapsed_ms;
@@ -533,15 +535,27 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     screen_h = SplashRenderGetScreenHeight();
     left_anchor_x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
     right_anchor_x = screen_w - left_anchor_x;
+    if (g_countdown.right_anchor_x >= 0)
+        right_anchor_x = g_countdown.right_anchor_x;
 
     right_anchor_x = clamp_int(right_anchor_x, 0, screen_w);
 
     countdown_width = (int)strlen(countdown_text) * GLYPH_ADVANCE_PX;
     time_width = (int)strlen(time_text) * GLYPH_ADVANCE_PX;
     date_width = (int)strlen(date_text) * GLYPH_ADVANCE_PX;
-    countdown_x = clamp_int(right_anchor_x - countdown_width, 0, screen_w);
-    time_x = clamp_int(right_anchor_x - time_width, 0, screen_w);
-    date_x = clamp_int(right_anchor_x - date_width, 0, screen_w);
+    max_block_width = countdown_width;
+    if (time_width > max_block_width)
+        max_block_width = time_width;
+    if (date_width > max_block_width)
+        max_block_width = date_width;
+    if (right_anchor_x < max_block_width)
+        right_anchor_x = max_block_width;
+    if (right_anchor_x > screen_w)
+        right_anchor_x = screen_w;
+    block_x = right_anchor_x - max_block_width;
+    countdown_x = block_x;
+    time_x = block_x;
+    date_x = block_x;
 
     countdown_y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP;
     time_y = countdown_y + HOTKEY_CLOCK_DATE_LINE_SPACING;
@@ -562,35 +576,22 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
         }
     }
 
-    clear_countdown_x = clear_left_anchor_x - ((HOTKEY_CLOCK_COUNTDOWN_MAX_CHARS + HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT) * GLYPH_ADVANCE_PX);
-    if (clear_countdown_x < 0)
-        clear_countdown_x = 0;
-    clear_time_x = clear_left_anchor_x - ((HOTKEY_CLOCK_TIME_MAX_CHARS + HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT) * GLYPH_ADVANCE_PX);
-    if (clear_time_x < 0)
-        clear_time_x = 0;
-    clear_date_x = clear_left_anchor_x - ((HOTKEY_CLOCK_DATE_MAX_CHARS + HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT) * GLYPH_ADVANCE_PX);
-    if (clear_date_x < 0)
-        clear_date_x = 0;
-
-    clear_countdown_w = clear_right_x - clear_countdown_x;
-    clear_time_w = clear_right_x - clear_time_x;
-    clear_date_w = clear_right_x - clear_date_x;
-    if (clear_countdown_w > 0) {
-        SplashRenderRestoreBackgroundRect(clear_countdown_x,
+    clear_block_x = clear_left_anchor_x - ((HOTKEY_CLOCK_BLOCK_MAX_CHARS + HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT) * GLYPH_ADVANCE_PX);
+    if (clear_block_x < 0)
+        clear_block_x = 0;
+    clear_block_w = clear_right_x - clear_block_x;
+    if (clear_block_w > 0) {
+        SplashRenderRestoreBackgroundRect(clear_block_x,
                                           countdown_y,
-                                          clear_countdown_w + GLYPH_SHADOW_PAD_X,
+                                          clear_block_w + GLYPH_SHADOW_PAD_X,
                                           GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
-    }
-    if (clear_time_w > 0) {
-        SplashRenderRestoreBackgroundRect(clear_time_x,
+        SplashRenderRestoreBackgroundRect(clear_block_x,
                                           time_y,
-                                          clear_time_w + GLYPH_SHADOW_PAD_X,
+                                          clear_block_w + GLYPH_SHADOW_PAD_X,
                                           GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
-    }
-    if (clear_date_w > 0) {
-        SplashRenderRestoreBackgroundRect(clear_date_x,
+        SplashRenderRestoreBackgroundRect(clear_block_x,
                                           date_y,
-                                          clear_date_w + GLYPH_SHADOW_PAD_X,
+                                          clear_block_w + GLYPH_SHADOW_PAD_X,
                                           GLYPH_HEIGHT_PX + GLYPH_SHADOW_PAD_Y);
     }
 
@@ -617,6 +618,7 @@ static void reset_console_info_overlay_state(void)
 {
     g_countdown.visible = 0;
     g_countdown.last_chars = 0;
+    g_countdown.right_anchor_x = -1;
     g_countdown.text[0] = '\0';
     g_temp.visible = 0;
 }
@@ -689,6 +691,7 @@ static void draw_console_info_overlay(const char *info_line,
     x = SplashRenderGetScreenCenterX() - (line_width_px / 2) + INFO_CENTER_ADJUST_X;
 
     SplashRenderDrawTextPxScaled(x, y, INFO_TEXT_COLOR, info_line, 1);
+    g_countdown.right_anchor_x = x + line_width_px;
 
     update_temp_overlay_anchor(info_line, x, y, has_temp);
 
