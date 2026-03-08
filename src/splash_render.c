@@ -23,6 +23,8 @@
 #define LOGO_SHIMMER_WIDTH_PERCENT 12
 #define LOGO_SHIMMER_MIN_WIDTH_PX 8
 #define LOGO_SHIMMER_SPEED_PX_PER_FRAME 1
+#define LOGO_SHIMMER_EDGE_INSET_PERCENT 25
+#define LOGO_SHIMMER_EDGE_INSET_MIN_PX 4
 #define LOGO_SHIMMER_SLICE_COUNT 18
 #define LOGO_SHIMMER_HIGHLIGHT_OPACITY_PERCENT 5
 #define LOGO_SHIMMER_HALO_OPACITY_PERCENT 3
@@ -248,6 +250,7 @@ static void get_logo_shimmer_sweep_bounds(const SPLASH_LAYER *logo,
     int visible_left;
     int visible_right;
     int logo_width;
+    int edge_inset;
 
     if (shimmer_min_left == NULL || shimmer_max_left == NULL)
         return;
@@ -267,8 +270,14 @@ static void get_logo_shimmer_sweep_bounds(const SPLASH_LAYER *logo,
         visible_right = logo_width;
     }
 
-    *shimmer_min_left = visible_left - g_logo_shimmer_band_width;
-    *shimmer_max_left = visible_right + g_logo_shimmer_band_width;
+    edge_inset = ((g_logo_shimmer_band_width * LOGO_SHIMMER_EDGE_INSET_PERCENT) + 50) / 100;
+    if (edge_inset < LOGO_SHIMMER_EDGE_INSET_MIN_PX)
+        edge_inset = LOGO_SHIMMER_EDGE_INSET_MIN_PX;
+    if (edge_inset > g_logo_shimmer_band_width)
+        edge_inset = g_logo_shimmer_band_width;
+
+    *shimmer_min_left = visible_left - g_logo_shimmer_band_width + edge_inset;
+    *shimmer_max_left = visible_right + g_logo_shimmer_band_width - edge_inset;
     if (*shimmer_max_left < *shimmer_min_left)
         *shimmer_max_left = *shimmer_min_left;
 }
