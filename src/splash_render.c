@@ -569,14 +569,6 @@ static void draw_static_layers(void)
         draw_layer(&g_layers[LAYER_HOTKEYS], g_hotkeys_x, g_hotkeys_y, FG_Z, GS_ALPHA_OPAQUE);
 }
 
-void SplashRenderAnimateLogoShimmer(void)
-{
-    if (g_gs == NULL)
-        return;
-
-    draw_logo_shimmer_overlay();
-}
-
 void SplashRenderBeginFrame(void)
 {
     if (g_gs == NULL)

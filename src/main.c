@@ -1365,15 +1365,14 @@ int main(int argc, char *argv[])
             u64 now = Timer();
 
             if (SplashRenderIsActive()) {
-                SplashRenderAnimateLogoShimmer();
-                SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+                const char *render_temp = temp_celsius;
 #ifndef NO_TEMP_DISP
                 if (temp_supported) {
                     if (QueryTemperatureCelsius(temp_query_buf, sizeof(temp_query_buf))) {
                         strncpy(temp_render_buf, temp_query_buf, sizeof(temp_render_buf));
                         temp_render_buf[sizeof(temp_render_buf) - 1] = '\0';
                     }
-                    SplashRenderConsoleInfoTemperatureOnly(temp_render_buf);
+                    render_temp = temp_render_buf;
                 }
 #endif
                 u64 remaining_ms = (now <= deadline) ? (deadline - now) : 0;
@@ -1381,7 +1380,16 @@ int main(int argc, char *argv[])
                 unsigned int remaining_tenths = (unsigned int)((remaining_ms % 1000u) / 100u);
 
                 snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%uS", remaining_sec, remaining_tenths);
-                SplashRenderConsoleInfoCountdownOnly(autoboot_text);
+                SplashRenderBeginFrame();
+                SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+                SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                            model,
+                                            rom_fmt,
+                                            dvdver,
+                                            ps1ver,
+                                            render_temp,
+                                            autoboot_text,
+                                            source);
                 SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, now);
                 SplashRenderPresent();
             }
