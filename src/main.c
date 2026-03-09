@@ -950,47 +950,335 @@ static const char *const g_psx_desr_rom_prefixes[] = {
 int PAD = 0;
 unsigned char *config_buf = NULL; // pointer to allocated config file
 static int g_video_mode_selector_requested = 0;
+static int g_block_hotkeys_until_release = 0;
+static int g_hotkey_launches_enabled = 1;
+static char g_config_path_in_use[256] = "";
 
 #define RESCUE_COMBO_WINDOW_MS 2000
-#define VIDEO_SELECTOR_BOX_WIDTH 460
-#define VIDEO_SELECTOR_BOX_HEIGHT 98
-#define VIDEO_SELECTOR_BOX_RADIUS 10
+#define VIDEO_SELECTOR_TEXT_COLOR 0xffffff
+#define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
+#define VIDEO_SELECTOR_SELECT_COLOR 0xffff00
 #define VIDEO_SELECTOR_BOX_BG_COLOR 0x606060
 #define VIDEO_SELECTOR_BOX_BG_OPACITY_PERCENT 55
-#define VIDEO_SELECTOR_BOX_TEXT_PAD_X 16
-#define VIDEO_SELECTOR_BOX_TEXT_PAD_Y 14
-#define VIDEO_SELECTOR_BOX_LINE_SPACING 22
+#define VIDEO_SELECTOR_BOX_TEXT_PAD_X 10
+#define VIDEO_SELECTOR_BOX_TEXT_PAD_Y 20
+#define VIDEO_SELECTOR_LINE_SPACING 22
+#define VIDEO_SELECTOR_TEXT_HEIGHT 7
 #define VIDEO_SELECTOR_BOX_GAP_FROM_LOGO 14
+#define VIDEO_SELECTOR_BOX_SCREEN_MARGIN 8
 #define PAD_MASK_RIGHT 0x0020
 #define PAD_MASK_LEFT 0x0080
+#define PAD_MASK_SELECT 0x0001
 #define PAD_MASK_TRIANGLE 0x1000
 #define PAD_MASK_CROSS 0x4000
+#define PAD_MASK_ANY 0xffff
+
+static int is_space_or_tab(char c)
+{
+    return (c == ' ' || c == '\t');
+}
+
+static int ci_starts_with_n(const char *s, size_t s_len, const char *prefix)
+{
+    size_t i;
+
+    if (s == NULL || prefix == NULL)
+        return 0;
+
+    for (i = 0; prefix[i] != '\0'; i++) {
+        unsigned char cs;
+        unsigned char cp;
+
+        if (i >= s_len)
+            return 0;
+
+        cs = (unsigned char)s[i];
+        cp = (unsigned char)prefix[i];
+        if (cs >= 'a' && cs <= 'z')
+            cs -= ('a' - 'A');
+        if (cp >= 'a' && cp <= 'z')
+            cp -= ('a' - 'A');
+        if (cs != cp)
+            return 0;
+    }
+
+    return 1;
+}
+
+static int classify_video_mode_config_line(const char *line, size_t len)
+{
+    size_t i = 0;
+
+    while (i < len && is_space_or_tab(line[i]))
+        i++;
+    if (i >= len)
+        return 0;
+
+    if (line[i] == '#' || line[i] == ';')
+        return 0;
+
+    if (!ci_starts_with_n(line + i, len - i, "VIDEO_MODE"))
+        return 0;
+    i += strlen("VIDEO_MODE");
+    while (i < len && is_space_or_tab(line[i]))
+        i++;
+    if (i < len && line[i] == '=')
+        return 1;
+
+    return 0;
+}
+
+static int SaveVideoModeToConfigFile(int cfg_mode, char *saved_path_out, size_t saved_path_out_size)
+{
+    FILE *fp = NULL;
+    char *in_buf = NULL;
+    char *out_buf = NULL;
+    char mode_line[32];
+    char *resolved_path;
+    const char *path = g_config_path_in_use;
+    size_t in_size;
+    size_t out_cap;
+    size_t out_size;
+    long file_size;
+    int use_crlf = 0;
+    int replaced_video_mode_line = 0;
+    int success = 0;
+    const char *cursor;
+    const char *end;
+    char *out;
+
+    if (saved_path_out != NULL && saved_path_out_size > 0)
+        saved_path_out[0] = '\0';
+
+    if (path[0] == '\0' && !(config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT))
+        return 0;
+
+    snprintf(mode_line, sizeof(mode_line), "VIDEO_MODE = %s", video_mode_label(cfg_mode));
+
+    fp = fopen(path, "rb");
+    if (fp == NULL && config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT) {
+        resolved_path = CheckPath(CONFIG_PATHS[config_source]);
+        if (resolved_path != NULL && *resolved_path != '\0') {
+            snprintf(g_config_path_in_use, sizeof(g_config_path_in_use), "%s", resolved_path);
+            path = g_config_path_in_use;
+            fp = fopen(path, "rb");
+        }
+    }
+    if (fp == NULL)
+        goto cleanup;
+
+    if (fseek(fp, 0, SEEK_END) != 0)
+        goto cleanup;
+    file_size = ftell(fp);
+    if (file_size < 0)
+        goto cleanup;
+    if (fseek(fp, 0, SEEK_SET) != 0)
+        goto cleanup;
+
+    in_size = (size_t)file_size;
+    in_buf = (char *)malloc(in_size + 1);
+    if (in_buf == NULL)
+        goto cleanup;
+    if (in_size > 0 && fread(in_buf, 1, in_size, fp) != in_size)
+        goto cleanup;
+    fclose(fp);
+    fp = NULL;
+    in_buf[in_size] = '\0';
+
+    {
+        size_t i;
+        for (i = 0; i + 1 < in_size; i++) {
+            if (in_buf[i] == '\r' && in_buf[i + 1] == '\n') {
+                use_crlf = 1;
+                break;
+            }
+        }
+    }
+
+    out_cap = (in_size * 2) + 128;
+    out_buf = (char *)malloc(out_cap);
+    if (out_buf == NULL)
+        goto cleanup;
+
+    out = out_buf;
+    cursor = in_buf;
+    end = in_buf + in_size;
+    while (cursor < end) {
+        const char *line_end = cursor;
+        const char *newline_ptr = NULL;
+        size_t line_content_len;
+        size_t newline_len = 0;
+        int kind;
+
+        while (line_end < end && *line_end != '\n')
+            line_end++;
+
+        if (line_end < end) {
+            if (line_end > cursor && line_end[-1] == '\r') {
+                line_content_len = (size_t)((line_end - 1) - cursor);
+                newline_ptr = line_end - 1;
+                newline_len = 2;
+            } else {
+                line_content_len = (size_t)(line_end - cursor);
+                newline_ptr = line_end;
+                newline_len = 1;
+            }
+        } else {
+            line_content_len = (size_t)(end - cursor);
+        }
+
+        kind = classify_video_mode_config_line(cursor, line_content_len);
+        if (kind == 1) {
+            size_t mode_line_len = strlen(mode_line);
+
+            memcpy(out, mode_line, mode_line_len);
+            out += mode_line_len;
+
+            if (newline_len > 0) {
+                memcpy(out, newline_ptr, newline_len);
+                out += newline_len;
+            }
+            replaced_video_mode_line = 1;
+        } else {
+            size_t original_len = line_content_len + newline_len;
+            memcpy(out, cursor, original_len);
+            out += original_len;
+        }
+
+        cursor = (line_end < end) ? (line_end + 1) : end;
+    }
+
+    if (!replaced_video_mode_line) {
+        size_t mode_line_len = strlen(mode_line);
+        size_t newline_len = use_crlf ? 2 : 1;
+        size_t prefix_len = mode_line_len + newline_len;
+        size_t existing_len = (size_t)(out - out_buf);
+
+        if (existing_len + prefix_len > out_cap)
+            goto cleanup;
+
+        memmove(out_buf + prefix_len, out_buf, existing_len);
+        memcpy(out_buf, mode_line, mode_line_len);
+        if (use_crlf) {
+            out_buf[mode_line_len] = '\r';
+            out_buf[mode_line_len + 1] = '\n';
+        } else {
+            out_buf[mode_line_len] = '\n';
+        }
+        out = out_buf + prefix_len + existing_len;
+    }
+
+    out_size = (size_t)(out - out_buf);
+    fp = fopen(path, "wb");
+    if (fp == NULL)
+        goto cleanup;
+    if (out_size > 0 && fwrite(out_buf, 1, out_size, fp) != out_size)
+        goto cleanup;
+
+    success = 1;
+    if (saved_path_out != NULL && saved_path_out_size > 0)
+        snprintf(saved_path_out, saved_path_out_size, "%s", path);
+
+cleanup:
+    if (!success && saved_path_out != NULL && saved_path_out_size > 0 && path != NULL && *path != '\0')
+        snprintf(saved_path_out, saved_path_out_size, "%s", path);
+    if (fp != NULL)
+        fclose(fp);
+    if (in_buf != NULL)
+        free(in_buf);
+    if (out_buf != NULL)
+        free(out_buf);
+    return success;
+}
 
 static void RunEmergencyVideoModeSelector(void)
 {
     int selected_mode = GLOBCFG.VIDEO_MODE;
     int applied_effective_mode;
     int prev_pad;
+    char model_buf[64];
+    char ps1_buf[64];
+    char dvd_buf[64];
+    char src_buf[32];
+    char rom_raw[ROMVER_MAX_LEN + 1];
+    char rom_buf[32];
+    char rom_fmt[8];
+    const char *model = "";
+    const char *ps1ver = "";
+    const char *dvdver = "";
+    const char *source = "";
+    const char *temp_celsius = NULL;
+    const char *hotkey_lines[KEY_COUNT] = {
+        GLOBCFG.KEYNAMES[AUTO],
+        GLOBCFG.KEYNAMES[TRIANGLE],
+        GLOBCFG.KEYNAMES[CIRCLE],
+        GLOBCFG.KEYNAMES[CROSS],
+        GLOBCFG.KEYNAMES[SQUARE],
+        GLOBCFG.KEYNAMES[UP],
+        GLOBCFG.KEYNAMES[DOWN],
+        GLOBCFG.KEYNAMES[LEFT],
+        GLOBCFG.KEYNAMES[RIGHT],
+        GLOBCFG.KEYNAMES[L1],
+        GLOBCFG.KEYNAMES[L2],
+        GLOBCFG.KEYNAMES[L3],
+        GLOBCFG.KEYNAMES[R1],
+        GLOBCFG.KEYNAMES[R2],
+        GLOBCFG.KEYNAMES[R3],
+        GLOBCFG.KEYNAMES[SELECT],
+        GLOBCFG.KEYNAMES[START],
+    };
+#ifndef NO_TEMP_DISP
+    char temp_query_buf[16];
+    char temp_render_buf[16];
+    int temp_supported = 0;
+#endif
+    u64 save_feedback_until = 0;
+    int save_feedback_ok = 0;
+    char save_feedback_path[128];
 
     if (selected_mode < CFG_VIDEO_MODE_AUTO || selected_mode > CFG_VIDEO_MODE_480P)
         selected_mode = CFG_VIDEO_MODE_AUTO;
     applied_effective_mode = resolve_effective_video_mode(selected_mode);
+    g_hotkey_launches_enabled = 0;
 
     GLOBCFG.LOGO_DISP = 5;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
     g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
     ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
 
+    model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
+    ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
+    dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
+    source = strip_crlf_copy(SOURCES[config_source], src_buf, sizeof(src_buf));
+    memcpy(rom_raw, ROMVER, ROMVER_MAX_LEN);
+    rom_raw[ROMVER_MAX_LEN] = '\0';
+    {
+        const char *romver = strip_crlf_copy(rom_raw, rom_buf, sizeof(rom_buf));
+        char major = (romver[1] != '\0') ? romver[1] : '?';
+        char minor1 = (romver[2] != '\0') ? romver[2] : '?';
+        char minor2 = (romver[3] != '\0') ? romver[3] : '?';
+        char region = (romver[4] != '\0') ? romver[4] : '?';
+        snprintf(rom_fmt, sizeof(rom_fmt), "%c.%c%c%c", major, minor1, minor2, region);
+    }
+#ifndef NO_TEMP_DISP
+    if (QueryTemperatureCelsius(temp_query_buf, sizeof(temp_query_buf))) {
+        strncpy(temp_render_buf, temp_query_buf, sizeof(temp_render_buf));
+        temp_render_buf[sizeof(temp_render_buf) - 1] = '\0';
+        temp_celsius = temp_render_buf;
+        temp_supported = 1;
+    }
+#endif
+
     SplashRenderSetVideoMode(selected_mode, g_native_video_mode);
     if (SplashRenderIsActive())
         SplashRenderEnd();
     SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+    save_feedback_path[0] = '\0';
 
     prev_pad = ReadCombinedPadStatus_raw();
-    while ((prev_pad & PAD_MASK_TRIANGLE) && (prev_pad & PAD_MASK_CROSS))
-        prev_pad = ReadCombinedPadStatus_raw();
 
     while (1) {
+        u64 now = Timer();
         int pad = ReadCombinedPadStatus_raw();
         int pressed = pad & (~prev_pad);
         int mode_changed = 0;
@@ -1017,10 +1305,25 @@ static void RunEmergencyVideoModeSelector(void)
             }
         }
 
+        if (pressed & PAD_MASK_SELECT) {
+            save_feedback_ok = SaveVideoModeToConfigFile(selected_mode,
+                                                         save_feedback_path,
+                                                         sizeof(save_feedback_path));
+            save_feedback_until = now + 2000;
+        }
+
         if (SplashRenderIsActive()) {
             char line_mode[96];
+            char line_save_status[96];
+            char save_path_display[56];
+            const char *line_start_prefix = "PRESS ";
+            const char *line_start_word = "START";
+            const char *line_start_suffix = " TO JUMP TO HOTKEY DISPLAY";
             const char *line_change = "PRESS LEFT/RIGHT TO CHANGE MODES";
-            const char *line_start = "PRESS START TO JUMP TO HOTKEY DISPLAY";
+            const char *line_select_prefix = "PRESS ";
+            const char *line_select_word = "SELECT";
+            const char *line_select_suffix = " TO SAVE TO CONFIG";
+            const char *status_path = "(unknown)";
             const char *selected_label = video_mode_label(selected_mode);
             const char *native_label = video_mode_label(g_native_video_mode);
             int screen_w = SplashRenderGetScreenWidth();
@@ -1032,70 +1335,219 @@ static void RunEmergencyVideoModeSelector(void)
             int anchor_center_x = screen_w / 2;
             int box_x;
             int box_y;
-            int text_y;
+            int box_w;
+            int box_h;
+            int text_block_h;
+            int text_base_y;
+            int line_mode_y;
+            int line_change_y;
+            int line_start_y;
+            int line_select_y;
+            int line_save_status_y;
             int line_mode_x;
             int line_change_x;
             int line_start_x;
+            int line_select_x;
+            int line_save_status_x;
             int line_mode_w;
             int line_change_w;
+            int line_start_prefix_w;
+            int line_start_word_w;
+            int line_start_suffix_w;
             int line_start_w;
+            int line_select_prefix_w;
+            int line_select_word_w;
+            int line_select_suffix_w;
+            int line_select_w;
+            int line_save_status_w;
+            int line_start_prefix_x;
+            int line_start_word_x;
+            int line_start_suffix_x;
+            int line_select_prefix_x;
+            int line_select_word_x;
+            int line_select_suffix_x;
+            int max_line_w;
+            int line_count = 4;
+            int show_save_status = (save_feedback_until > now);
+            const char *render_temp = temp_celsius;
+            u32 save_status_color = VIDEO_SELECTOR_TEXT_COLOR;
 
             if (logo_x >= 0 && logo_y >= 0 && logo_w > 0 && logo_h > 0) {
                 anchor_center_x = logo_x + (logo_w / 2);
                 box_y = logo_y + logo_h + VIDEO_SELECTOR_BOX_GAP_FROM_LOGO;
             } else
                 box_y = ((screen_h * 55) + 50) / 100;
-            box_x = anchor_center_x - (VIDEO_SELECTOR_BOX_WIDTH / 2);
 
-            if (box_x < 8)
-                box_x = 8;
-            if (box_x + VIDEO_SELECTOR_BOX_WIDTH > screen_w - 8)
-                box_x = screen_w - VIDEO_SELECTOR_BOX_WIDTH - 8;
-            if (box_y < 8)
-                box_y = 8;
-            if (box_y + VIDEO_SELECTOR_BOX_HEIGHT > screen_h - 8)
-                box_y = screen_h - VIDEO_SELECTOR_BOX_HEIGHT - 8;
+#ifndef NO_TEMP_DISP
+            if (temp_supported) {
+                if (QueryTemperatureCelsius(temp_query_buf, sizeof(temp_query_buf))) {
+                    strncpy(temp_render_buf, temp_query_buf, sizeof(temp_render_buf));
+                    temp_render_buf[sizeof(temp_render_buf) - 1] = '\0';
+                }
+                render_temp = temp_render_buf;
+            }
+#endif
 
             snprintf(line_mode, sizeof(line_mode), "VIDEO_MODE = %s [NATIVE %s]", selected_label, native_label);
+            if (show_save_status) {
+                if (save_feedback_path[0] != '\0') {
+                    size_t path_len = strlen(save_feedback_path);
+                    if (path_len < sizeof(save_path_display)) {
+                        snprintf(save_path_display, sizeof(save_path_display), "%s", save_feedback_path);
+                    } else {
+                        size_t keep_len = sizeof(save_path_display) - 4;
+                        memcpy(save_path_display, save_feedback_path, keep_len);
+                        save_path_display[keep_len] = '.';
+                        save_path_display[keep_len + 1] = '.';
+                        save_path_display[keep_len + 2] = '.';
+                        save_path_display[keep_len + 3] = '\0';
+                    }
+                    status_path = save_path_display;
+                }
+
+                snprintf(line_save_status,
+                         sizeof(line_save_status),
+                         save_feedback_ok ? "SAVED TO %s" : "SAVE FAILED %s",
+                         status_path);
+                line_count = 5;
+                save_status_color = save_feedback_ok ? VIDEO_SELECTOR_HIGHLIGHT_COLOR : 0xff4040;
+            }
             line_mode_w = (int)strlen(line_mode) * 6;
             line_change_w = (int)strlen(line_change) * 6;
-            line_start_w = (int)strlen(line_start) * 6;
-            line_mode_x = box_x + (VIDEO_SELECTOR_BOX_WIDTH - line_mode_w) / 2;
-            line_change_x = box_x + (VIDEO_SELECTOR_BOX_WIDTH - line_change_w) / 2;
-            line_start_x = box_x + (VIDEO_SELECTOR_BOX_WIDTH - line_start_w) / 2;
+            line_start_prefix_w = (int)strlen(line_start_prefix) * 6;
+            line_start_word_w = (int)strlen(line_start_word) * 6;
+            line_start_suffix_w = (int)strlen(line_start_suffix) * 6;
+            line_start_w = line_start_prefix_w + line_start_word_w + line_start_suffix_w;
+            line_select_prefix_w = (int)strlen(line_select_prefix) * 6;
+            line_select_word_w = (int)strlen(line_select_word) * 6;
+            line_select_suffix_w = (int)strlen(line_select_suffix) * 6;
+            line_select_w = line_select_prefix_w + line_select_word_w + line_select_suffix_w;
+            line_save_status_w = show_save_status ? (int)strlen(line_save_status) * 6 : 0;
 
-            SplashRenderSetHotkeysVisible(0);
+            text_block_h = ((line_count - 1) * VIDEO_SELECTOR_LINE_SPACING) + VIDEO_SELECTOR_TEXT_HEIGHT;
+
+            max_line_w = line_mode_w;
+            if (line_change_w > max_line_w)
+                max_line_w = line_change_w;
+            if (line_start_w > max_line_w)
+                max_line_w = line_start_w;
+            if (line_select_w > max_line_w)
+                max_line_w = line_select_w;
+            if (line_save_status_w > max_line_w)
+                max_line_w = line_save_status_w;
+
+            box_w = max_line_w + (VIDEO_SELECTOR_BOX_TEXT_PAD_X * 2);
+            box_h = text_block_h + (VIDEO_SELECTOR_BOX_TEXT_PAD_Y * 2);
+            box_x = anchor_center_x - (box_w / 2);
+
+            if (box_x < VIDEO_SELECTOR_BOX_SCREEN_MARGIN)
+                box_x = VIDEO_SELECTOR_BOX_SCREEN_MARGIN;
+            if (box_x + box_w > screen_w - VIDEO_SELECTOR_BOX_SCREEN_MARGIN)
+                box_x = screen_w - box_w - VIDEO_SELECTOR_BOX_SCREEN_MARGIN;
+            if (box_y < VIDEO_SELECTOR_BOX_SCREEN_MARGIN)
+                box_y = VIDEO_SELECTOR_BOX_SCREEN_MARGIN;
+            if (box_y + box_h > screen_h - VIDEO_SELECTOR_BOX_SCREEN_MARGIN)
+                box_y = screen_h - box_h - VIDEO_SELECTOR_BOX_SCREEN_MARGIN;
+
+            text_base_y = box_y + ((box_h - text_block_h) / 2);
+            line_mode_y = text_base_y;
+            line_change_y = text_base_y + VIDEO_SELECTOR_LINE_SPACING;
+            line_start_y = text_base_y + (VIDEO_SELECTOR_LINE_SPACING * 2);
+            line_select_y = text_base_y + (VIDEO_SELECTOR_LINE_SPACING * 3);
+            line_save_status_y = text_base_y + (VIDEO_SELECTOR_LINE_SPACING * 4);
+
+            line_mode_x = box_x + (box_w - line_mode_w) / 2;
+            line_change_x = box_x + (box_w - line_change_w) / 2;
+            line_start_x = box_x + (box_w - line_start_w) / 2;
+            line_select_x = box_x + (box_w - line_select_w) / 2;
+            line_save_status_x = box_x + (box_w - line_save_status_w) / 2;
+            line_start_prefix_x = line_start_x;
+            line_start_word_x = line_start_prefix_x + line_start_prefix_w;
+            line_start_suffix_x = line_start_word_x + line_start_word_w;
+            line_select_prefix_x = line_select_x;
+            line_select_word_x = line_select_prefix_x + line_select_prefix_w;
+            line_select_suffix_x = line_select_word_x + line_select_word_w;
+
+            SplashRenderSetHotkeysVisible(1);
             SplashRenderBeginFrame();
+            SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
+            SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                        model,
+                                        rom_fmt,
+                                        dvdver,
+                                        ps1ver,
+                                        render_temp,
+                                        "",
+                                        source);
+            SplashRenderHotkeyClockDate(GLOBCFG.LOGO_DISP, now);
             SplashRenderDrawRoundedRect(box_x,
                                         box_y,
-                                        VIDEO_SELECTOR_BOX_WIDTH,
-                                        VIDEO_SELECTOR_BOX_HEIGHT,
-                                        VIDEO_SELECTOR_BOX_RADIUS,
+                                        box_w,
+                                        box_h,
+                                        0,
                                         VIDEO_SELECTOR_BOX_BG_COLOR,
                                         VIDEO_SELECTOR_BOX_BG_OPACITY_PERCENT);
-            text_y = box_y + VIDEO_SELECTOR_BOX_TEXT_PAD_Y;
-            SplashRenderDrawTextPxScaled(line_mode_x, text_y, 0xffffff, line_mode, 1);
+            SplashRenderDrawTextPxScaled(line_mode_x,
+                                         line_mode_y,
+                                         VIDEO_SELECTOR_HIGHLIGHT_COLOR,
+                                         line_mode,
+                                         1);
             SplashRenderDrawTextPxScaled(line_change_x,
-                                         text_y + VIDEO_SELECTOR_BOX_LINE_SPACING,
-                                         0xffffff,
+                                         line_change_y,
+                                         VIDEO_SELECTOR_TEXT_COLOR,
                                          line_change,
                                          1);
-            SplashRenderDrawTextPxScaled(line_start_x,
-                                         text_y + (VIDEO_SELECTOR_BOX_LINE_SPACING * 2),
-                                         0xffffff,
-                                         line_start,
+            SplashRenderDrawTextPxScaled(line_start_prefix_x,
+                                         line_start_y,
+                                         VIDEO_SELECTOR_TEXT_COLOR,
+                                         line_start_prefix,
                                          1);
+            SplashRenderDrawTextPxScaled(line_start_word_x,
+                                         line_start_y,
+                                         VIDEO_SELECTOR_HIGHLIGHT_COLOR,
+                                         line_start_word,
+                                         1);
+            SplashRenderDrawTextPxScaled(line_start_suffix_x,
+                                         line_start_y,
+                                         VIDEO_SELECTOR_TEXT_COLOR,
+                                         line_start_suffix,
+                                         1);
+            SplashRenderDrawTextPxScaled(line_select_prefix_x,
+                                         line_select_y,
+                                         VIDEO_SELECTOR_TEXT_COLOR,
+                                         line_select_prefix,
+                                         1);
+            SplashRenderDrawTextPxScaled(line_select_word_x,
+                                         line_select_y,
+                                         VIDEO_SELECTOR_SELECT_COLOR,
+                                         line_select_word,
+                                         1);
+            SplashRenderDrawTextPxScaled(line_select_suffix_x,
+                                         line_select_y,
+                                         VIDEO_SELECTOR_TEXT_COLOR,
+                                         line_select_suffix,
+                                         1);
+            if (show_save_status) {
+                SplashRenderDrawTextPxScaled(line_save_status_x,
+                                             line_save_status_y,
+                                             save_status_color,
+                                             line_save_status,
+                                             1);
+            }
             SplashRenderPresent();
         }
 
-        if (pressed & PAD_START)
+        if (pressed & PAD_START) {
+            g_hotkey_launches_enabled = 1;
             break;
+        }
 
         prev_pad = pad;
     }
 
     GLOBCFG.VIDEO_MODE = selected_mode;
     SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+    g_block_hotkeys_until_release = 1;
     if (SplashRenderIsActive())
         SplashRenderEnd();
 
@@ -1368,6 +1820,7 @@ int main(int argc, char *argv[])
     PollEmergencyComboWindow(&rescue_combo_deadline);
     DPRINTF("load default settings\n");
     SetDefaultSettings();
+    g_config_path_in_use[0] = '\0';
     FILE *fp;
     for (x = SOURCE_CWD; x >= SOURCE_MC0; x--) {
         PollEmergencyComboWindow(&rescue_combo_deadline);
@@ -1379,6 +1832,7 @@ int main(int argc, char *argv[])
         fp = fopen(T, "r");
         if (fp != NULL) {
             config_source = x;
+            snprintf(g_config_path_in_use, sizeof(g_config_path_in_use), "%s", T);
             break;
         }
     }
@@ -1719,6 +2173,13 @@ int main(int argc, char *argv[])
 
         button = pad_button; // reset the value so we can iterate (bit-shift) again
         PAD = ReadCombinedPadStatus_raw();
+        if (!g_hotkey_launches_enabled)
+            continue;
+        if (g_block_hotkeys_until_release) {
+            if (PAD & PAD_MASK_ANY)
+                continue;
+            g_block_hotkeys_until_release = 0;
+        }
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
             if (PAD & button) {
                 int command_cancelled = 0;
