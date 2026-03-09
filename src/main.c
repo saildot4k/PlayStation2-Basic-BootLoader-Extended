@@ -966,6 +966,7 @@ static char g_config_path_in_use[256] = "";
 #define VIDEO_SELECTOR_TEXT_HEIGHT 7
 #define VIDEO_SELECTOR_BOX_GAP_FROM_LOGO 14
 #define VIDEO_SELECTOR_BOX_SCREEN_MARGIN 8
+#define VIDEO_SELECTOR_SAVE_FEEDBACK_MS 3000
 #define PAD_MASK_RIGHT 0x0020
 #define PAD_MASK_LEFT 0x0080
 #define PAD_MASK_SELECT 0x0001
@@ -1309,7 +1310,7 @@ static void RunEmergencyVideoModeSelector(void)
             save_feedback_ok = SaveVideoModeToConfigFile(selected_mode,
                                                          save_feedback_path,
                                                          sizeof(save_feedback_path));
-            save_feedback_until = now + 2000;
+            save_feedback_until = Timer() + VIDEO_SELECTOR_SAVE_FEEDBACK_MS;
         }
 
         if (SplashRenderIsActive()) {
