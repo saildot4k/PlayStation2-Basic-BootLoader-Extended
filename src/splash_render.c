@@ -881,7 +881,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     destroy_frame_state();
 
-    if (logo_disp < 2)
+    if (logo_disp < 1)
         return 0;
 
     g_gs = gsKit_init_global();
@@ -908,6 +908,15 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     g_screen_h = (int)g_gs->Height;
     center_x = g_screen_w / 2;
     center_y = g_screen_h / 2;
+
+    if (logo_disp == 1) {
+        // LOGO_DISPLAY=1 renders text-only info overlay on black.
+        g_logo_visible = 0;
+        g_hotkeys_visible = 0;
+        SplashRenderBeginFrame();
+        SplashRenderPresent();
+        return 1;
+    }
 
     bg = SplashGetBackgroundImage(is_psx_desr);
     if (!upload_layer_texture(&g_layers[LAYER_BG], bg, GS_FILTER_LINEAR)) {
