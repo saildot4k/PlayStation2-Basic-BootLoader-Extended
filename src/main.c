@@ -158,6 +158,64 @@ static void apply_loader_video_mode(int cfg_mode)
     SetGsCrt(interlace, gs_mode, ffmd);
 }
 
+static int resolve_effective_video_mode(int cfg_mode)
+{
+    if (cfg_mode == CFG_VIDEO_MODE_AUTO)
+        return g_native_video_mode;
+
+    switch (cfg_mode) {
+        case CFG_VIDEO_MODE_PAL:
+            return CFG_VIDEO_MODE_PAL;
+        case CFG_VIDEO_MODE_480P:
+            return CFG_VIDEO_MODE_480P;
+        case CFG_VIDEO_MODE_NTSC:
+        default:
+            return CFG_VIDEO_MODE_NTSC;
+    }
+}
+
+static const char *video_mode_label(int cfg_mode)
+{
+    switch (cfg_mode) {
+        case CFG_VIDEO_MODE_NTSC:
+            return "NTSC";
+        case CFG_VIDEO_MODE_PAL:
+            return "PAL";
+        case CFG_VIDEO_MODE_480P:
+            return "480P";
+        case CFG_VIDEO_MODE_AUTO:
+        default:
+            return "AUTO";
+    }
+}
+
+static int step_video_mode(int current_mode, int direction)
+{
+    static const int mode_order[] = {
+        CFG_VIDEO_MODE_AUTO,
+        CFG_VIDEO_MODE_NTSC,
+        CFG_VIDEO_MODE_PAL,
+        CFG_VIDEO_MODE_480P
+    };
+    int i;
+    int index = 0;
+    int count = (int)(sizeof(mode_order) / sizeof(mode_order[0]));
+
+    for (i = 0; i < count; i++) {
+        if (mode_order[i] == current_mode) {
+            index = i;
+            break;
+        }
+    }
+
+    if (direction > 0)
+        index = (index + 1) % count;
+    else
+        index = (index + count - 1) % count;
+
+    return mode_order[index];
+}
+
 #ifndef NO_TEMP_DISP
 // Query CDVD thermal sensor and return formatted Celsius string when supported.
 static int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
@@ -891,8 +949,159 @@ static const char *const g_psx_desr_rom_prefixes[] = {
 };
 int PAD = 0;
 unsigned char *config_buf = NULL; // pointer to allocated config file
+static int g_video_mode_selector_requested = 0;
 
 #define RESCUE_COMBO_WINDOW_MS 2000
+#define VIDEO_SELECTOR_BOX_WIDTH 460
+#define VIDEO_SELECTOR_BOX_HEIGHT 98
+#define VIDEO_SELECTOR_BOX_RADIUS 10
+#define VIDEO_SELECTOR_BOX_BG_COLOR 0x606060
+#define VIDEO_SELECTOR_BOX_BG_OPACITY_PERCENT 55
+#define VIDEO_SELECTOR_BOX_TEXT_PAD_X 16
+#define VIDEO_SELECTOR_BOX_TEXT_PAD_Y 14
+#define VIDEO_SELECTOR_BOX_LINE_SPACING 22
+#define VIDEO_SELECTOR_BOX_GAP_FROM_LOGO 14
+#define PAD_MASK_RIGHT 0x0020
+#define PAD_MASK_LEFT 0x0080
+#define PAD_MASK_TRIANGLE 0x1000
+#define PAD_MASK_CROSS 0x4000
+
+static void RunEmergencyVideoModeSelector(void)
+{
+    int selected_mode = GLOBCFG.VIDEO_MODE;
+    int applied_effective_mode;
+    int prev_pad;
+
+    if (selected_mode < CFG_VIDEO_MODE_AUTO || selected_mode > CFG_VIDEO_MODE_480P)
+        selected_mode = CFG_VIDEO_MODE_AUTO;
+    applied_effective_mode = resolve_effective_video_mode(selected_mode);
+
+    GLOBCFG.LOGO_DISP = 5;
+    GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
+    g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
+    ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
+
+    SplashRenderSetVideoMode(selected_mode, g_native_video_mode);
+    if (SplashRenderIsActive())
+        SplashRenderEnd();
+    SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+
+    prev_pad = ReadCombinedPadStatus_raw();
+    while ((prev_pad & PAD_MASK_TRIANGLE) && (prev_pad & PAD_MASK_CROSS))
+        prev_pad = ReadCombinedPadStatus_raw();
+
+    while (1) {
+        int pad = ReadCombinedPadStatus_raw();
+        int pressed = pad & (~prev_pad);
+        int mode_changed = 0;
+
+        if (pressed & PAD_MASK_LEFT) {
+            selected_mode = step_video_mode(selected_mode, -1);
+            mode_changed = 1;
+        }
+        if (pressed & PAD_MASK_RIGHT) {
+            selected_mode = step_video_mode(selected_mode, +1);
+            mode_changed = 1;
+        }
+
+        if (mode_changed) {
+            int new_effective_mode = resolve_effective_video_mode(selected_mode);
+
+            if (new_effective_mode != applied_effective_mode) {
+                apply_loader_video_mode(selected_mode);
+                SplashRenderSetVideoMode(selected_mode, g_native_video_mode);
+                if (SplashRenderIsActive())
+                    SplashRenderEnd();
+                SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+                applied_effective_mode = new_effective_mode;
+            }
+        }
+
+        if (SplashRenderIsActive()) {
+            char line_mode[96];
+            const char *line_change = "PRESS LEFT/RIGHT TO CHANGE MODES";
+            const char *line_start = "PRESS START TO JUMP TO HOTKEY DISPLAY";
+            const char *selected_label = video_mode_label(selected_mode);
+            const char *native_label = video_mode_label(g_native_video_mode);
+            int screen_w = SplashRenderGetScreenWidth();
+            int screen_h = SplashRenderGetScreenHeight();
+            int logo_x = SplashRenderGetLogoX();
+            int logo_y = SplashRenderGetLogoY();
+            int logo_w = SplashRenderGetLogoWidth();
+            int logo_h = SplashRenderGetLogoHeight();
+            int anchor_center_x = screen_w / 2;
+            int box_x;
+            int box_y;
+            int text_y;
+            int line_mode_x;
+            int line_change_x;
+            int line_start_x;
+            int line_mode_w;
+            int line_change_w;
+            int line_start_w;
+
+            if (logo_x >= 0 && logo_y >= 0 && logo_w > 0 && logo_h > 0) {
+                anchor_center_x = logo_x + (logo_w / 2);
+                box_y = logo_y + logo_h + VIDEO_SELECTOR_BOX_GAP_FROM_LOGO;
+            } else
+                box_y = ((screen_h * 55) + 50) / 100;
+            box_x = anchor_center_x - (VIDEO_SELECTOR_BOX_WIDTH / 2);
+
+            if (box_x < 8)
+                box_x = 8;
+            if (box_x + VIDEO_SELECTOR_BOX_WIDTH > screen_w - 8)
+                box_x = screen_w - VIDEO_SELECTOR_BOX_WIDTH - 8;
+            if (box_y < 8)
+                box_y = 8;
+            if (box_y + VIDEO_SELECTOR_BOX_HEIGHT > screen_h - 8)
+                box_y = screen_h - VIDEO_SELECTOR_BOX_HEIGHT - 8;
+
+            snprintf(line_mode, sizeof(line_mode), "VIDEO_MODE = %s [NATIVE %s]", selected_label, native_label);
+            line_mode_w = (int)strlen(line_mode) * 6;
+            line_change_w = (int)strlen(line_change) * 6;
+            line_start_w = (int)strlen(line_start) * 6;
+            line_mode_x = box_x + (VIDEO_SELECTOR_BOX_WIDTH - line_mode_w) / 2;
+            line_change_x = box_x + (VIDEO_SELECTOR_BOX_WIDTH - line_change_w) / 2;
+            line_start_x = box_x + (VIDEO_SELECTOR_BOX_WIDTH - line_start_w) / 2;
+
+            SplashRenderSetHotkeysVisible(0);
+            SplashRenderBeginFrame();
+            SplashRenderDrawRoundedRect(box_x,
+                                        box_y,
+                                        VIDEO_SELECTOR_BOX_WIDTH,
+                                        VIDEO_SELECTOR_BOX_HEIGHT,
+                                        VIDEO_SELECTOR_BOX_RADIUS,
+                                        VIDEO_SELECTOR_BOX_BG_COLOR,
+                                        VIDEO_SELECTOR_BOX_BG_OPACITY_PERCENT);
+            text_y = box_y + VIDEO_SELECTOR_BOX_TEXT_PAD_Y;
+            SplashRenderDrawTextPxScaled(line_mode_x, text_y, 0xffffff, line_mode, 1);
+            SplashRenderDrawTextPxScaled(line_change_x,
+                                         text_y + VIDEO_SELECTOR_BOX_LINE_SPACING,
+                                         0xffffff,
+                                         line_change,
+                                         1);
+            SplashRenderDrawTextPxScaled(line_start_x,
+                                         text_y + (VIDEO_SELECTOR_BOX_LINE_SPACING * 2),
+                                         0xffffff,
+                                         line_start,
+                                         1);
+            SplashRenderPresent();
+        }
+
+        if (pressed & PAD_START)
+            break;
+
+        prev_pad = pad;
+    }
+
+    GLOBCFG.VIDEO_MODE = selected_mode;
+    SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+    if (SplashRenderIsActive())
+        SplashRenderEnd();
+
+    while (ReadCombinedPadStatus_raw() & PAD_START) {
+    }
+}
 
 static void PollEmergencyComboWindow(u64 *window_deadline_ms)
 {
@@ -909,6 +1118,8 @@ static void PollEmergencyComboWindow(u64 *window_deadline_ms)
     pad_state = ReadCombinedPadStatus_raw();
     if ((pad_state & PAD_R1) && (pad_state & PAD_START))
         EMERGENCY();
+    if ((pad_state & PAD_MASK_TRIANGLE) && (pad_state & PAD_MASK_CROSS))
+        g_video_mode_selector_requested = 1;
 }
 
 static int ROMVERMatchesAnyPrefix(const u8 romver[16], const char *const *prefixes, size_t prefix_count)
@@ -1352,6 +1563,11 @@ int main(int argc, char *argv[])
         apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
         sleep(1);
+    }
+
+    if (g_video_mode_selector_requested) {
+        RunEmergencyVideoModeSelector();
+        g_video_mode_selector_requested = 0;
     }
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
