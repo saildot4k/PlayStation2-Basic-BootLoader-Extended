@@ -11,11 +11,22 @@
 .set noreorder  # disable assembler reorder mode, so the code will not be optimized or changed in any way, giving complete instruction order control to the programmer
 .set noat       # disable assembler from using register $1 (known as the assembler temporary, or $at register) to hold intermediate values when performing macro expansions
 
+# el2_regs layout (matches ee_registers_t in include/ee_asm.h)
+# 0x000 zero  0x010 at    0x020 v0    0x030 v1
+# 0x040 a0    0x050 a1    0x060 a2    0x070 a3
+# 0x080 t0    0x090 t1    0x0A0 t2    0x0B0 t3
+# 0x0C0 t4    0x0D0 t5    0x0E0 t6    0x0F0 t7
+# 0x100 s0    0x110 s1    0x120 s2    0x130 s3
+# 0x140 s4    0x150 s5    0x160 s6    0x170 s7
+# 0x180 t8    0x190 t9    0x1A0 k0    0x1B0 k1
+# 0x1C0 gp    0x1D0 sp    0x1E0 fp    0x1F0 ra
+# 0x200 hi    0x210 lo
+
 #----------------------------------------------------------------------------
 .global el2_asm_handler
 .ent    el2_asm_handler
 el2_asm_handler:
-    # Save registers
+    # Save full interrupted context into el2_regs.
     # $k1 is used to save the context by the Level 2 exception handler.
     # $k1 is reserved for kernel usage in interrupt and trap handling.
     sq      $k1, -0x20($zero)                       # Store $k1 register in the same place as the kernel does, via kseg3.
@@ -58,14 +69,14 @@ el2_asm_handler:
     lq      $v0, -0x20($zero)
     sq      $v0, 0x1B0($k1)                         # $k1 can now be saved properly.
 
-    # Move stack to kseg0
+    # Switch to dedicated EL2 stack in kseg0.
     la      $sp, el2_stack + 256 + 0x80000000
 
-    # Short call
+    # Call C handler: a0 = &el2_regs.
     jal     el2_c_handler
     move    $a0, $k1
 
-    # Restore registers
+    # Restore context from el2_regs.
     la      $k1, el2_regs
     #lq      $zero, 0x000($k0)
     lq      $at, 0x010($k1)
@@ -106,7 +117,7 @@ el2_asm_handler:
     lq      $k0, 0x1A0($k1)
     lq      $k1, 0x1B0($k1)
 
-    # Return from exception
+    # Return from exception.
     eret
 .end el2_asm_handler
 
