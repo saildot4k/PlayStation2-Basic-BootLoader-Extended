@@ -36,6 +36,14 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 ### Video Mode
 - `VIDEO_MODE = AUTO, NTSC, PAL, 480P` Will use PS2 default or force either of the other 3 modes.
 
+#### Emergency video mode selector
+- Enter with `TRIANGLE + CROSS` during boot
+- Selector forces `LOGO_DISPLAY = 5` while active so you can see logo/hotkey UI context.
+- Controls:
+  - `LEFT/RIGHT` cycle modes: `AUTO`, `NTSC`, `PAL`, `480P`
+  - `SELECT` save the currently selected mode to the active config file
+  - `START` exit selector and continue to hotkey display with first found full path
+
 ### PS1DRV options (PS1 discs only)
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 - `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.
@@ -117,10 +125,13 @@ you tell me ;)
 ## Credits & Thanks
 
 - From saildot4k
-  - @pcm720 for his Retrogem gameid and PS1 Video Negator code from [OSDMenu](https://github.com/pcm720/OSDMenu)
-  - @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
-  - @nathanneurotic for PS2BBLE 10path, ideas and logo
   - @israpps for [PS2BBL](https://github.com/israpps/PlayStation2-Basic-BootLoader/)
+  - @pcm720 for
+    - Retrogem gameid, PS1 Video Negator,  PS2LOGO code from [OSDMenu](https://github.com/pcm720/OSDMenu)
+    - Video mode options from [NHDDL](https://github.com/pcm720/nhddl)
+  - @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
+  - @nathanneurotic for PS2BBLE 10path, ideas and persuasion
+  - [@Berion](https://www.psx-place.com/members/berion.1431/) for logos, background and hotkey graphics
 
 - From [El Isra](https://israpps.github.io/) (PS2BBL Developer): 
   - @SP193 for the OSD initialization libraries, wich serve as the foundation for this project
