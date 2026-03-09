@@ -8,6 +8,7 @@ void SplashRenderSetVideoMode(int cfg_mode, int native_mode);
 void SplashRenderBeginFrame(void);
 void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text);
 void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int scale);
+void SplashRenderDrawRoundedRect(int x, int y, int w, int h, int radius, u32 color, unsigned int opacity_percent);
 void SplashRenderRestoreBackgroundRect(int x, int y, int w, int h);
 void SplashRenderSetHotkeysVisible(int visible);
 void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms);
@@ -20,5 +21,9 @@ int SplashRenderGetScreenCenterX(void);
 int SplashRenderGetScreenCenterY(void);
 int SplashRenderGetHotkeysX(void);
 int SplashRenderGetHotkeysY(void);
+int SplashRenderGetLogoX(void);
+int SplashRenderGetLogoY(void);
+int SplashRenderGetLogoWidth(void);
+int SplashRenderGetLogoHeight(void);
 
 #endif

@@ -6,7 +6,7 @@
 #include "splash_render.h"
 #include "splash_screen.h"
 
-// Console info text anchor for LOGO_DISPLAY = 2-5.
+// Console info text anchor for LOGO_DISPLAY = 1-5.
 #define INFO_CENTER_ADJUST_X 0
 #define INFO_BOTTOM_MARGIN_PERCENT 10
 #define INFO_Y_ADJUST 0
@@ -26,6 +26,7 @@
 #define HOTKEY_CLOCK_DATE_MAX_CHARS 10
 #define HOTKEY_CLOCK_BLOCK_MAX_CHARS HOTKEY_CLOCK_COUNTDOWN_MAX_CHARS
 #define HOTKEY_CLOCK_CLEAR_EXTRA_CHARS_LEFT 1
+#define HOTKEY_CLOCK_TOP_MARGIN_PERCENT 10
 
 typedef struct
 {
@@ -417,7 +418,7 @@ static int seed_hotkey_clock_from_ps2(u64 tick_ms)
 void SplashRenderTextBody(int logo_disp,
                           int is_psx_desr)
 {
-    if (logo_disp < 2)
+    if (logo_disp < 1)
         return;
 
     (void)SplashRenderBegin(logo_disp, is_psx_desr);
@@ -481,11 +482,12 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     int clear_block_x;
     int clear_block_w;
     int text_bottom_y;
+    int top_margin_y;
     int i;
     u64 elapsed_ms;
     u64 elapsed_seconds;
 
-    if (!SplashRenderIsActive() || logo_disp < HOTKEY_TEXT_LOGO_DISPLAY_MIN) {
+    if (!SplashRenderIsActive() || logo_disp < 1) {
         clear_hotkey_clock_date();
         g_hotkey_clock.initialized = 0;
         g_hotkey_clock.last_tick_ms = 0;
@@ -494,9 +496,11 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
 
     hotkeys_x = SplashRenderGetHotkeysX();
     hotkeys_y = SplashRenderGetHotkeysY();
-    if (hotkeys_x < 0 || hotkeys_y < 0) {
-        clear_hotkey_clock_date();
-        return;
+    if (logo_disp >= HOTKEY_TEXT_LOGO_DISPLAY_MIN) {
+        if (hotkeys_x < 0 || hotkeys_y < 0) {
+            clear_hotkey_clock_date();
+            return;
+        }
     }
 
     if (!g_hotkey_clock.initialized) {
@@ -533,7 +537,10 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
 
     screen_w = SplashRenderGetScreenWidth();
     screen_h = SplashRenderGetScreenHeight();
-    left_anchor_x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
+    if (logo_disp >= HOTKEY_TEXT_LOGO_DISPLAY_MIN)
+        left_anchor_x = hotkeys_x + HOTKEY_TEXT_X_FROM_HOTKEYS_LEFT;
+    else
+        left_anchor_x = ((screen_w * HOTKEY_CLOCK_TOP_MARGIN_PERCENT) + 50) / 100;
     right_anchor_x = screen_w - left_anchor_x;
     if (g_countdown.right_anchor_x >= 0)
         right_anchor_x = g_countdown.right_anchor_x;
@@ -557,7 +564,11 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     time_x = block_x;
     date_x = block_x;
 
-    countdown_y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP;
+    top_margin_y = ((screen_h * HOTKEY_CLOCK_TOP_MARGIN_PERCENT) + 50) / 100;
+    if (logo_disp >= HOTKEY_TEXT_LOGO_DISPLAY_MIN)
+        countdown_y = hotkeys_y + HOTKEY_TEXT_Y_FROM_HOTKEYS_TOP;
+    else
+        countdown_y = top_margin_y;
     time_y = countdown_y + HOTKEY_CLOCK_DATE_LINE_SPACING;
     date_y = time_y + HOTKEY_CLOCK_DATE_LINE_SPACING;
     text_bottom_y = get_text_bottom_y_limit(screen_h);
@@ -612,15 +623,6 @@ void SplashRenderHotkeyClockDate(int logo_disp, u64 tick_ms)
     g_hotkey_clock.last_right_anchor[g_hotkey_clock.anchor_slot] = right_anchor_x;
     g_hotkey_clock.anchor_slot ^= 1;
     g_hotkey_clock.visible = 1;
-}
-
-static void reset_console_info_overlay_state(void)
-{
-    g_countdown.visible = 0;
-    g_countdown.last_chars = 0;
-    g_countdown.right_anchor_x = -1;
-    g_countdown.text[0] = '\0';
-    g_temp.visible = 0;
 }
 
 static void build_console_info_line_text(char *info_line,
@@ -695,7 +697,7 @@ static void draw_console_info_overlay(const char *info_line,
 
     update_temp_overlay_anchor(info_line, x, y, has_temp);
 
-    if (logo_disp >= HOTKEY_TEXT_LOGO_DISPLAY_MIN && has_autoboot)
+    if (logo_disp >= 1 && has_autoboot)
         copy_clamped(g_countdown.text, sizeof(g_countdown.text), autoboot_countdown, HOTKEY_CLOCK_COUNTDOWN_MAX_CHARS);
     else
         g_countdown.text[0] = '\0';
@@ -728,15 +730,6 @@ void SplashRenderConsoleInfoLine(int logo_disp,
                                  temp_celsius,
                                  config_source_name,
                                  has_temp);
-
-    if (logo_disp == 1) {
-        reset_console_info_overlay_state();
-        if (has_autoboot)
-            scr_printf("\n%s%s", info_line, autoboot_countdown);
-        else
-            scr_printf("\n%s", info_line);
-        return;
-    }
 
     if (SplashRenderIsActive())
         draw_console_info_overlay(info_line, autoboot_countdown, has_temp, has_autoboot, logo_disp);

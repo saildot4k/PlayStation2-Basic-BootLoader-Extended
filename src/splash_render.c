@@ -14,6 +14,7 @@
 #define FONT_ADVANCE ((FONT_W + 1) * FONT_SCALE)
 #define TEXT_Z 10
 #define TEXT_SHADOW_Z (TEXT_Z - 1)
+#define OVERLAY_RECT_Z (TEXT_Z - 2)
 #define BG_Z 1
 #define FG_Z 2
 #define GS_ALPHA_OPAQUE 0x80
@@ -555,6 +556,23 @@ static void draw_layer_stretched(const SPLASH_LAYER *layer, int z)
                               GS_SETREG_RGBAQ(0x80, 0x80, 0x80, GS_ALPHA_OPAQUE, 0x00));
 }
 
+static void draw_filled_rect(int x0, int y0, int x1, int y1, int z, u64 color)
+{
+    if (g_gs == NULL)
+        return;
+
+    if (x0 >= x1 || y0 >= y1)
+        return;
+
+    gsKit_prim_sprite(g_gs,
+                      (float)x0,
+                      (float)y0,
+                      (float)x1,
+                      (float)y1,
+                      z,
+                      color);
+}
+
 static void draw_logo_subrect(int rel_x,
                               int rel_w,
                               int z,
@@ -881,7 +899,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 
     destroy_frame_state();
 
-    if (logo_disp < 2)
+    if (logo_disp < 1)
         return 0;
 
     g_gs = gsKit_init_global();
@@ -908,6 +926,15 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     g_screen_h = (int)g_gs->Height;
     center_x = g_screen_w / 2;
     center_y = g_screen_h / 2;
+
+    if (logo_disp == 1) {
+        // LOGO_DISPLAY=1 renders text-only info overlay on black.
+        g_logo_visible = 0;
+        g_hotkeys_visible = 0;
+        SplashRenderBeginFrame();
+        SplashRenderPresent();
+        return 1;
+    }
 
     bg = SplashGetBackgroundImage(is_psx_desr);
     if (!upload_layer_texture(&g_layers[LAYER_BG], bg, GS_FILTER_LINEAR)) {
@@ -1044,6 +1071,79 @@ void SplashRenderDrawTextPxScaled(int x, int y, u32 color, const char *text, int
     }
 }
 
+void SplashRenderDrawRoundedRect(int x,
+                                 int y,
+                                 int w,
+                                 int h,
+                                 int radius,
+                                 u32 color,
+                                 unsigned int opacity_percent)
+{
+    int x0 = x;
+    int y0 = y;
+    int x1 = x + w;
+    int y1 = y + h;
+    int r;
+    int row;
+    int dx_max;
+    int cr;
+    int cg;
+    int cb;
+    unsigned char alpha;
+    u64 gs_color;
+
+    if (g_gs == NULL || w <= 0 || h <= 0)
+        return;
+
+    if (x0 < 0)
+        x0 = 0;
+    if (y0 < 0)
+        y0 = 0;
+    if (x1 > g_screen_w)
+        x1 = g_screen_w;
+    if (y1 > g_screen_h)
+        y1 = g_screen_h;
+    if (x0 >= x1 || y0 >= y1)
+        return;
+
+    r = radius;
+    if (r < 0)
+        r = 0;
+    if (r > (x1 - x0) / 2)
+        r = (x1 - x0) / 2;
+    if (r > (y1 - y0) / 2)
+        r = (y1 - y0) / 2;
+
+    cr = (color >> 16) & 0xFF;
+    cg = (color >> 8) & 0xFF;
+    cb = color & 0xFF;
+    alpha = opacity_percent_to_gs_alpha(opacity_percent);
+    gs_color = GS_SETREG_RGBAQ(cr, cg, cb, alpha, 0x00);
+
+    if (r == 0) {
+        draw_filled_rect(x0, y0, x1, y1, OVERLAY_RECT_Z, gs_color);
+        return;
+    }
+
+    draw_filled_rect(x0 + r, y0, x1 - r, y1, OVERLAY_RECT_Z, gs_color);
+    draw_filled_rect(x0, y0 + r, x0 + r, y1 - r, OVERLAY_RECT_Z, gs_color);
+    draw_filled_rect(x1 - r, y0 + r, x1, y1 - r, OVERLAY_RECT_Z, gs_color);
+
+    for (row = 0; row < r; row++) {
+        dx_max = r;
+        while (dx_max > 0 && ((dx_max * dx_max) + (row * row)) > (r * r))
+            dx_max--;
+
+        if (dx_max <= 0)
+            continue;
+
+        draw_filled_rect(x0 + (r - dx_max), y0 + row, x0 + r, y0 + row + 1, OVERLAY_RECT_Z, gs_color);
+        draw_filled_rect(x1 - r, y0 + row, x1 - (r - dx_max), y0 + row + 1, OVERLAY_RECT_Z, gs_color);
+        draw_filled_rect(x0 + (r - dx_max), y1 - row - 1, x0 + r, y1 - row, OVERLAY_RECT_Z, gs_color);
+        draw_filled_rect(x1 - r, y1 - row - 1, x1 - (r - dx_max), y1 - row, OVERLAY_RECT_Z, gs_color);
+    }
+}
+
 void SplashRenderDrawTextPx(int x, int y, u32 color, const char *text)
 {
     SplashRenderDrawTextPxScaled(x, y, color, text, FONT_SCALE);
@@ -1088,4 +1188,32 @@ int SplashRenderGetHotkeysX(void)
 int SplashRenderGetHotkeysY(void)
 {
     return g_hotkeys_y;
+}
+
+int SplashRenderGetLogoX(void)
+{
+    return g_logo_x;
+}
+
+int SplashRenderGetLogoY(void)
+{
+    return g_logo_y;
+}
+
+int SplashRenderGetLogoWidth(void)
+{
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+
+    if (!logo->ready)
+        return 0;
+    return (int)logo->tex.Width;
+}
+
+int SplashRenderGetLogoHeight(void)
+{
+    const SPLASH_LAYER *logo = &g_layers[LAYER_LOGO];
+
+    if (!logo->ready)
+        return 0;
+    return (int)logo->tex.Height;
 }
