@@ -1664,10 +1664,6 @@ int main(int argc, char *argv[])
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
     LogDetectedPlatform();
-    scr_setfontcolor(0x101010);
-    scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
-    scr_setfontcolor(0xffffff);
-    // print a simple dot to allow gbs control to start displaying video before banner and pad timeout begins to run. othersiwe, users with timeout lower than 4000 will have issues to respond in time, then resets back to white text
     DPRINTF("enabling LoadModuleBuffer\n");
     sbv_patch_enable_lmb(); // The old IOP kernel has no support for LoadModuleBuffer. Apply the patch to enable it.
 
@@ -2000,6 +1996,15 @@ int main(int argc, char *argv[])
         // Apply configured video mode as early as possible so displays/scalers
         // can re-sync before splash/countdown work starts.
         apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+
+        // Show splash immediately after video mode is known so users can read it
+        // while path validation runs.
+        if (GLOBCFG.LOGO_DISP > 0) {
+            SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+            SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+            SplashDrawCenteredStatus("LOADING...", 0x404040);
+        }
+
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
@@ -2016,8 +2021,16 @@ int main(int argc, char *argv[])
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         // Keep behavior consistent when no config exists (AUTO/native default).
         apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+
+        // Keep fallback path consistent: show a quick loading overlay once
+        // video mode is selected (AUTO/native by default).
+        if (GLOBCFG.LOGO_DISP > 0) {
+            SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+            SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+            SplashDrawCenteredStatus("LOADING...", 0x404040);
+        }
+
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
-        sleep(1);
     }
 
     if (g_video_mode_selector_requested) {
@@ -2071,7 +2084,8 @@ int main(int argc, char *argv[])
         int temp_supported = 0;
 #endif
 
-        SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+        if (!SplashRenderIsActive())
+            SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
 
         if (GLOBCFG.LOGO_DISP > 0) {
             model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
