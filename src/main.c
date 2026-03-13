@@ -472,6 +472,28 @@ static void SplashDrawCenteredStatus(const char *text, u32 color)
     SplashRenderPresent();
 }
 
+static void SplashDrawCenteredStatusModeAware(int logo_disp, const char *text, u32 color)
+{
+    int line_width;
+    int x;
+    int y;
+
+    if (text == NULL || !SplashRenderIsActive())
+        return;
+
+    SplashRenderSetHotkeysVisible(logo_disp >= 3);
+    SplashRenderBeginFrame();
+    if (logo_disp >= 3)
+        SplashRenderHotkeyLines(logo_disp, NULL);
+    line_width = (int)strlen(text) * 6;
+    x = SplashRenderGetScreenCenterX() - (line_width / 2);
+    y = SplashRenderGetScreenCenterY() - 4;
+    if (x < 8)
+        x = 8;
+    SplashRenderDrawTextPxScaled(x, y, color, text, 1);
+    SplashRenderPresent();
+}
+
 static void SplashDrawCenteredStatusWithInfo(const char *text,
                                              u32 color,
                                              const char *model,
@@ -1647,6 +1669,7 @@ int main(int argc, char *argv[])
     u64 tstart;
     u64 rescue_combo_deadline = 0;
     int button, x, j, cnf_size, result;
+    int splash_early_presented = 0;
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
@@ -2002,7 +2025,8 @@ int main(int argc, char *argv[])
         if (GLOBCFG.LOGO_DISP > 0) {
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawCenteredStatus("LOADING...", 0x404040);
+            SplashDrawCenteredStatusModeAware(GLOBCFG.LOGO_DISP, "LOADING...", 0x404040);
+            splash_early_presented = 1;
         }
 
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
@@ -2027,7 +2051,8 @@ int main(int argc, char *argv[])
         if (GLOBCFG.LOGO_DISP > 0) {
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawCenteredStatus("LOADING...", 0x404040);
+            SplashDrawCenteredStatusModeAware(GLOBCFG.LOGO_DISP, "LOADING...", 0x404040);
+            splash_early_presented = 1;
         }
 
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
@@ -2128,8 +2153,9 @@ int main(int argc, char *argv[])
         }
 
         if (SplashRenderIsActive()) {
+            int pass_count = splash_early_presented ? 1 : 2;
             int pass;
-            for (pass = 0; pass < 2; pass++) {
+            for (pass = 0; pass < pass_count; pass++) {
                 SplashRenderBeginFrame();
                 SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
                 SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
