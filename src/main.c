@@ -909,6 +909,13 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     for (i = 0; i < KEY_COUNT; i++)
         first_valid[i] = NULL;
 
+    // For LOGO_DISPLAY 4/5 (display_mode 2/3), keep lines blank until each
+    // corresponding entry is actually resolved during scan.
+    if (display_mode == 2 || display_mode == 3) {
+        for (i = 0; i < KEY_COUNT; i++)
+            GLOBCFG.KEYNAMES[i] = "";
+    }
+
     if (scan_paths) {
         build_device_available_cache(dev_ok, DEV_COUNT);
         for (i = 0; i < KEY_COUNT; i++) {
