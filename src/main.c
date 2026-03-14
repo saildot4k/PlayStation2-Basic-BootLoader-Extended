@@ -497,10 +497,9 @@ static void SplashDrawLoadingStatus(int logo_disp)
     phase = (int)((now_ms / 500u) % 3u);
     dots = phase + 1;
     strcpy(loading_line, "Loading");
-    loading_line[7] = ' ';
     for (i = 0; i < dots; i++)
-        loading_line[8 + i] = '.';
-    loading_line[8 + dots] = '\0';
+        loading_line[7 + i] = '.';
+    loading_line[7 + dots] = '\0';
 
     screen_w = SplashRenderGetScreenWidth();
     screen_h = SplashRenderGetScreenHeight();
