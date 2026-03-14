@@ -2093,6 +2093,10 @@ int main(int argc, char *argv[])
         // Show splash immediately after video mode is known so users can read it
         // while path validation runs.
         if (GLOBCFG.LOGO_DISP > 0) {
+            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
+                for (x = 0; x < KEY_COUNT; x++)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
             SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
@@ -2119,6 +2123,10 @@ int main(int argc, char *argv[])
         // Keep fallback path consistent: show a quick loading overlay once
         // video mode is selected (AUTO/native by default).
         if (GLOBCFG.LOGO_DISP > 0) {
+            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
+                for (x = 0; x < KEY_COUNT; x++)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
             SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
