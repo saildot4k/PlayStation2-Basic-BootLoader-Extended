@@ -926,56 +926,20 @@ static int logo_to_hotkey_display(int logo_disp)
 static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 {
     static char name_buf[KEY_COUNT][MAX_LEN];
-    static const int render_hotkey_order[KEY_COUNT] = {
-        AUTO,
-        TRIANGLE,
-        CIRCLE,
-        CROSS,
-        SQUARE,
-        UP,
-        DOWN,
-        LEFT,
-        RIGHT,
-        L1,
-        L2,
-        L3,
-        R1,
-        R2,
-        R3,
-        SELECT,
-        START,
-    };
     int dev_ok[DEV_COUNT];
     const char *first_valid[KEY_COUNT];
-    int logo_disp = GLOBCFG.LOGO_DISP;
-    int i, j, scan_idx;
+    int i, j;
 
     for (i = 0; i < KEY_COUNT; i++)
         first_valid[i] = NULL;
 
-    // For LOGO_DISPLAY 4/5 (display_mode 2/3), keep lines blank until each
-    // corresponding entry is actually resolved during scan.
-    if (display_mode == 2 || display_mode == 3) {
-        for (i = 0; i < KEY_COUNT; i++)
-            GLOBCFG.KEYNAMES[i] = "";
-    }
-
     if (scan_paths) {
         build_device_available_cache(dev_ok, DEV_COUNT);
-        if (logo_disp > 0)
-            SplashDrawLoadingStatus(logo_disp);
-        for (scan_idx = 0; scan_idx < KEY_COUNT; scan_idx++) {
-            if (display_mode == 2 || display_mode == 3)
-                i = render_hotkey_order[scan_idx];
-            else
-                i = scan_idx;
+        for (i = 0; i < KEY_COUNT; i++) {
             int found = 0;
 
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
-
-                if (logo_disp > 0)
-                    SplashDrawLoadingStatus(logo_disp);
 
                 if (found) {
                     GLOBCFG.KEYPATHS[i][j] = "";
@@ -1037,8 +1001,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 }
             }
         }
-        if (logo_disp > 0)
-            SplashDrawLoadingStatus(logo_disp);
     }
 
     if (display_mode < 0 || display_mode > 3)
@@ -2131,10 +2093,6 @@ int main(int argc, char *argv[])
         // Show splash immediately after video mode is known so users can read it
         // while path validation runs.
         if (GLOBCFG.LOGO_DISP > 0) {
-            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
-                for (x = 0; x < KEY_COUNT; x++)
-                    GLOBCFG.KEYNAMES[x] = "";
-            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
             SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
@@ -2161,10 +2119,6 @@ int main(int argc, char *argv[])
         // Keep fallback path consistent: show a quick loading overlay once
         // video mode is selected (AUTO/native by default).
         if (GLOBCFG.LOGO_DISP > 0) {
-            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
-                for (x = 0; x < KEY_COUNT; x++)
-                    GLOBCFG.KEYNAMES[x] = "";
-            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
             SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
