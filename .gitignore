@@ -22,3 +22,6 @@ asm/
 *.XLF
 *.dat
 bin/CONFIG.INI
+
+# Local external references
+thirdparty/OSDMenu/

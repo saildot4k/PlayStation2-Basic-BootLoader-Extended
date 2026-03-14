@@ -51,5 +51,9 @@ SECTIONS
     KEEP(*ee_exception_l2.o(.bss.*))
     __egsm_end = .;
   }
+
+  /* Keep eGSM inside 0x00080000-0x000813FF to avoid PS2LOGO kernel stubs at 0x00081400+. */
+  ASSERT(__egsm_start >= 0x00080000, "eGSM start must be in reserved kernel RAM")
+  ASSERT(__egsm_end <= 0x00081400, "eGSM exceeds reserved kernel RAM and overlaps PS2LOGO stubs")
 }
 INSERT BEFORE .text;
