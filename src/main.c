@@ -472,10 +472,11 @@ static void SplashDrawCenteredStatus(const char *text, u32 color)
     SplashRenderPresent();
 }
 
-static void SplashDrawLoadingStatus(int logo_disp, int anim_step)
+static void SplashDrawLoadingStatus(int logo_disp)
 {
     char loading_line[16];
     int dots;
+    int phase;
     int i;
     int loading_w;
     int loading_x;
@@ -487,11 +488,14 @@ static void SplashDrawLoadingStatus(int logo_disp, int anim_step)
     int logo_y;
     int logo_w;
     int logo_h;
+    u64 now_ms;
 
     if (!SplashRenderIsActive())
         return;
 
-    dots = (anim_step % 3) + 1;
+    now_ms = Timer();
+    phase = (int)((now_ms / 500u) % 3u);
+    dots = phase + 1;
     strcpy(loading_line, "Loading");
     loading_line[7] = ' ';
     for (i = 0; i < dots; i++)
@@ -900,7 +904,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     int dev_ok[DEV_COUNT];
     const char *first_valid[KEY_COUNT];
     int logo_disp = GLOBCFG.LOGO_DISP;
-    int loading_anim_step = 0;
     int i, j;
 
     for (i = 0; i < KEY_COUNT; i++)
@@ -912,7 +915,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
             int found = 0;
 
             if (logo_disp > 0)
-                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                SplashDrawLoadingStatus(logo_disp);
 
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
@@ -943,7 +946,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                                 GLOBCFG.KEYNAMES[i] = name_buf[i];
                             }
                             if (logo_disp > 0)
-                                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                                SplashDrawLoadingStatus(logo_disp);
                         }
                         found = 1;
                     }
@@ -974,7 +977,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                                 GLOBCFG.KEYNAMES[i] = name_buf[i];
                             }
                             if (logo_disp > 0)
-                                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                                SplashDrawLoadingStatus(logo_disp);
                         }
                         found = 1;
                     } else {
@@ -1004,7 +1007,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                                 GLOBCFG.KEYNAMES[i] = name_buf[i];
                             }
                             if (logo_disp > 0)
-                                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                                SplashDrawLoadingStatus(logo_disp);
                         }
                         found = 1;
                     } else {
@@ -1032,7 +1035,7 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                             GLOBCFG.KEYNAMES[i] = name_buf[i];
                         }
                         if (logo_disp > 0)
-                            SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                            SplashDrawLoadingStatus(logo_disp);
                     }
                     found = 1;
                 } else {
@@ -2134,7 +2137,7 @@ int main(int argc, char *argv[])
         if (GLOBCFG.LOGO_DISP > 0) {
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP, 0);
+            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
             splash_early_presented = 1;
         }
 
@@ -2160,7 +2163,7 @@ int main(int argc, char *argv[])
         if (GLOBCFG.LOGO_DISP > 0) {
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP, 0);
+            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
             splash_early_presented = 1;
         }
 
