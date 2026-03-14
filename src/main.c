@@ -917,14 +917,17 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 
     if (scan_paths) {
         build_device_available_cache(dev_ok, DEV_COUNT);
+        if (logo_disp > 0)
+            SplashDrawLoadingStatus(logo_disp);
         for (i = 0; i < KEY_COUNT; i++) {
             int found = 0;
 
-            if (logo_disp > 0)
-                SplashDrawLoadingStatus(logo_disp);
-
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
+
+                if (logo_disp > 0)
+                    SplashDrawLoadingStatus(logo_disp);
+
                 if (found) {
                     GLOBCFG.KEYPATHS[i][j] = "";
                     continue;
@@ -951,8 +954,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                                 name_buf[i][len] = '\0';
                                 GLOBCFG.KEYNAMES[i] = name_buf[i];
                             }
-                            if (logo_disp > 0)
-                                SplashDrawLoadingStatus(logo_disp);
                         }
                         found = 1;
                     }
@@ -982,8 +983,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                                 name_buf[i][len] = '\0';
                                 GLOBCFG.KEYNAMES[i] = name_buf[i];
                             }
-                            if (logo_disp > 0)
-                                SplashDrawLoadingStatus(logo_disp);
                         }
                         found = 1;
                     } else {
@@ -1012,8 +1011,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                                 name_buf[i][len] = '\0';
                                 GLOBCFG.KEYNAMES[i] = name_buf[i];
                             }
-                            if (logo_disp > 0)
-                                SplashDrawLoadingStatus(logo_disp);
                         }
                         found = 1;
                     } else {
@@ -1040,8 +1037,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                             name_buf[i][len] = '\0';
                             GLOBCFG.KEYNAMES[i] = name_buf[i];
                         }
-                        if (logo_disp > 0)
-                            SplashDrawLoadingStatus(logo_disp);
                     }
                     found = 1;
                 } else {
@@ -1049,6 +1044,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 }
             }
         }
+        if (logo_disp > 0)
+            SplashDrawLoadingStatus(logo_disp);
     }
 
     if (display_mode < 0 || display_mode > 3)
@@ -2141,6 +2138,10 @@ int main(int argc, char *argv[])
         // Show splash immediately after video mode is known so users can read it
         // while path validation runs.
         if (GLOBCFG.LOGO_DISP > 0) {
+            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
+                for (x = 0; x < KEY_COUNT; x++)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
             SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
@@ -2167,6 +2168,10 @@ int main(int argc, char *argv[])
         // Keep fallback path consistent: show a quick loading overlay once
         // video mode is selected (AUTO/native by default).
         if (GLOBCFG.LOGO_DISP > 0) {
+            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
+                for (x = 0; x < KEY_COUNT; x++)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
             SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
