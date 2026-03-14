@@ -907,10 +907,29 @@ static int logo_to_hotkey_display(int logo_disp)
 static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 {
     static char name_buf[KEY_COUNT][MAX_LEN];
+    static const int render_hotkey_order[KEY_COUNT] = {
+        AUTO,
+        TRIANGLE,
+        CIRCLE,
+        CROSS,
+        SQUARE,
+        UP,
+        DOWN,
+        LEFT,
+        RIGHT,
+        L1,
+        L2,
+        L3,
+        R1,
+        R2,
+        R3,
+        SELECT,
+        START,
+    };
     int dev_ok[DEV_COUNT];
     const char *first_valid[KEY_COUNT];
     int logo_disp = GLOBCFG.LOGO_DISP;
-    int i, j;
+    int i, j, scan_idx;
 
     for (i = 0; i < KEY_COUNT; i++)
         first_valid[i] = NULL;
@@ -926,7 +945,11 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
         build_device_available_cache(dev_ok, DEV_COUNT);
         if (logo_disp > 0)
             SplashDrawLoadingStatus(logo_disp);
-        for (i = 0; i < KEY_COUNT; i++) {
+        for (scan_idx = 0; scan_idx < KEY_COUNT; scan_idx++) {
+            if (display_mode == 2 || display_mode == 3)
+                i = render_hotkey_order[scan_idx];
+            else
+                i = scan_idx;
             int found = 0;
 
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
