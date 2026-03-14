@@ -707,7 +707,7 @@ static int PS2GetBootFile(char *boot)
 /*  While this function uses sceCdReadKey() to obtain the filename,
     it is possible to actually parse SYSTEM.CNF and get the boot filename from BOOT2.
     Lots of homebrew software do that. */
-int PS2DiscBoot(int skip_PS2LOGO)
+int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm_override_arg)
 {
     DPRINTF("%s: start\n skip_ps2_logo=%d\n", __func__, skip_PS2LOGO);
     char ps2disc_boot[CNF_PATH_LEN_MAX] = "";             // This was originally static/global.
@@ -797,9 +797,19 @@ int PS2DiscBoot(int skip_PS2LOGO)
     DPRINTF("%s:\n\tline:[%s]\n\tps2discboot:[%s]\n", __func__, line, ps2disc_boot);
     GameIDHandleDisc(ps2disc_boot, GameIDDiscEnabled());
 #if EGSM_BUILD
-    osdgsm_arg = PS2GetOSDGSMArgument(ps2disc_boot, &osdgsm_flags);
-    if (osdgsm_arg != NULL)
-        DPRINTF("%s: discovered OSDGSM setting '%s' for %s\n", __func__, osdgsm_arg, ps2disc_boot);
+    if (egsm_override_flags != 0) {
+        osdgsm_flags = egsm_override_flags;
+        if (egsm_override_arg != NULL)
+            osdgsm_arg = PS2DupString(egsm_override_arg);
+        DPRINTF("%s: using explicit -gsm override '%s' flags=0x%08x\n",
+                __func__,
+                (egsm_override_arg != NULL) ? egsm_override_arg : "<unknown>",
+                osdgsm_flags);
+    } else {
+        osdgsm_arg = PS2GetOSDGSMArgument(ps2disc_boot, &osdgsm_flags);
+        if (osdgsm_arg != NULL)
+            DPRINTF("%s: discovered OSDGSM setting '%s' for %s\n", __func__, osdgsm_arg, ps2disc_boot);
+    }
 #else
     DPRINTF("%s: eGSM build disabled, skipping OSDGSM.CNF lookup\n", __func__);
 #endif

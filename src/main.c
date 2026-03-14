@@ -1,7 +1,13 @@
+#include <stdint.h>
+
 #include "main.h"
 #include "game_id.h"
+#include "egsm_parse.h"
 #include "splash_screen.h"
 #include "splash_render.h"
+
+static int g_pending_command_argc;
+static char **g_pending_command_argv;
 
 // Whitespace/CRLF trimming for config values (in-place)
 // Returns a pointer to the first non-whitespace character (may be inside the original buffer).
@@ -880,6 +886,56 @@ static int allow_virtual_patinfo_entry(int key_idx, int entry_idx, const char *p
 }
 #endif
 
+static void set_pending_command_args(int argc, char *argv[])
+{
+    if (argc > 0 && argv != NULL) {
+        g_pending_command_argc = argc;
+        g_pending_command_argv = argv;
+    } else {
+        g_pending_command_argc = 0;
+        g_pending_command_argv = NULL;
+    }
+}
+
+static void parse_disc_egsm_override(int argc, char *argv[], uint32_t *flags_out, const char **arg_out)
+{
+    int i;
+
+    if (flags_out != NULL)
+        *flags_out = 0;
+    if (arg_out != NULL)
+        *arg_out = NULL;
+
+    if (argc <= 0 || argv == NULL)
+        return;
+
+    for (i = 0; i < argc; i++) {
+        const char *value;
+        uint32_t flags;
+
+        if (argv[i] == NULL || !ci_starts_with(argv[i], "-gsm="))
+            continue;
+
+        value = argv[i] + 5;
+        while (*value == ' ' || *value == '\t')
+            value++;
+
+        if (*value == '\0')
+            continue;
+
+        flags = parse_egsm_flags_common(value);
+        if (flags == 0) {
+            DPRINTF("Ignoring invalid disc command -gsm value '%s'\n", value);
+            continue;
+        }
+
+        if (flags_out != NULL)
+            *flags_out = flags;
+        if (arg_out != NULL)
+            *arg_out = value;
+    }
+}
+
 #ifdef MMCE
 static char preferred_mmce_slot(void)
 {
@@ -1046,6 +1102,8 @@ char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
 static int g_is_psx_desr = 0;
 static int g_cdvd_cancelled = 0;
+static int g_pending_command_argc = 0;
+static char **g_pending_command_argv = NULL;
 #define ROMVER_MODEL_PREFIX_LEN 5
 static const char *const g_psx_desr_rom_prefixes[] = {
     "0180J",
@@ -2349,7 +2407,11 @@ int main(int argc, char *argv[])
                     } else {
                         if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]))
                             ShowLaunchStatus(GLOBCFG.KEYPATHS[x + 1][j]);
+                        if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]))
+                            set_pending_command_args(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         EXECPATHS[j] = CheckPath(GLOBCFG.KEYPATHS[x + 1][j]);
+                        if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]))
+                            set_pending_command_args(0, NULL);
                         if (is_command_token(GLOBCFG.KEYPATHS[x + 1][j]) && g_cdvd_cancelled) {
                             g_cdvd_cancelled = 0;
                             command_cancelled = 1;
@@ -2490,9 +2552,9 @@ char *CheckPath(char *path)
     {
         g_cdvd_cancelled = 0;
         if (!strcmp("$CDVD", path))
-            g_cdvd_cancelled = (dischandler(0) < 0);
+            g_cdvd_cancelled = (dischandler(0, g_pending_command_argc, g_pending_command_argv) < 0);
         if (!strcmp("$CDVD_NO_PS2LOGO", path))
-            g_cdvd_cancelled = (dischandler(1) < 0);
+            g_cdvd_cancelled = (dischandler(1, g_pending_command_argc, g_pending_command_argv) < 0);
 #ifdef HDD
         if (!strcmp("$HDDCHECKER", path))
             HDDChecker();
@@ -2862,7 +2924,7 @@ void poweroffCallback(void *arg)
 }
 
 #endif
-int dischandler(int skip_ps2logo)
+int dischandler(int skip_ps2logo, int argc, char *argv[])
 {
     int OldDiscType, DiscType, ValidDiscInserted, result, first_run = 1;
     int cancel_requested = 0;
@@ -2886,8 +2948,15 @@ int dischandler(int skip_ps2logo)
     const char *dvdver = "";
     const char *source = "";
     const char *temp_celsius = NULL;
+    const char *egsm_override_arg = NULL;
     char disc_status[64];
+    uint32_t egsm_override_flags = 0;
     u32 STAT;
+
+    parse_disc_egsm_override(argc, argv, &egsm_override_flags, &egsm_override_arg);
+    if (egsm_override_flags != 0)
+        DPRINTF("%s: using command -gsm override '%s' flags=0x%08x\n",
+                __func__, egsm_override_arg, egsm_override_flags);
 
     use_splash_ui = SplashRenderIsActive();
 
@@ -3194,7 +3263,7 @@ int dischandler(int skip_ps2logo)
         case SCECdPS2DVD:
             // Boot PlayStation 2 disc
             PS2DiscSetConfigHint(get_disc_config_hint());
-            PS2DiscBoot(skip_ps2logo);
+            PS2DiscBoot(skip_ps2logo, egsm_override_flags, egsm_override_arg);
             break;
 
         case SCECdDVDV:
