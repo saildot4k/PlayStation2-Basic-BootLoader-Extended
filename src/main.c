@@ -472,6 +472,96 @@ static void SplashDrawCenteredStatus(const char *text, u32 color)
     SplashRenderPresent();
 }
 
+static void SplashDrawLoadingStatus(int logo_disp)
+{
+    const char *scan_hotkey_lines[KEY_COUNT] = {
+        GLOBCFG.KEYNAMES[AUTO],
+        GLOBCFG.KEYNAMES[TRIANGLE],
+        GLOBCFG.KEYNAMES[CIRCLE],
+        GLOBCFG.KEYNAMES[CROSS],
+        GLOBCFG.KEYNAMES[SQUARE],
+        GLOBCFG.KEYNAMES[UP],
+        GLOBCFG.KEYNAMES[DOWN],
+        GLOBCFG.KEYNAMES[LEFT],
+        GLOBCFG.KEYNAMES[RIGHT],
+        GLOBCFG.KEYNAMES[L1],
+        GLOBCFG.KEYNAMES[L2],
+        GLOBCFG.KEYNAMES[L3],
+        GLOBCFG.KEYNAMES[R1],
+        GLOBCFG.KEYNAMES[R2],
+        GLOBCFG.KEYNAMES[R3],
+        GLOBCFG.KEYNAMES[SELECT],
+        GLOBCFG.KEYNAMES[START],
+    };
+    char loading_line[16];
+    int dots;
+    int loading_max_w;
+    int i;
+    int loading_x;
+    int loading_y;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
+    u64 now_ms;
+    static int s_loading_phase = 0;
+    static u64 s_loading_phase_tick_ms = 0;
+
+    if (!SplashRenderIsActive())
+        return;
+
+    now_ms = Timer();
+    if (s_loading_phase_tick_ms == 0)
+        s_loading_phase_tick_ms = now_ms;
+    if (now_ms >= s_loading_phase_tick_ms + 500u) {
+        s_loading_phase = (s_loading_phase + 1) % 3;
+        s_loading_phase_tick_ms = now_ms;
+    }
+    dots = s_loading_phase + 1;
+    strcpy(loading_line, "Loading");
+    for (i = 0; i < dots; i++)
+        loading_line[7 + i] = '.';
+    loading_line[7 + dots] = '\0';
+
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    anchor_center_x = SplashRenderGetScreenCenterX();
+    logo_x = SplashRenderGetLogoX();
+    logo_y = SplashRenderGetLogoY();
+    logo_w = SplashRenderGetLogoWidth();
+    logo_h = SplashRenderGetLogoHeight();
+
+    if (logo_x >= 0 && logo_y >= 0 && logo_w > 0 && logo_h > 0) {
+        anchor_center_x = logo_x + (logo_w / 2);
+        loading_y = logo_y + logo_h + 6;
+    } else {
+        loading_y = SplashRenderGetScreenCenterY() + 10;
+    }
+
+    if (loading_y > screen_h - 20)
+        loading_y = screen_h - 20;
+    if (loading_y < 0)
+        loading_y = 0;
+
+    // Keep the loading label anchored so it does not shift as dots change.
+    loading_max_w = (int)strlen("Loading...") * 6;
+    loading_x = anchor_center_x - (loading_max_w / 2);
+    if (loading_x < 8)
+        loading_x = 8;
+    if (loading_x + loading_max_w > screen_w - 8)
+        loading_x = screen_w - loading_max_w - 8;
+
+    SplashRenderSetHotkeysVisible(logo_disp >= 3);
+    SplashRenderBeginFrame();
+    if (logo_disp >= 3)
+        SplashRenderHotkeyLines(logo_disp, scan_hotkey_lines);
+    SplashRenderDrawTextPxScaled(loading_x, loading_y, 0x404040, loading_line, 1);
+    SplashRenderPresent();
+}
+
 static void SplashDrawCenteredStatusWithInfo(const char *text,
                                              u32 color,
                                              const char *model,
@@ -838,6 +928,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     static char name_buf[KEY_COUNT][MAX_LEN];
     int dev_ok[DEV_COUNT];
     const char *first_valid[KEY_COUNT];
+    int logo_disp = GLOBCFG.LOGO_DISP;
+    u64 next_loading_refresh_ms = 0;
     int i, j;
 
     for (i = 0; i < KEY_COUNT; i++)
@@ -845,10 +937,22 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 
     if (scan_paths) {
         build_device_available_cache(dev_ok, DEV_COUNT);
+        if (logo_disp > 0)
+            next_loading_refresh_ms = Timer() + 500u;
         for (i = 0; i < KEY_COUNT; i++) {
             int found = 0;
+
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
+
+                if (logo_disp > 0) {
+                    u64 now_ms = Timer();
+                    if (now_ms >= next_loading_refresh_ms) {
+                        SplashDrawLoadingStatus(logo_disp);
+                        next_loading_refresh_ms = now_ms + 500u;
+                    }
+                }
+
                 if (found) {
                     GLOBCFG.KEYPATHS[i][j] = "";
                     continue;
@@ -1647,6 +1751,7 @@ int main(int argc, char *argv[])
     u64 tstart;
     u64 rescue_combo_deadline = 0;
     int button, x, j, cnf_size, result;
+    int splash_early_presented = 0;
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
@@ -1664,10 +1769,6 @@ int main(int argc, char *argv[])
         DPRINTF("\targv[%d] = [%s]\n", x, argv[x]);
 #endif
     LogDetectedPlatform();
-    scr_setfontcolor(0x101010);
-    scr_printf(".\n"); // GBS control does not detect image output with scr debug till the first char is printed
-    scr_setfontcolor(0xffffff);
-    // print a simple dot to allow gbs control to start displaying video before banner and pad timeout begins to run. othersiwe, users with timeout lower than 4000 will have issues to respond in time, then resets back to white text
     DPRINTF("enabling LoadModuleBuffer\n");
     sbv_patch_enable_lmb(); // The old IOP kernel has no support for LoadModuleBuffer. Apply the patch to enable it.
 
@@ -2000,6 +2101,20 @@ int main(int argc, char *argv[])
         // Apply configured video mode as early as possible so displays/scalers
         // can re-sync before splash/countdown work starts.
         apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+
+        // Show splash immediately after video mode is known so users can read it
+        // while path validation runs.
+        if (GLOBCFG.LOGO_DISP > 0) {
+            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
+                for (x = 0; x < KEY_COUNT; x++)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
+            SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+            SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
+            splash_early_presented = 1;
+        }
+
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
     } else {
         scr_printf("Can't find config, loading hardcoded paths\n");
@@ -2016,8 +2131,21 @@ int main(int argc, char *argv[])
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         // Keep behavior consistent when no config exists (AUTO/native default).
         apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+
+        // Keep fallback path consistent: show a quick loading overlay once
+        // video mode is selected (AUTO/native by default).
+        if (GLOBCFG.LOGO_DISP > 0) {
+            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
+                for (x = 0; x < KEY_COUNT; x++)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
+            SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+            SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
+            splash_early_presented = 1;
+        }
+
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
-        sleep(1);
     }
 
     if (g_video_mode_selector_requested) {
@@ -2071,7 +2199,8 @@ int main(int argc, char *argv[])
         int temp_supported = 0;
 #endif
 
-        SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
+        if (!SplashRenderIsActive())
+            SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
 
         if (GLOBCFG.LOGO_DISP > 0) {
             model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
@@ -2114,8 +2243,9 @@ int main(int argc, char *argv[])
         }
 
         if (SplashRenderIsActive()) {
+            int pass_count = splash_early_presented ? 1 : 2;
             int pass;
-            for (pass = 0; pass < 2; pass++) {
+            for (pass = 0; pass < pass_count; pass++) {
                 SplashRenderBeginFrame();
                 SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
                 SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
