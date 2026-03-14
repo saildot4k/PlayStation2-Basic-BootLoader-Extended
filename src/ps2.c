@@ -260,6 +260,38 @@ static char *PS2TrimLeft(char *s)
     return s;
 }
 
+static int PS2StrEqCI(const char *a, const char *b)
+{
+    if (a == NULL || b == NULL)
+        return 0;
+
+    while (*a != '\0' && *b != '\0') {
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b))
+            return 0;
+        a++;
+        b++;
+    }
+
+    return (*a == '\0' && *b == '\0');
+}
+
+static int PS2StrnEqCI(const char *a, const char *b, size_t len)
+{
+    size_t i;
+
+    if (a == NULL || b == NULL)
+        return 0;
+
+    for (i = 0; i < len; i++) {
+        if (a[i] == '\0' || b[i] == '\0')
+            return 0;
+        if (tolower((unsigned char)a[i]) != tolower((unsigned char)b[i]))
+            return 0;
+    }
+
+    return 1;
+}
+
 static void PS2TrimRight(char *s)
 {
     size_t len;
@@ -348,15 +380,15 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
     if (flags_out != NULL)
         *flags_out = 0;
 
-    if (title_id == NULL || title_id[0] == '\0')
-        return NULL;
-
     DPRINTF("%s: trying to load OSDGSM.CNF\n", __func__);
     gsm_conf = PS2OpenOSDGSMConfig();
     if (gsm_conf == NULL) {
         DPRINTF("%s: no OSDGSM.CNF found\n", __func__);
         return NULL;
     }
+
+    if (title_id == NULL || title_id[0] == '\0')
+        DPRINTF("%s: no title id available, checking default OSDGSM value only\n", __func__);
 
     while (fgets(line_buffer, sizeof(line_buffer), gsm_conf) != NULL) {
         char *key;
@@ -376,13 +408,13 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
         if (*key == '\0' || *value == '\0')
             continue;
 
-        if (!strncmp(key, title_id, 11)) {
+        if (title_id != NULL && title_id[0] != '\0' && PS2StrnEqCI(key, title_id, 11)) {
             DPRINTF("%s: OSDGSM.CNF title-specific match for %s\n", __func__, title_id);
             title_arg = PS2DupString(value);
             break;
         }
 
-        if (!strncmp(key, "default", 7)) {
+        if (PS2StrEqCI(key, "default")) {
             char *tmp = PS2DupString(value);
             if (tmp != NULL) {
                 if (default_arg != NULL)
@@ -408,7 +440,10 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
     if (selected_arg != NULL) {
         uint32_t flags = PS2ParseOSDGSMFlags(selected_arg);
         if (flags == 0) {
-            DPRINTF("%s: ignoring invalid OSDGSM value '%s' for title %s\n", __func__, selected_arg, title_id);
+            if (title_id != NULL && title_id[0] != '\0')
+                DPRINTF("%s: ignoring invalid OSDGSM value '%s' for title %s\n", __func__, selected_arg, title_id);
+            else
+                DPRINTF("%s: ignoring invalid default OSDGSM value '%s'\n", __func__, selected_arg);
             free(selected_arg);
             return NULL;
         }
@@ -772,6 +807,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
     CleanUp();
     if (skip_PS2LOGO) {
         PS2ApplyDeckardXParamIfNeeded(ps2disc_boot);
+        SifExitRpc();
         SifExitCmd();
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)
@@ -786,6 +822,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
         if (ret && (ret = SifLoadElfEncrypted("rom0:PS2LOGO", &elfdata))) {
             SifLoadFileExit();
             DPRINTF("%s: failed to load rom0:PS2LOGO for patching (%d); falling back to LoadExecPS2\n", __func__, ret);
+            SifExitRpc();
             SifExitCmd();
             PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
@@ -797,6 +834,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
         if (elfdata.epc == 0) {
             DPRINTF("%s: PS2LOGO load returned empty entrypoint; falling back to LoadExecPS2\n", __func__);
+            SifExitRpc();
             SifExitCmd();
             PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
@@ -807,6 +845,7 @@ int PS2DiscBoot(int skip_PS2LOGO)
 
         PatchPS2LOGO(elfdata.epc, is_pal_vmode);
         ResetIOPForExec();
+        SifExitRpc();
         SifExitCmd();
         PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)

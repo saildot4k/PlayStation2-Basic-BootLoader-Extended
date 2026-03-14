@@ -1,4 +1,5 @@
 #define NEWLIB_PORT_AWARE
+#include <ctype.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <string.h>
@@ -7,6 +8,20 @@
 #include "debugprintf.h"
 #include "egsm_api.h"
 #include "egsm_parse.h"
+
+static int egsm_starts_with_ci(const char *value, const char *prefix)
+{
+    while (*prefix != '\0') {
+        if (*value == '\0')
+            return 0;
+        if (tolower((unsigned char)*value) != tolower((unsigned char)*prefix))
+            return 0;
+        value++;
+        prefix++;
+    }
+
+    return 1;
+}
 
 uint32_t parse_egsm_flags_common(const char *gsm_arg)
 {
@@ -19,7 +34,7 @@ uint32_t parse_egsm_flags_common(const char *gsm_arg)
     if (p == NULL || *p == '\0')
         return 0;
 
-    if (!strncmp(p, "fp", 2)) {
+    if (egsm_starts_with_ci(p, "fp")) {
         switch (p[2]) {
             case '1':
                 flags |= EGSM_FLAG_VMODE_FP1;
@@ -31,7 +46,7 @@ uint32_t parse_egsm_flags_common(const char *gsm_arg)
                 return 0;
         }
         p += 3;
-    } else if (!strncmp(p, "1080ix", 6)) {
+    } else if (egsm_starts_with_ci(p, "1080ix")) {
         switch (p[6]) {
             case '1':
                 flags |= EGSM_FLAG_VMODE_1080I_X1;
@@ -46,6 +61,21 @@ uint32_t parse_egsm_flags_common(const char *gsm_arg)
                 return 0;
         }
         p += 7;
+    } else if (egsm_starts_with_ci(p, "1080x")) {
+        switch (p[5]) {
+            case '1':
+                flags |= EGSM_FLAG_VMODE_1080I_X1;
+                break;
+            case '2':
+                flags |= EGSM_FLAG_VMODE_1080I_X2;
+                break;
+            case '3':
+                flags |= EGSM_FLAG_VMODE_1080I_X3;
+                break;
+            default:
+                return 0;
+        }
+        p += 6;
     } else {
         return 0;
     }
