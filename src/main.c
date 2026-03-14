@@ -472,25 +472,64 @@ static void SplashDrawCenteredStatus(const char *text, u32 color)
     SplashRenderPresent();
 }
 
-static void SplashDrawCenteredStatusModeAware(int logo_disp, const char *text, u32 color)
+static void SplashDrawLoadingStatus(int logo_disp, int anim_step)
 {
-    int line_width;
-    int x;
-    int y;
+    char loading_line[16];
+    int dots;
+    int i;
+    int loading_w;
+    int loading_x;
+    int loading_y;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
 
-    if (text == NULL || !SplashRenderIsActive())
+    if (!SplashRenderIsActive())
         return;
+
+    dots = (anim_step % 3) + 1;
+    strcpy(loading_line, "Loading");
+    loading_line[7] = ' ';
+    for (i = 0; i < dots; i++)
+        loading_line[8 + i] = '.';
+    loading_line[8 + dots] = '\0';
+
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    anchor_center_x = SplashRenderGetScreenCenterX();
+    logo_x = SplashRenderGetLogoX();
+    logo_y = SplashRenderGetLogoY();
+    logo_w = SplashRenderGetLogoWidth();
+    logo_h = SplashRenderGetLogoHeight();
+
+    if (logo_x >= 0 && logo_y >= 0 && logo_w > 0 && logo_h > 0) {
+        anchor_center_x = logo_x + (logo_w / 2);
+        loading_y = logo_y + logo_h + 6;
+    } else {
+        loading_y = SplashRenderGetScreenCenterY() + 10;
+    }
+
+    if (loading_y > screen_h - 20)
+        loading_y = screen_h - 20;
+    if (loading_y < 0)
+        loading_y = 0;
+
+    loading_w = (int)strlen(loading_line) * 6;
+    loading_x = anchor_center_x - (loading_w / 2);
+    if (loading_x < 8)
+        loading_x = 8;
+    if (loading_x + loading_w > screen_w - 8)
+        loading_x = screen_w - loading_w - 8;
 
     SplashRenderSetHotkeysVisible(logo_disp >= 3);
     SplashRenderBeginFrame();
     if (logo_disp >= 3)
-        SplashRenderHotkeyLines(logo_disp, NULL);
-    line_width = (int)strlen(text) * 6;
-    x = SplashRenderGetScreenCenterX() - (line_width / 2);
-    y = SplashRenderGetScreenCenterY() - 4;
-    if (x < 8)
-        x = 8;
-    SplashRenderDrawTextPxScaled(x, y, color, text, 1);
+        SplashRenderHotkeyLines(logo_disp, GLOBCFG.KEYNAMES);
+    SplashRenderDrawTextPxScaled(loading_x, loading_y, 0x404040, loading_line, 1);
     SplashRenderPresent();
 }
 
@@ -860,6 +899,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     static char name_buf[KEY_COUNT][MAX_LEN];
     int dev_ok[DEV_COUNT];
     const char *first_valid[KEY_COUNT];
+    int logo_disp = GLOBCFG.LOGO_DISP;
+    int loading_anim_step = 0;
     int i, j;
 
     for (i = 0; i < KEY_COUNT; i++)
@@ -869,6 +910,10 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
         build_device_available_cache(dev_ok, DEV_COUNT);
         for (i = 0; i < KEY_COUNT; i++) {
             int found = 0;
+
+            if (logo_disp > 0)
+                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
                 if (found) {
@@ -882,8 +927,24 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 if (is_command_token(path)) {
                     const char *cmd_display = NULL;
                     if (command_display_path(path, dev_ok, &cmd_display)) {
-                        if (first_valid[i] == NULL)
+                        if (first_valid[i] == NULL) {
                             first_valid[i] = (cmd_display != NULL) ? cmd_display : path;
+                            if (display_mode == 3) {
+                                GLOBCFG.KEYNAMES[i] = first_valid[i];
+                            } else if (display_mode == 2) {
+                                const char *base = path_basename(first_valid[i]);
+                                size_t len = strlen(base);
+                                if (is_elf_ext_ci(base, len))
+                                    len -= 4;
+                                if (len >= MAX_LEN)
+                                    len = MAX_LEN - 1;
+                                memcpy(name_buf[i], base, len);
+                                name_buf[i][len] = '\0';
+                                GLOBCFG.KEYNAMES[i] = name_buf[i];
+                            }
+                            if (logo_disp > 0)
+                                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                        }
                         found = 1;
                     }
                     continue; // Commands only run on keypress.
@@ -897,8 +958,24 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
                     if (resolve_pair_path(path, slot_index, preferred, &path)) {
                         GLOBCFG.KEYPATHS[i][j] = path;
-                        if (first_valid[i] == NULL)
+                        if (first_valid[i] == NULL) {
                             first_valid[i] = path;
+                            if (display_mode == 3) {
+                                GLOBCFG.KEYNAMES[i] = first_valid[i];
+                            } else if (display_mode == 2) {
+                                const char *base = path_basename(first_valid[i]);
+                                size_t len = strlen(base);
+                                if (is_elf_ext_ci(base, len))
+                                    len -= 4;
+                                if (len >= MAX_LEN)
+                                    len = MAX_LEN - 1;
+                                memcpy(name_buf[i], base, len);
+                                name_buf[i][len] = '\0';
+                                GLOBCFG.KEYNAMES[i] = name_buf[i];
+                            }
+                            if (logo_disp > 0)
+                                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                        }
                         found = 1;
                     } else {
                         GLOBCFG.KEYPATHS[i][j] = "";
@@ -911,8 +988,24 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     char preferred = preferred_mmce_slot();
                     if (resolve_pair_path(path, slot_index, preferred, &path)) {
                         GLOBCFG.KEYPATHS[i][j] = path;
-                        if (first_valid[i] == NULL)
+                        if (first_valid[i] == NULL) {
                             first_valid[i] = path;
+                            if (display_mode == 3) {
+                                GLOBCFG.KEYNAMES[i] = first_valid[i];
+                            } else if (display_mode == 2) {
+                                const char *base = path_basename(first_valid[i]);
+                                size_t len = strlen(base);
+                                if (is_elf_ext_ci(base, len))
+                                    len -= 4;
+                                if (len >= MAX_LEN)
+                                    len = MAX_LEN - 1;
+                                memcpy(name_buf[i], base, len);
+                                name_buf[i][len] = '\0';
+                                GLOBCFG.KEYNAMES[i] = name_buf[i];
+                            }
+                            if (logo_disp > 0)
+                                SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                        }
                         found = 1;
                     } else {
                         GLOBCFG.KEYPATHS[i][j] = "";
@@ -923,8 +1016,24 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 path = CheckPath(path);
                 if (allow_virtual_patinfo_entry(i, j, path) || exist(path)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
-                    if (first_valid[i] == NULL)
+                    if (first_valid[i] == NULL) {
                         first_valid[i] = path;
+                        if (display_mode == 3) {
+                            GLOBCFG.KEYNAMES[i] = first_valid[i];
+                        } else if (display_mode == 2) {
+                            const char *base = path_basename(first_valid[i]);
+                            size_t len = strlen(base);
+                            if (is_elf_ext_ci(base, len))
+                                len -= 4;
+                            if (len >= MAX_LEN)
+                                len = MAX_LEN - 1;
+                            memcpy(name_buf[i], base, len);
+                            name_buf[i][len] = '\0';
+                            GLOBCFG.KEYNAMES[i] = name_buf[i];
+                        }
+                        if (logo_disp > 0)
+                            SplashDrawLoadingStatus(logo_disp, loading_anim_step++);
+                    }
                     found = 1;
                 } else {
                     GLOBCFG.KEYPATHS[i][j] = "";
@@ -2025,7 +2134,7 @@ int main(int argc, char *argv[])
         if (GLOBCFG.LOGO_DISP > 0) {
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawCenteredStatusModeAware(GLOBCFG.LOGO_DISP, "LOADING...", 0x404040);
+            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP, 0);
             splash_early_presented = 1;
         }
 
@@ -2051,7 +2160,7 @@ int main(int argc, char *argv[])
         if (GLOBCFG.LOGO_DISP > 0) {
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawCenteredStatusModeAware(GLOBCFG.LOGO_DISP, "LOADING...", 0x404040);
+            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP, 0);
             splash_early_presented = 1;
         }
 
