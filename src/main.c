@@ -928,6 +928,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
     static char name_buf[KEY_COUNT][MAX_LEN];
     int dev_ok[DEV_COUNT];
     const char *first_valid[KEY_COUNT];
+    int logo_disp = GLOBCFG.LOGO_DISP;
+    u64 next_loading_refresh_ms = 0;
     int i, j;
 
     for (i = 0; i < KEY_COUNT; i++)
@@ -935,11 +937,21 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 
     if (scan_paths) {
         build_device_available_cache(dev_ok, DEV_COUNT);
+        if (logo_disp > 0)
+            next_loading_refresh_ms = Timer() + 500u;
         for (i = 0; i < KEY_COUNT; i++) {
             int found = 0;
 
             for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                 char *path = GLOBCFG.KEYPATHS[i][j];
+
+                if (logo_disp > 0) {
+                    u64 now_ms = Timer();
+                    if (now_ms >= next_loading_refresh_ms) {
+                        SplashDrawLoadingStatus(logo_disp);
+                        next_loading_refresh_ms = now_ms + 500u;
+                    }
+                }
 
                 if (found) {
                     GLOBCFG.KEYPATHS[i][j] = "";
