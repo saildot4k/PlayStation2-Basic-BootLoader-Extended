@@ -474,6 +474,25 @@ static void SplashDrawCenteredStatus(const char *text, u32 color)
 
 static void SplashDrawLoadingStatus(int logo_disp)
 {
+    const char *scan_hotkey_lines[KEY_COUNT] = {
+        GLOBCFG.KEYNAMES[AUTO],
+        GLOBCFG.KEYNAMES[TRIANGLE],
+        GLOBCFG.KEYNAMES[CIRCLE],
+        GLOBCFG.KEYNAMES[CROSS],
+        GLOBCFG.KEYNAMES[SQUARE],
+        GLOBCFG.KEYNAMES[UP],
+        GLOBCFG.KEYNAMES[DOWN],
+        GLOBCFG.KEYNAMES[LEFT],
+        GLOBCFG.KEYNAMES[RIGHT],
+        GLOBCFG.KEYNAMES[L1],
+        GLOBCFG.KEYNAMES[L2],
+        GLOBCFG.KEYNAMES[L3],
+        GLOBCFG.KEYNAMES[R1],
+        GLOBCFG.KEYNAMES[R2],
+        GLOBCFG.KEYNAMES[R3],
+        GLOBCFG.KEYNAMES[SELECT],
+        GLOBCFG.KEYNAMES[START],
+    };
     char loading_line[16];
     int dots;
     int loading_max_w;
@@ -538,7 +557,7 @@ static void SplashDrawLoadingStatus(int logo_disp)
     SplashRenderSetHotkeysVisible(logo_disp >= 3);
     SplashRenderBeginFrame();
     if (logo_disp >= 3)
-        SplashRenderHotkeyLines(logo_disp, GLOBCFG.KEYNAMES);
+        SplashRenderHotkeyLines(logo_disp, scan_hotkey_lines);
     SplashRenderDrawTextPxScaled(loading_x, loading_y, 0x404040, loading_line, 1);
     SplashRenderPresent();
 }
