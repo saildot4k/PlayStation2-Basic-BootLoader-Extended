@@ -476,9 +476,8 @@ static void SplashDrawLoadingStatus(int logo_disp)
 {
     char loading_line[16];
     int dots;
-    int phase;
+    int loading_max_w;
     int i;
-    int loading_w;
     int loading_x;
     int loading_y;
     int screen_w;
@@ -489,13 +488,20 @@ static void SplashDrawLoadingStatus(int logo_disp)
     int logo_w;
     int logo_h;
     u64 now_ms;
+    static int s_loading_phase = 0;
+    static u64 s_loading_phase_tick_ms = 0;
 
     if (!SplashRenderIsActive())
         return;
 
     now_ms = Timer();
-    phase = (int)((now_ms / 500u) % 3u);
-    dots = phase + 1;
+    if (s_loading_phase_tick_ms == 0)
+        s_loading_phase_tick_ms = now_ms;
+    if (now_ms >= s_loading_phase_tick_ms + 500u) {
+        s_loading_phase = (s_loading_phase + 1) % 3;
+        s_loading_phase_tick_ms = now_ms;
+    }
+    dots = s_loading_phase + 1;
     strcpy(loading_line, "Loading");
     for (i = 0; i < dots; i++)
         loading_line[7 + i] = '.';
@@ -521,12 +527,13 @@ static void SplashDrawLoadingStatus(int logo_disp)
     if (loading_y < 0)
         loading_y = 0;
 
-    loading_w = (int)strlen(loading_line) * 6;
-    loading_x = anchor_center_x - (loading_w / 2);
+    // Keep the loading label anchored so it does not shift as dots change.
+    loading_max_w = (int)strlen("Loading...") * 6;
+    loading_x = anchor_center_x - (loading_max_w / 2);
     if (loading_x < 8)
         loading_x = 8;
-    if (loading_x + loading_w > screen_w - 8)
-        loading_x = screen_w - loading_w - 8;
+    if (loading_x + loading_max_w > screen_w - 8)
+        loading_x = screen_w - loading_max_w - 8;
 
     SplashRenderSetHotkeysVisible(logo_disp >= 3);
     SplashRenderBeginFrame();
