@@ -988,22 +988,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 if (is_command_token(path)) {
                     const char *cmd_display = NULL;
                     if (command_display_path(path, dev_ok, &cmd_display)) {
-                        if (first_valid[i] == NULL) {
+                        if (first_valid[i] == NULL)
                             first_valid[i] = (cmd_display != NULL) ? cmd_display : path;
-                            if (display_mode == 3) {
-                                GLOBCFG.KEYNAMES[i] = first_valid[i];
-                            } else if (display_mode == 2) {
-                                const char *base = path_basename(first_valid[i]);
-                                size_t len = strlen(base);
-                                if (is_elf_ext_ci(base, len))
-                                    len -= 4;
-                                if (len >= MAX_LEN)
-                                    len = MAX_LEN - 1;
-                                memcpy(name_buf[i], base, len);
-                                name_buf[i][len] = '\0';
-                                GLOBCFG.KEYNAMES[i] = name_buf[i];
-                            }
-                        }
                         found = 1;
                     }
                     continue; // Commands only run on keypress.
@@ -1017,22 +1003,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     char preferred = (config_source == SOURCE_MC1) ? '1' : '0';
                     if (resolve_pair_path(path, slot_index, preferred, &path)) {
                         GLOBCFG.KEYPATHS[i][j] = path;
-                        if (first_valid[i] == NULL) {
+                        if (first_valid[i] == NULL)
                             first_valid[i] = path;
-                            if (display_mode == 3) {
-                                GLOBCFG.KEYNAMES[i] = first_valid[i];
-                            } else if (display_mode == 2) {
-                                const char *base = path_basename(first_valid[i]);
-                                size_t len = strlen(base);
-                                if (is_elf_ext_ci(base, len))
-                                    len -= 4;
-                                if (len >= MAX_LEN)
-                                    len = MAX_LEN - 1;
-                                memcpy(name_buf[i], base, len);
-                                name_buf[i][len] = '\0';
-                                GLOBCFG.KEYNAMES[i] = name_buf[i];
-                            }
-                        }
                         found = 1;
                     } else {
                         GLOBCFG.KEYPATHS[i][j] = "";
@@ -1045,22 +1017,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                     char preferred = preferred_mmce_slot();
                     if (resolve_pair_path(path, slot_index, preferred, &path)) {
                         GLOBCFG.KEYPATHS[i][j] = path;
-                        if (first_valid[i] == NULL) {
+                        if (first_valid[i] == NULL)
                             first_valid[i] = path;
-                            if (display_mode == 3) {
-                                GLOBCFG.KEYNAMES[i] = first_valid[i];
-                            } else if (display_mode == 2) {
-                                const char *base = path_basename(first_valid[i]);
-                                size_t len = strlen(base);
-                                if (is_elf_ext_ci(base, len))
-                                    len -= 4;
-                                if (len >= MAX_LEN)
-                                    len = MAX_LEN - 1;
-                                memcpy(name_buf[i], base, len);
-                                name_buf[i][len] = '\0';
-                                GLOBCFG.KEYNAMES[i] = name_buf[i];
-                            }
-                        }
                         found = 1;
                     } else {
                         GLOBCFG.KEYPATHS[i][j] = "";
@@ -1071,22 +1029,8 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                 path = CheckPath(path);
                 if (allow_virtual_patinfo_entry(i, j, path) || exist(path)) {
                     GLOBCFG.KEYPATHS[i][j] = path;
-                    if (first_valid[i] == NULL) {
+                    if (first_valid[i] == NULL)
                         first_valid[i] = path;
-                        if (display_mode == 3) {
-                            GLOBCFG.KEYNAMES[i] = first_valid[i];
-                        } else if (display_mode == 2) {
-                            const char *base = path_basename(first_valid[i]);
-                            size_t len = strlen(base);
-                            if (is_elf_ext_ci(base, len))
-                                len -= 4;
-                            if (len >= MAX_LEN)
-                                len = MAX_LEN - 1;
-                            memcpy(name_buf[i], base, len);
-                            name_buf[i][len] = '\0';
-                            GLOBCFG.KEYNAMES[i] = name_buf[i];
-                        }
-                    }
                     found = 1;
                 } else {
                     GLOBCFG.KEYPATHS[i][j] = "";
