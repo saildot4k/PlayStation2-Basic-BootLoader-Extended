@@ -76,10 +76,11 @@ struct gsm_state {
 
   uint64_t last_display1;
   uint64_t last_display2;
+
+  uint32_t trace_setgscrt_hits;
+  uint32_t trace_el2_hits;
 };
 static struct gsm_state state = {NULL};
-static uint32_t g_trace_setgscrt_hits = 0;
-static uint32_t g_trace_el2_hits = 0;
 
 enum MIPS_OP {
   MOP_SPECIAL = 0x00,
@@ -315,10 +316,10 @@ void el2_c_handler(ee_registers_t *regs) {
   uint32_t cop0_Cause = _ee_mfc0(EE_COP0_Cause);
   uint32_t cop0_ErrorEPC = _ee_mfc0(EE_COP0_ErrorEPC);
 
-  if (g_trace_el2_hits < 8) {
-    g_trace_el2_hits++;
+  if (pstate->trace_el2_hits < 8) {
+    pstate->trace_el2_hits++;
     EGSM_LOGV("eGSM EL2: hit=%u cause=%08x epc=%08x\n",
-              (unsigned int)g_trace_el2_hits,
+              (unsigned int)pstate->trace_el2_hits,
               (unsigned int)cop0_Cause,
               (unsigned int)cop0_ErrorEPC);
   }
@@ -583,10 +584,10 @@ void el2_c_handler(ee_registers_t *regs) {
 static void hook_SetGsCrt(short int interlace, short int mode, short int ffmd) {
   struct gsm_state *pstate = _TO_KSEG0(&state);
 
-  if (g_trace_setgscrt_hits < 8) {
-    g_trace_setgscrt_hits++;
+  if (pstate->trace_setgscrt_hits < 8) {
+    pstate->trace_setgscrt_hits++;
     EGSM_LOGV("eGSM hook: hit=%u il=%d mode=%x ff=%d fl=%08x\n",
-              (unsigned int)g_trace_setgscrt_hits,
+              (unsigned int)pstate->trace_setgscrt_hits,
               interlace,
               mode,
               ffmd,
@@ -661,8 +662,8 @@ void enableGSM(uint32_t flags) {
   void *new_handler;
 
   state.flags = flags;
-  g_trace_setgscrt_hits = 0;
-  g_trace_el2_hits = 0;
+  state.trace_setgscrt_hits = 0;
+  state.trace_el2_hits = 0;
   EGSM_LOG("eGSM on fl=%08x\n", (unsigned int)flags);
 
   // Hook SetGsCrt
