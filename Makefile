@@ -24,7 +24,7 @@ PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
 EGSM_BUILD ?= 1 # build embedded eGSM runtime (0=disabled, 1=enabled)
-EGSM_TRACE ?= 0 # verbose eGSM runtime tracing (used only when EGSM_BUILD=1)
+EGSM_TRACE ?= 0 # eGSM runtime trace level (0=off, 1=minimal, 2=verbose)
 EMBED_PS2_STAGE2 ?= 0 # experimental OSDMenu loader-style stage2 for PS2 disc launch
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used

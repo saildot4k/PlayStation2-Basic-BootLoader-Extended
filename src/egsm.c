@@ -20,6 +20,12 @@
 #define EGSM_LOG(...)
 #endif
 
+#if EGSM_TRACE > 1
+#define EGSM_LOGV(...) DPRINTF(__VA_ARGS__)
+#else
+#define EGSM_LOGV(...)
+#endif
+
 #define MAKE_J(func) (uint32_t)((0x02 << 26) | (((uint32_t)func) / 4)) // Jump (MIPS instruction)
 #define NOP 0x00000000                                                 // No Operation (MIPS instruction)
 
@@ -311,7 +317,10 @@ void el2_c_handler(ee_registers_t *regs) {
 
   if (g_trace_el2_hits < 8) {
     g_trace_el2_hits++;
-    EGSM_LOG("eGSM EL2: hit=%u cause=0x%08x err_epc=0x%08x\n", g_trace_el2_hits, cop0_Cause, cop0_ErrorEPC);
+    EGSM_LOGV("eGSM EL2: hit=%u cause=%08x epc=%08x\n",
+              (unsigned int)g_trace_el2_hits,
+              (unsigned int)cop0_Cause,
+              (unsigned int)cop0_ErrorEPC);
   }
 
   // Check for debug exception
@@ -576,8 +585,12 @@ static void hook_SetGsCrt(short int interlace, short int mode, short int ffmd) {
 
   if (g_trace_setgscrt_hits < 8) {
     g_trace_setgscrt_hits++;
-    EGSM_LOG("eGSM hook_SetGsCrt: hit=%u interlace=%d mode=0x%x ffmd=%d flags=0x%08x\n",
-             g_trace_setgscrt_hits, interlace, mode, ffmd, pstate->flags);
+    EGSM_LOGV("eGSM hook: hit=%u il=%d mode=%x ff=%d fl=%08x\n",
+              (unsigned int)g_trace_setgscrt_hits,
+              interlace,
+              mode,
+              ffmd,
+              (unsigned int)pstate->flags);
   }
 
   // printf("%s(%d, 0x%x, %d)\n", __FUNCTION__, interlace, mode, ffmd);
@@ -650,15 +663,14 @@ void enableGSM(uint32_t flags) {
   state.flags = flags;
   g_trace_setgscrt_hits = 0;
   g_trace_el2_hits = 0;
-  EGSM_LOG("eGSM enableGSM: flags=0x%08x\n", flags);
+  EGSM_LOG("eGSM on fl=%08x\n", (unsigned int)flags);
 
   // Hook SetGsCrt
   org_handler = GetSyscallHandler(__NR_SetGsCrt);
   state.org_SetGsCrt = org_handler;
   SetSyscall(__NR_SetGsCrt, (void *)(((uint32_t)(hook_SetGsCrt) & ~0xE0000000) | 0x80000000));
   new_handler = GetSyscallHandler(__NR_SetGsCrt);
-  EGSM_LOG("eGSM enableGSM: org_SetGsCrt=%p hook_SetGsCrt=%p installed=%p\n",
-           org_handler, hook_SetGsCrt, new_handler);
+  EGSM_LOGV("eGSM hook org=%p new=%p ins=%p\n", org_handler, hook_SetGsCrt, new_handler);
 
   // Make sure no exceptions are generated
   _ee_disable_bpc();
@@ -668,8 +680,10 @@ void enableGSM(uint32_t flags) {
   v_debug[0] = MAKE_J((int)el2_asm_handler);
   v_debug[1] = NOP;
   ee_kmode_exit();
-  EGSM_LOG("eGSM enableGSM: EL2 vec[0]=0x%08x vec[1]=0x%08x handler=%p\n",
-           v_debug[0], v_debug[1], el2_asm_handler);
+  EGSM_LOGV("eGSM el2 vec0=%08x vec1=%08x h=%p\n",
+           (unsigned int)v_debug[0],
+           (unsigned int)v_debug[1],
+           el2_asm_handler);
   FlushCache(WRITEBACK_DCACHE);
   FlushCache(INVALIDATE_ICACHE);
 
@@ -686,10 +700,10 @@ void enableGSM(uint32_t flags) {
   if (state.flags & (EGSM_FLAG_COMP_1 | EGSM_FLAG_COMP_2 | EGSM_FLAG_COMP_3)) {
     // For FIELD flipping we need to also set a breakpoint for CSR register
     _ee_mtdabm(0x1fffef5f);
-    EGSM_LOG("eGSM enableGSM: bpc mask=0x1fffef5f (compat mode)\n");
+    EGSM_LOGV("eGSM bpc=1fffef5f\n");
   } else {
     _ee_mtdabm(0x1fffff5f);
-    EGSM_LOG("eGSM enableGSM: bpc mask=0x1fffff5f\n");
+    EGSM_LOGV("eGSM bpc=1fffff5f\n");
   }
 }
 
