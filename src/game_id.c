@@ -119,8 +119,13 @@ void GameIDHandleDisc(const char *titleID, int display)
     if (validateTitleID(titleID))
         UpdatePlayHistory(titleID);
 
+#if defined(SCR_PRINT) && defined(EGSM_TRACE) && (EGSM_TRACE != 0)
+    if (display && titleID[0] != '?')
+        DPRINTF("%s: suppressing disc Game ID overlay during SCR eGSM trace\n", __func__);
+#else
     if (display && titleID[0] != '?')
         gsDisplayGameID(titleID);
+#endif
 }
 
 void GameIDHandleApp(const char *titleID, int showAppID)
