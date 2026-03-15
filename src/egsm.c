@@ -668,9 +668,17 @@ void enableGSM(uint32_t flags) {
 
   // Hook SetGsCrt
   org_handler = GetSyscallHandler(__NR_SetGsCrt);
+  if (org_handler == NULL) {
+    EGSM_LOG("eGSM hook fail: org null\n");
+    return;
+  }
   state.org_SetGsCrt = org_handler;
   SetSyscall(__NR_SetGsCrt, (void *)(((uint32_t)(hook_SetGsCrt) & ~0xE0000000) | 0x80000000));
   new_handler = GetSyscallHandler(__NR_SetGsCrt);
+  if (new_handler == NULL) {
+    EGSM_LOG("eGSM hook fail: new null\n");
+    return;
+  }
   EGSM_LOGV("eGSM hook org=%p new=%p ins=%p\n", org_handler, hook_SetGsCrt, new_handler);
 
   // Make sure no exceptions are generated

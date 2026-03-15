@@ -5,9 +5,24 @@
 #include "egsm_parse.h"
 #include "splash_screen.h"
 #include "splash_render.h"
+#include "ee_asm.h"
 
 static int g_pending_command_argc;
 static char **g_pending_command_argv;
+
+static void ClearStaleEEDebugState(void)
+{
+    // Emulator and some warm-boot paths can preserve BPC/watch registers.
+    // Clear them before any GS traffic to prevent immediate EL2 traps.
+    _ee_disable_bpc();
+    _ee_mtiab(0);
+    _ee_mtiabm(0);
+    _ee_mtdab(0);
+    _ee_mtdabm(0);
+    _ee_mtdvb(0);
+    _ee_mtdvbm(0);
+    _ee_sync_p();
+}
 
 // Whitespace/CRLF trimming for config values (in-place)
 // Returns a pointer to the first non-whitespace character (may be inside the original buffer).
@@ -1813,6 +1828,7 @@ int main(int argc, char *argv[])
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
+    ClearStaleEEDebugState();
     ReadROMVEROnce();
     ResetIOP();
     SifInitIopHeap(); // Initialize SIF services for loading modules and files.
