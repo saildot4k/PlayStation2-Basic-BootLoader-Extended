@@ -25,8 +25,8 @@ PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
 EGSM_BUILD ?= 1 # build embedded eGSM runtime (0=disabled, 1=enabled)
 EGSM_TRACE ?= 0 # eGSM trace level (0=off, 1=size-safe/no logs, 2=verbose)
-EGSM_MAIN_RUNTIME ?= 1 # link the low-memory eGSM runtime into the main ELF (set 0 to use stub in main ELF)
-EMBED_PS2_STAGE2 ?= 0 # experimental OSDMenu loader-style stage2 for PS2 disc launch
+EGSM_MAIN_RUNTIME ?= 0 # keep eGSM out of the main ELF by default; stage2 handles disc/non-disc -gsm launches
+EMBED_PS2_STAGE2 ?= 1 # use the embedded OSDMenu loader-style stage2 by default
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
