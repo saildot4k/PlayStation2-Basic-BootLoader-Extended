@@ -2972,7 +2972,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
     parse_disc_egsm_override(argc, argv, &egsm_override_flags, &egsm_override_arg);
     if (egsm_override_flags != 0)
         DPRINTF("%s: using command -gsm override '%s' flags=0x%08x\n",
-                __func__, egsm_override_arg, egsm_override_flags);
+                __func__, egsm_override_arg, (unsigned int)egsm_override_flags);
 
     use_splash_ui = SplashRenderIsActive();
 

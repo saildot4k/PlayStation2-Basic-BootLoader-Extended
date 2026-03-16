@@ -257,7 +257,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
     DPRINTF("%s: stage2 launch='%s' argc=%d loader='%s' gsm='%s'\n",
             __func__, stage2_launch, stage2_argc, loader_args, gsm_arg);
 #ifdef SCR_PRINT
-    DelayThread(1000 * 1000);
+    sleep(1);
 #endif
 
     if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {
@@ -320,7 +320,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                         if (gsm_flags == 0)
                             DPRINTF("Ignoring invalid -gsm value: '%s'\n", val);
                         else {
-                            DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, gsm_flags);
+                            DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, (unsigned int)gsm_flags);
                             gsm_arg = val;
                         }
                         continue;
@@ -388,10 +388,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
             DPRINTF("Embedded stage2 handoff failed, falling back to direct ELF launch\n");
 #endif
 #if EGSM_BUILD
-            DPRINTF("Applying -gsm flags 0x%08x before launch\n", gsm_flags);
+            DPRINTF("Applying -gsm flags 0x%08x before launch\n", (unsigned int)gsm_flags);
             enableGSM(gsm_flags);
 #else
-            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", gsm_flags);
+            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", (unsigned int)gsm_flags);
 #endif
         }
     }

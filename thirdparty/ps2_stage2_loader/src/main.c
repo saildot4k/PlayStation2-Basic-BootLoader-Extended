@@ -22,6 +22,7 @@
 #include <sifrpc.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
@@ -40,7 +41,7 @@ PS2_DISABLE_AUTOSTART_PTHREAD();
 #define USER_MEM_END_ADDR 0x2000000
 
 #ifdef SCR_PRINT
-static void stage2DebugPause(void) { DelayThread(1000 * 1000); }
+static void stage2DebugPause(void) { sleep(1); }
 #define STAGE2_DPRINTF(...)                                                                      \
   do {                                                                                           \
     DPRINTF(__VA_ARGS__);                                                                        \
@@ -187,7 +188,7 @@ int main(int argc, char *argv[]) {
       case 'G':
         // Force video mode via eGSM
         eGSMFlags = parseGSMFlags(argv[argc - 2]);
-        STAGE2_DPRINTF("stage2: parsed -la=G arg '%s' -> flags=0x%08x\n", argv[argc - 2], eGSMFlags);
+        STAGE2_DPRINTF("stage2: parsed -la=G arg '%s' -> flags=0x%08x\n", argv[argc - 2], (unsigned int)eGSMFlags);
         argc--;
         break;
       case 'A':
@@ -223,7 +224,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Handle in-memory ELF file
-  STAGE2_DPRINTF("stage2: elfPath=%s argc=%d eGSMFlags=0x%08x\n", elfPath, argc, eGSMFlags);
+  STAGE2_DPRINTF("stage2: elfPath=%s argc=%d eGSMFlags=0x%08x\n", elfPath, argc, (unsigned int)eGSMFlags);
   if (!strncmp(elfPath, "mem:", 4))
     return loadEmbeddedELF(argc, argv);
 
@@ -293,11 +294,11 @@ int loadEmbeddedELF(int argc, char *argv[]) {
   if (entry < 0)
     return -1;
 
-  STAGE2_DPRINTF("stage2: embedded entry=0x%08x flags=0x%08x\n", entry, eGSMFlags);
+  STAGE2_DPRINTF("stage2: embedded entry=0x%08x flags=0x%08x\n", (unsigned int)entry, (unsigned int)eGSMFlags);
   if (eGSMFlags)
     enableGSM(eGSMFlags);
 
-  STAGE2_DPRINTF("stage2: ExecPS2 embedded entry=0x%08x argc=%d\n", entry, argc);
+  STAGE2_DPRINTF("stage2: ExecPS2 embedded entry=0x%08x argc=%d\n", (unsigned int)entry, argc);
   return ExecPS2((void *)entry, NULL, argc, argv);
 }
 
@@ -374,7 +375,7 @@ int loadELFFromFile(int argc, char *argv[]) {
     return -ENOENT;
   }
 
-  STAGE2_DPRINTF("stage2: enableGSM flags=0x%08x\n", eGSMFlags);
+  STAGE2_DPRINTF("stage2: enableGSM flags=0x%08x\n", (unsigned int)eGSMFlags);
   if (eGSMFlags)
     enableGSM(eGSMFlags);
 
