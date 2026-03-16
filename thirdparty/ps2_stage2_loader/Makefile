@@ -1,6 +1,6 @@
 EE_BIN = ps2_stage2_loader.elf
 
-EE_INCS = -I./include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
+EE_INCS = -I./include -I../../include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
 EE_LINKFILE = linkfile
 
 EE_OBJS = main.o ps2logo.o egsm.o ee_exception_l2.o
