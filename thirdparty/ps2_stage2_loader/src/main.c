@@ -11,7 +11,6 @@
 */
 
 #include "egsm_api.h"
-#include "egsm_parse.h"
 #include "ps2logo.h"
 #include <iopcontrol.h>
 #include <iopcontrol_special.h>
@@ -470,5 +469,68 @@ void resetIOP() {
 
 // Parses the loader eGSM argument into the eGSM flags
 uint32_t parseGSMFlags(char *gsmArg) {
-  return parse_egsm_flags_common(gsmArg);
+  uint32_t flags = 0;
+  if (!gsmArg || *gsmArg == '\0')
+    return 0;
+
+  if (*gsmArg != '\0' && *gsmArg != ':') {
+    if (!strncmp(gsmArg, "fp1", 3)) {
+      flags |= EGSM_FLAG_VMODE_FP1;
+      gsmArg += 3;
+    } else if (!strncmp(gsmArg, "fp2", 3)) {
+      flags |= EGSM_FLAG_VMODE_FP2;
+      gsmArg += 3;
+    } else if (!strncmp(gsmArg, "1080ix1", 7)) {
+      flags |= EGSM_FLAG_VMODE_1080I_X1;
+      gsmArg += 7;
+    } else if (!strncmp(gsmArg, "1080ix2", 7)) {
+      flags |= EGSM_FLAG_VMODE_1080I_X2;
+      gsmArg += 7;
+    } else if (!strncmp(gsmArg, "1080ix3", 7)) {
+      flags |= EGSM_FLAG_VMODE_1080I_X3;
+      gsmArg += 7;
+    } else
+      return 0;
+  }
+
+  if (gsmArg[0] == ':') {
+    gsmArg++;
+    switch (gsmArg[0]) {
+    case '\0':
+      break;
+    case '1':
+      flags |= EGSM_FLAG_COMP_1;
+      gsmArg++;
+      break;
+    case '2':
+      flags |= EGSM_FLAG_COMP_2;
+      gsmArg++;
+      break;
+    case '3':
+      flags |= EGSM_FLAG_COMP_3;
+      gsmArg++;
+      break;
+    default:
+      return 0;
+    }
+  }
+
+  if (gsmArg[0] != '\0')
+    return 0;
+
+  if (flags) {
+    int fd = fileXioOpen("rom0:ROMVER", FIO_O_RDONLY);
+    if (fd < 0)
+      flags |= EGSM_FLAG_NO_576P;
+    else {
+      char romver[4] = {0};
+      fileXioRead(fd, romver, 4);
+      fileXioClose(fd);
+
+      if (romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
+        flags |= EGSM_FLAG_NO_576P;
+    }
+  }
+
+  return flags;
 }

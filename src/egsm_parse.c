@@ -1,5 +1,4 @@
 #define NEWLIB_PORT_AWARE
-#include <ctype.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include <string.h>
@@ -8,20 +7,6 @@
 #include "debugprintf.h"
 #include "egsm_api.h"
 #include "egsm_parse.h"
-
-static int egsm_starts_with_ci(const char *value, const char *prefix)
-{
-    while (*prefix != '\0') {
-        if (*value == '\0')
-            return 0;
-        if (tolower((unsigned char)*value) != tolower((unsigned char)*prefix))
-            return 0;
-        value++;
-        prefix++;
-    }
-
-    return 1;
-}
 
 uint32_t parse_egsm_flags_common(const char *gsm_arg)
 {
@@ -34,68 +19,51 @@ uint32_t parse_egsm_flags_common(const char *gsm_arg)
     if (p == NULL || *p == '\0')
         return 0;
 
-    if (egsm_starts_with_ci(p, "fp")) {
-        switch (p[2]) {
-            case '1':
-                flags |= EGSM_FLAG_VMODE_FP1;
-                break;
-            case '2':
-                flags |= EGSM_FLAG_VMODE_FP2;
-                break;
-            default:
-                return 0;
+    if (*p != '\0' && *p != ':') {
+        if (strncmp(p, "fp1", 3) == 0) {
+            flags |= EGSM_FLAG_VMODE_FP1;
+            p += 3;
+        } else if (strncmp(p, "fp2", 3) == 0) {
+            flags |= EGSM_FLAG_VMODE_FP2;
+            p += 3;
+        } else if (strncmp(p, "1080ix1", 7) == 0) {
+            flags |= EGSM_FLAG_VMODE_1080I_X1;
+            p += 7;
+        } else if (strncmp(p, "1080ix2", 7) == 0) {
+            flags |= EGSM_FLAG_VMODE_1080I_X2;
+            p += 7;
+        } else if (strncmp(p, "1080ix3", 7) == 0) {
+            flags |= EGSM_FLAG_VMODE_1080I_X3;
+            p += 7;
+        } else {
+            return 0;
         }
-        p += 3;
-    } else if (egsm_starts_with_ci(p, "1080ix")) {
-        switch (p[6]) {
-            case '1':
-                flags |= EGSM_FLAG_VMODE_1080I_X1;
-                break;
-            case '2':
-                flags |= EGSM_FLAG_VMODE_1080I_X2;
-                break;
-            case '3':
-                flags |= EGSM_FLAG_VMODE_1080I_X3;
-                break;
-            default:
-                return 0;
-        }
-        p += 7;
-    } else if (egsm_starts_with_ci(p, "1080x")) {
-        switch (p[5]) {
-            case '1':
-                flags |= EGSM_FLAG_VMODE_1080I_X1;
-                break;
-            case '2':
-                flags |= EGSM_FLAG_VMODE_1080I_X2;
-                break;
-            case '3':
-                flags |= EGSM_FLAG_VMODE_1080I_X3;
-                break;
-            default:
-                return 0;
-        }
-        p += 6;
-    } else {
-        return 0;
     }
 
     if (*p == ':') {
         p++;
         switch (*p) {
+            case '\0':
+                break;
             case '1':
                 flags |= EGSM_FLAG_COMP_1;
+                p++;
                 break;
             case '2':
                 flags |= EGSM_FLAG_COMP_2;
+                p++;
                 break;
             case '3':
                 flags |= EGSM_FLAG_COMP_3;
+                p++;
                 break;
             default:
-                break;
+                return 0;
         }
     }
+
+    if (*p != '\0')
+        return 0;
 
     if (flags == 0)
         return 0;
