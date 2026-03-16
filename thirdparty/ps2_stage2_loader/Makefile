@@ -1,4 +1,5 @@
 EE_BIN = ps2_stage2_loader.elf
+PRINTF ?= NONE
 
 EE_INCS = -I./include -I../../include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
 EE_LINKFILE = linkfile
@@ -15,7 +16,20 @@ NEWLIB_NANO = 1
 
 EE_LIBS += -lfileXio -liopreboot -lpatches -lcdvd -lcglue -lpthread -lpthreadglue
 
-vpath %.c src src/egsm
+ifeq ($(PRINTF), NONE)
+else ifeq ($(PRINTF), SCR)
+  EE_CFLAGS += -DSCR_PRINT
+else ifeq ($(PRINTF), EE_SIO)
+  EE_CFLAGS += -DEE_SIO_DEBUG
+  EE_LIBS += -lsiocookie
+  EE_OBJS += sioprintf.o
+else ifeq ($(PRINTF), PRINTF)
+  EE_CFLAGS += -DCOMMON_PRINTF
+else ifneq ($(PRINTF),)
+  $(warning UNKNOWN PRINTF REQUESTED FOR STAGE2: '$(PRINTF)')
+endif
+
+vpath %.c src src/egsm ../../src
 vpath %.S src/egsm
 
 .PHONY: all clean
