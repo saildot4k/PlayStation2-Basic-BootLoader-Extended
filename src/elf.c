@@ -227,7 +227,7 @@ static int ExecEmbeddedStage2(unsigned char *elf, unsigned int elf_size, int arg
 static int RunLoaderElfViaStage2(const char *launch_filename, const char *party, int argc, char *argv[], const char *gsm_arg, int dev9_mode)
 {
     char full_launch_path[MAX_PATH];
-    char loader_args[16] = "-la=AG";
+    char loader_args[16] = "-la=G";
     char **stage2_argv;
     const char *stage2_launch = launch_filename;
     int i;
@@ -252,7 +252,11 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
     }
 
     i = (int)strlen(loader_args);
-    loader_args[i++] = (dev9_mode == DEV9_NIC) ? 'N' : 'D';
+    if (dev9_mode == DEV9_NIC) {
+        loader_args[i++] = 'N';
+    } else if (dev9_mode == DEV9_NICHDD) {
+        loader_args[i++] = 'D';
+    }
     loader_args[i] = '\0';
 
     stage2_argc = argc + 3;
