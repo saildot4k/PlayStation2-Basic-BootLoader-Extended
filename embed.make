@@ -41,12 +41,12 @@ $(EE_ASM_DIR)ps1vn_elf.c: $(PS1VN_ELF) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps1vn_elf
 endif
 
-ifeq ($(EMBED_PS2_STAGE2), 1)
+ifeq ($(EGSM_BUILD), 1)
 PS2_STAGE2_DIR := thirdparty/ps2_stage2_loader
 PS2_STAGE2_ELF := $(PS2_STAGE2_DIR)/ps2_stage2_loader.elf
 
 $(PS2_STAGE2_ELF):
-	$(MAKE) -C $(PS2_STAGE2_DIR) PRINTF=$(PRINTF)
+	$(MAKE) -C $(PS2_STAGE2_DIR) EGSM_BUILD=$(EGSM_BUILD)
 
 $(EE_ASM_DIR)ps2_stage2_loader_elf.c: $(PS2_STAGE2_ELF) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2_stage2_loader_elf

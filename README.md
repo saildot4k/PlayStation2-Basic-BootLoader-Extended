@@ -85,8 +85,7 @@ Example:
 NAME_SQUARE = POPSLOADER
 ```
 
-### NOT YET IMPLEMENTED
-__eGSM NOT YET IMPLEMENTED__
+### eGSM
 - `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
   - eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
   eGSM format (OSDMenu-style):

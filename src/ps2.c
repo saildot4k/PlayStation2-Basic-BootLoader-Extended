@@ -18,14 +18,13 @@
 #include "OSDInit.h"
 #include "OSDHistory.h"
 #include "game_id.h"
-#include "egsm_api.h"
 #include "egsm_parse.h"
 #include "debugprintf.h"
 #include "irx_import.h"
 
 void CleanUp(void);
 
-#ifdef EMBED_PS2_STAGE2
+#if EGSM_BUILD
 extern unsigned char ps2_stage2_loader_elf[];
 extern unsigned int size_ps2_stage2_loader_elf;
 
@@ -428,17 +427,6 @@ static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
     return flags;
 }
 
-static void PS2ApplyEGSMIfNeeded(uint32_t flags)
-{
-    if (flags == 0) {
-        DPRINTF("%s: no eGSM flags to apply\n", __func__);
-        return;
-    }
-
-    DPRINTF("%s: applying eGSM flags 0x%08x\n", __func__, flags);
-    enableGSM(flags);
-}
-
 static FILE *PS2OpenOSDGSMConfig(void)
 {
     FILE *gsm_conf = NULL;
@@ -552,13 +540,6 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
     }
 
     return selected_arg;
-}
-#endif
-
-#if !EGSM_BUILD
-static void PS2ApplyEGSMIfNeeded(uint32_t flags)
-{
-    (void)flags;
 }
 #endif
 
@@ -914,7 +895,7 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
 #endif
 
     CleanUp();
-#ifdef EMBED_PS2_STAGE2
+#if EGSM_BUILD
     if (skip_PS2LOGO) {
         PS2ApplyDeckardXParamIfNeeded(ps2disc_boot);
         deckard_xparam_applied = 1;
@@ -924,14 +905,14 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
             free(osdgsm_arg);
         return 0;
     }
-    DPRINTF("%s: stage2 handoff failed, continuing with legacy path\n", __func__);
+    if (osdgsm_flags != 0)
+        DPRINTF("%s: stage2 handoff failed, launching disc without eGSM\n", __func__);
 #endif
     if (skip_PS2LOGO) {
         if (!deckard_xparam_applied)
             PS2ApplyDeckardXParamIfNeeded(ps2disc_boot);
         SifExitRpc();
         SifExitCmd();
-        PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)
             free(osdgsm_arg);
         LoadExecPS2(line, 0, NULL);
@@ -943,10 +924,9 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
         ret = SifLoadElf("rom0:PS2LOGO", &elfdata);
         if (ret && (ret = SifLoadElfEncrypted("rom0:PS2LOGO", &elfdata))) {
             SifLoadFileExit();
-            DPRINTF("%s: failed to load rom0:PS2LOGO for patching (%d); falling back to LoadExecPS2\n", __func__, ret);
+            DPRINTF("%s: failed to load rom0:PS2LOGO for patching (%d); falling back to LoadExecPS2 without eGSM\n", __func__, ret);
             SifExitRpc();
             SifExitCmd();
-            PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
                 free(osdgsm_arg);
             LoadExecPS2("rom0:PS2LOGO", 2, args);
@@ -955,10 +935,9 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
         SifLoadFileExit();
 
         if (elfdata.epc == 0) {
-            DPRINTF("%s: PS2LOGO load returned empty entrypoint; falling back to LoadExecPS2\n", __func__);
+            DPRINTF("%s: PS2LOGO load returned empty entrypoint; falling back to LoadExecPS2 without eGSM\n", __func__);
             SifExitRpc();
             SifExitCmd();
-            PS2ApplyEGSMIfNeeded(osdgsm_flags);
             if (osdgsm_arg != NULL)
                 free(osdgsm_arg);
             LoadExecPS2("rom0:PS2LOGO", 2, args);
@@ -969,7 +948,6 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
         ResetIOPForExec();
         SifExitRpc();
         SifExitCmd();
-        PS2ApplyEGSMIfNeeded(osdgsm_flags);
         if (osdgsm_arg != NULL)
             free(osdgsm_arg);
         ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, 2, args);

@@ -12,7 +12,6 @@
 
 #include "egsm_api.h"
 #include "ps2logo.h"
-#include "debugprintf.h"
 #include <iopcontrol.h>
 #include <iopcontrol_special.h>
 #include <kernel.h>
@@ -22,7 +21,6 @@
 #include <sifrpc.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 
 #define NEWLIB_PORT_AWARE
 #include <fileXio_rpc.h>
@@ -39,24 +37,6 @@ PS2_DISABLE_AUTOSTART_PTHREAD();
 
 #define USER_MEM_START_ADDR 0x100000
 #define USER_MEM_END_ADDR 0x2000000
-
-#ifdef SCR_PRINT
-static void stage2DebugPause(void) {
-  volatile unsigned int spin;
-
-  // Busy-wait because sleep() has been unreliable in this handoff path on hardware.
-  for (spin = 0; spin < 160000000u; spin++) {
-    asm volatile("" ::: "memory");
-  }
-}
-#define STAGE2_DPRINTF(...)                                                                      \
-  do {                                                                                           \
-    DPRINTF(__VA_ARGS__);                                                                        \
-    stage2DebugPause();                                                                          \
-  } while (0)
-#else
-#define STAGE2_DPRINTF(...) DPRINTF(__VA_ARGS__)
-#endif
 
 typedef enum { ShutdownType_None, ShutdownType_HDD, ShutdownType_All } ShutdownType;
 
@@ -136,15 +116,15 @@ uint32_t parseGSMFlags(char *gsmArg);
 //   - 'E': The argv[argc-2] argument contains ELF memory location to use instead of argv[0]
 //   - 'A': Do not pass argv[0] to the target ELF and start with argv[1]
 //   - 'G': Force video mode via eGSM. The argv[argc-2] argument contains eGSM arguments:
-//          The argument format is inherited from Neutrino GSM and defined as `x:y:z`, where
-//          x — Interlaced field mode, when a full height buffer is used by the game for displaying. Force video output to:
-//            -      : don't force (default)  (480i/576i)
-//            - fp   : force progressive scan (480p/576p)
-//          y — Interlaced frame mode, when a half height buffer is used by the game for displaying. Force video output to:
+//          The argument format is inherited from Neutrino GSM and defined as `v[:c]`, where
+//          v — video mode:
 //            -      : don't force (default)  (480i/576i)
 //            - fp1  : force progressive scan (240p/288p)
-//            - fp2  : force progressive scan (480p/576p line doubling)
-//          z — Compatibility mode
+//            - fp2  : force progressive scan (480p/576p)
+//            - 1080ix1 : force 1080i, width/height x1
+//            - 1080ix2 : force 1080i, width/height x2
+//            - 1080ix3 : force 1080i, width/height x3
+//          c — Compatibility mode
 //            -      : no compatibility mode (default)
 //            - 1    : field flipping type 1 (GSM/OPL)
 //            - 2    : field flipping type 2
@@ -164,8 +144,6 @@ int main(int argc, char *argv[]) {
 
   // Init SIF RPC
   sceSifInitRpc(0);
-  DPRINTF_INIT();
-  STAGE2_DPRINTF("stage2: start argc=%d argv0=%s\n", argc, (argv[0] != NULL) ? argv[0] : "<null>");
 
   // Parse loader argument if argv[argc-1] starts with "-la"
   if (!strncmp(argv[argc - 1], "-la=", 4)) {
@@ -194,8 +172,11 @@ int main(int argc, char *argv[]) {
         break;
       case 'G':
         // Force video mode via eGSM
+#if EGSM_BUILD
         eGSMFlags = parseGSMFlags(argv[argc - 2]);
-        STAGE2_DPRINTF("stage2: parsed -la=G arg '%s' -> flags=0x%08x\n", argv[argc - 2], (unsigned int)eGSMFlags);
+#else
+        eGSMFlags = 0;
+#endif
         argc--;
         break;
       case 'A':
@@ -231,7 +212,6 @@ int main(int argc, char *argv[]) {
   }
 
   // Handle in-memory ELF file
-  STAGE2_DPRINTF("stage2: elfPath=%s argc=%d eGSMFlags=0x%08x\n", elfPath, argc, (unsigned int)eGSMFlags);
   if (!strncmp(elfPath, "mem:", 4))
     return loadEmbeddedELF(argc, argv);
 
@@ -269,7 +249,6 @@ int loadELF(int elfMem) {
 // Loads and executes the ELF elfPath points to.
 // elfPath must be mem:<8-char address in HEX>:<8-char file size in HEX>
 int loadEmbeddedELF(int argc, char *argv[]) {
-  STAGE2_DPRINTF("stage2: loadEmbeddedELF argc=%d path=%s\n", argc, elfPath);
   // Shutdown DEV9
   shutdownDEV9(dev9ShutdownType);
 
@@ -301,18 +280,15 @@ int loadEmbeddedELF(int argc, char *argv[]) {
   if (entry < 0)
     return -1;
 
-  STAGE2_DPRINTF("stage2: embedded entry=0x%08x flags=0x%08x\n", (unsigned int)entry, (unsigned int)eGSMFlags);
+#if EGSM_BUILD
   if (eGSMFlags)
     enableGSM(eGSMFlags);
-
-  STAGE2_DPRINTF("stage2: ExecPS2 embedded entry=0x%08x argc=%d\n", (unsigned int)entry, argc);
+#endif
   return ExecPS2((void *)entry, NULL, argc, argv);
 }
 
 // Loads and executes the ELF elfPath points to.
 int loadELFFromFile(int argc, char *argv[]) {
-  STAGE2_DPRINTF("stage2: loadELFFromFile argc=%d path=%s argv0=%s\n",
-                 argc, elfPath, (argc > 0 && argv[0] != NULL) ? argv[0] : "<null>");
   // Handle ELF files
   if (ioprpPath && !strncmp(ioprpPath, "mem:", 4)) {
     // Clear the memory without touching the loaded IOPRP
@@ -348,9 +324,6 @@ int loadELFFromFile(int argc, char *argv[]) {
     return ret;
   SifLoadFileExit();
 
-  STAGE2_DPRINTF("stage2: SifLoadElf ret=%d epc=0x%08x gp=0x%08x\n",
-                 ret, (unsigned int)elfdata.epc, (unsigned int)elfdata.gp);
-
   FlushCache(0);
   FlushCache(2);
 
@@ -378,16 +351,13 @@ int loadELFFromFile(int argc, char *argv[]) {
   sceSifExitCmd();
 
   if (ret != 0 || elfdata.epc == 0) {
-    STAGE2_DPRINTF("stage2: refusing launch ret=%d epc=0x%08x\n", ret, (unsigned int)elfdata.epc);
     return -ENOENT;
   }
 
-  STAGE2_DPRINTF("stage2: enableGSM flags=0x%08x\n", (unsigned int)eGSMFlags);
+#if EGSM_BUILD
   if (eGSMFlags)
     enableGSM(eGSMFlags);
-
-  STAGE2_DPRINTF("stage2: ExecPS2 epc=0x%08x gp=0x%08x argc=%d\n",
-                 (unsigned int)elfdata.epc, (unsigned int)elfdata.gp, argc);
+#endif
   return ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, argc, argv);
 }
 

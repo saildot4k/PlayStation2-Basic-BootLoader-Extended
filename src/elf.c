@@ -11,7 +11,6 @@
 #include <ctype.h>
 #include "debugprintf.h"
 #include "game_id.h"
-#include "egsm_api.h"
 #include "egsm_parse.h"
 #if defined(HDD) && defined(FILEXIO)
 #include <fileXio_rpc.h>
@@ -29,18 +28,6 @@ enum {
     DEV9_NIC,
     DEV9_NICHDD
 };
-
-#ifdef SCR_PRINT
-static void DebugScreenPause(void)
-{
-    volatile unsigned int spin;
-
-    // Busy-wait because sleep() has been unreliable in this handoff path on hardware.
-    for (spin = 0; spin < 160000000u; spin++) {
-        asm volatile("" ::: "memory");
-    }
-}
-#endif
 
 static int arg_eq_ci(const char *a, const char *b)
 {
@@ -143,7 +130,7 @@ static void apply_dev9_policy(int dev9_mode)
 #endif
 }
 
-#ifdef EMBED_PS2_STAGE2
+#if EGSM_BUILD
 extern unsigned char ps2_stage2_loader_elf[];
 extern unsigned int size_ps2_stage2_loader_elf;
 
@@ -270,12 +257,6 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
     stage2_argv[argc + 1] = (char *)gsm_arg;
     stage2_argv[argc + 2] = loader_args;
 
-    DPRINTF("%s: stage2 launch='%s' argc=%d loader='%s' gsm='%s'\n",
-            __func__, stage2_launch, stage2_argc, loader_args, gsm_arg);
-#ifdef SCR_PRINT
-    DebugScreenPause();
-#endif
-
     if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {
         free(stage2_argv);
         return -1;
@@ -398,14 +379,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         if (path_is_rom_binary(launch_filename)) {
             DPRINTF("Ignoring -gsm for ROM path '%s'\n", launch_filename);
         } else {
-#ifdef EMBED_PS2_STAGE2
+#if EGSM_BUILD
             if (RunLoaderElfViaStage2(launch_filename, party, argc, argv, gsm_arg, dev9_mode) == 0)
                 return;
-            DPRINTF("Embedded stage2 handoff failed, falling back to direct ELF launch\n");
-#endif
-#if EGSM_BUILD
-            DPRINTF("Applying -gsm flags 0x%08x before launch\n", (unsigned int)gsm_flags);
-            enableGSM(gsm_flags);
+            DPRINTF("Unable to hand off -gsm launch to embedded stage2; continuing without eGSM\n");
 #else
             DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", (unsigned int)gsm_flags);
 #endif

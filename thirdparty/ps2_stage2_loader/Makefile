@@ -1,14 +1,18 @@
 EE_BIN = ps2_stage2_loader.elf
-PRINTF ?= NONE
+EGSM_BUILD ?= 1
 
 EE_INCS = -I./include -I../../include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
 EE_LINKFILE = linkfile
 
+ifeq ($(EGSM_BUILD), 1)
 EE_OBJS = main.o ps2logo.o egsm.o ee_exception_l2.o
+else
+EE_OBJS = main.o ps2logo.o egsm_stub.o
+endif
 EE_OBJS_DIR = obj/
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%)
 
-EE_CFLAGS += -Os -G0 -Wall -fdata-sections -ffunction-sections
+EE_CFLAGS += -Os -G0 -Wall -fdata-sections -ffunction-sections -DEGSM_BUILD=$(EGSM_BUILD)
 EE_LDFLAGS += -Wl,-zmax-page-size=128 -Wl,--gc-sections -s
 
 EE_NEWLIB_NANO = 1
@@ -16,21 +20,7 @@ NEWLIB_NANO = 1
 
 EE_LIBS += -lfileXio -liopreboot -lpatches -lcdvd -lcglue -lpthread -lpthreadglue
 
-ifeq ($(PRINTF), NONE)
-else ifeq ($(PRINTF), SCR)
-  EE_CFLAGS += -DSCR_PRINT
-  EE_LIBS += -ldebug
-else ifeq ($(PRINTF), EE_SIO)
-  EE_CFLAGS += -DEE_SIO_DEBUG
-  EE_LIBS += -lsiocookie
-  EE_OBJS += sioprintf.o
-else ifeq ($(PRINTF), PRINTF)
-  EE_CFLAGS += -DCOMMON_PRINTF
-else ifneq ($(PRINTF),)
-  $(warning UNKNOWN PRINTF REQUESTED FOR STAGE2: '$(PRINTF)')
-endif
-
-vpath %.c src src/egsm ../../src
+vpath %.c src src/egsm
 vpath %.S src/egsm
 
 .PHONY: all clean

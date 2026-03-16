@@ -5,7 +5,6 @@
 #include <unistd.h>
 
 #include "debugprintf.h"
-#include "egsm_api.h"
 #include "egsm_parse.h"
 
 uint32_t parse_egsm_flags_common(const char *gsm_arg)

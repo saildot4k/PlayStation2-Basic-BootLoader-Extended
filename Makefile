@@ -23,10 +23,7 @@ UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
-EGSM_BUILD ?= 1 # build embedded eGSM runtime (0=disabled, 1=enabled)
-EGSM_TRACE ?= 0 # eGSM trace level (0=off, 1=size-safe/no logs, 2=verbose)
-EGSM_MAIN_RUNTIME ?= 0 # keep eGSM out of the main ELF by default; stage2 handles disc/non-disc -gsm launches
-EMBED_PS2_STAGE2 ?= 1 # use the embedded OSDMenu loader-style stage2 by default
+EGSM_BUILD ?= 1 # build the embedded stage2 eGSM runtime (0=disabled, 1=enabled)
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -71,28 +68,15 @@ EE_OBJS = main.o \
 			      $(IOP_OBJS)
 
 ifeq ($(EGSM_BUILD), 1)
-  EE_CFLAGS += -DEGSM_BUILD=1 -DEGSM_TRACE=$(EGSM_TRACE)
-  ifeq ($(EGSM_MAIN_RUNTIME), 1)
-    $(info --- building with eGSM runtime enabled)
-    EE_OBJS += egsm.o ee_exception_l2.o
-    EE_LDFLAGS += -Wl,-Tlinkfile.egsm
-  else
-    $(info --- building with eGSM main-runtime stub (disc/stage2 plumbing remains enabled))
-    EE_OBJS += egsm_stub.o
-  endif
+  $(info --- building with eGSM via embedded PS2 stage2)
+  EE_CFLAGS += -DEGSM_BUILD=1
+  EE_OBJS += ps2_stage2_loader_elf.o
 else
   $(info --- building with eGSM runtime disabled)
-  EE_OBJS += egsm_stub.o
-  EE_CFLAGS += -DEGSM_BUILD=0 -DEGSM_TRACE=0
+  EE_CFLAGS += -DEGSM_BUILD=0
 endif
 
 EMBEDDED_STUFF = icon_sys_A.o icon_sys_J.o icon_sys_C.o splash_images_rbg.o
-
-ifeq ($(EMBED_PS2_STAGE2), 1)
-  $(info --- embedding PS2 stage2 loader)
-  EE_OBJS += ps2_stage2_loader_elf.o
-  EE_CFLAGS += -DEMBED_PS2_STAGE2
-endif
 
 EE_CFLAGS += -Wall
 EE_CFLAGS += -fdata-sections -ffunction-sections -DREPORT_FATAL_ERRORS
@@ -103,9 +87,6 @@ EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
 EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2SDK)/common/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
 
-# Keep eGSM object layout predictable (matches OSDMenu's use of -G0).
-$(EE_OBJS_DIR)egsm.o: EE_CFLAGS += -G0 -Os
-$(EE_OBJS_DIR)ee_exception_l2.o: EE_CFLAGS += -G0 -Os
 $(EE_OBJS_DIR)ps2.o: EE_CFLAGS += -G0 -Os
 
 # ---{ CONDITIONS }--- #
@@ -287,22 +268,23 @@ ifeq ($(PROHBIT_DVD_0100),1)
 endif
 
 # ---{ RECIPES }--- #
-.PHONY: greeting debug all clean kelf packed release
+.PHONY: greeting debug all clean clean-subprojects kelf packed release rebuild banner analize celan
 
 all: $(EE_BIN)
-ifeq (DEBUG, 1)
+ifeq ($(DEBUG), 1)
 	$(MAKE) greeting
 endif
-rebuild: clean packed
+
+debug:
+	$(MAKE) all DEBUG=1
+
+rebuild:
+	$(MAKE) clean
+	$(MAKE) packed
 
 packed: $(EE_BIN_PACKED)
 
-ifeq ($(EGSM_TRACE), 1)
-  $(info --- EGSM_TRACE=1: release will keep the raw ELF and skip ps2-packer)
-  RELEASE_TARGET = $(EE_BIN)
-else
-  RELEASE_TARGET = $(EE_BIN_PACKED)
-endif
+RELEASE_TARGET = $(EE_BIN_PACKED)
 
 greeting:
 	@echo built PS2BBL PSX=$(PSX), LOCAL_IRX=$(HAS_EMBED_IRX), DEBUG=$(DEBUG)
@@ -312,13 +294,20 @@ greeting:
 	@echo printf=$(PRINTF)
 	@echo $(EE_OBJS)
 
-release: clean $(RELEASE_TARGET)
+release:
+	$(MAKE) clean
+	$(MAKE) $(RELEASE_TARGET)
 	@rm -f $(EE_BIN_STRIPPED)
 	@echo "$$HEADER"
+
+clean-subprojects:
+	@if [ -f thirdparty/ps1vn/Makefile ]; then $(MAKE) -C thirdparty/ps1vn clean; fi
+	@if [ -f thirdparty/ps2_stage2_loader/Makefile ]; then $(MAKE) -C thirdparty/ps2_stage2_loader clean; fi
 
 clean:
 	@rm -rf $(EE_BIN) $(EE_BIN_STRIPPED) $(EE_BIN_ENCRYPTED) $(EE_BIN_PACKED)
 	@rm -rf $(EE_OBJS_DIR) $(EE_ASM_DIR)
+	@$(MAKE) clean-subprojects
 
 $(EE_BIN_STRIPPED): $(EE_BIN)
 	@echo " -- Stripping"
