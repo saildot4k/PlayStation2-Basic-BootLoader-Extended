@@ -25,6 +25,7 @@ PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
 EGSM_BUILD ?= 1 # build embedded eGSM runtime (0=disabled, 1=enabled)
 EGSM_TRACE ?= 0 # eGSM trace level (0=off, 1=size-safe/no logs, 2=verbose)
+EGSM_MAIN_RUNTIME ?= 1 # link the low-memory eGSM runtime into the main ELF (set 0 to use stub in main ELF)
 EMBED_PS2_STAGE2 ?= 0 # experimental OSDMenu loader-style stage2 for PS2 disc launch
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
@@ -70,10 +71,15 @@ EE_OBJS = main.o \
 			      $(IOP_OBJS)
 
 ifeq ($(EGSM_BUILD), 1)
-  $(info --- building with eGSM runtime enabled)
-  EE_OBJS += egsm.o ee_exception_l2.o
   EE_CFLAGS += -DEGSM_BUILD=1 -DEGSM_TRACE=$(EGSM_TRACE)
-  EE_LDFLAGS += -Wl,-Tlinkfile.egsm
+  ifeq ($(EGSM_MAIN_RUNTIME), 1)
+    $(info --- building with eGSM runtime enabled)
+    EE_OBJS += egsm.o ee_exception_l2.o
+    EE_LDFLAGS += -Wl,-Tlinkfile.egsm
+  else
+    $(info --- building with eGSM main-runtime stub (disc/stage2 plumbing remains enabled))
+    EE_OBJS += egsm_stub.o
+  endif
 else
   $(info --- building with eGSM runtime disabled)
   EE_OBJS += egsm_stub.o
@@ -291,6 +297,13 @@ rebuild: clean packed
 
 packed: $(EE_BIN_PACKED)
 
+ifeq ($(EGSM_TRACE), 1)
+  $(info --- EGSM_TRACE=1: release will keep the raw ELF and skip ps2-packer)
+  RELEASE_TARGET = $(EE_BIN)
+else
+  RELEASE_TARGET = $(EE_BIN_PACKED)
+endif
+
 greeting:
 	@echo built PS2BBL PSX=$(PSX), LOCAL_IRX=$(HAS_EMBED_IRX), DEBUG=$(DEBUG)
 	@echo PROHBIT_DVD_0100=$(PROHBIT_DVD_0100), XCDVD_READKEY=$(XCDVD_READKEY)
@@ -299,7 +312,7 @@ greeting:
 	@echo printf=$(PRINTF)
 	@echo $(EE_OBJS)
 
-release: clean $(EE_BIN_PACKED)
+release: clean $(RELEASE_TARGET)
 	@rm -f $(EE_BIN_STRIPPED)
 	@echo "$$HEADER"
 
