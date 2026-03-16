@@ -30,6 +30,18 @@ enum {
     DEV9_NICHDD
 };
 
+#ifdef SCR_PRINT
+static void DebugScreenPause(void)
+{
+    volatile unsigned int spin;
+
+    // Busy-wait because sleep() has been unreliable in this handoff path on hardware.
+    for (spin = 0; spin < 160000000u; spin++) {
+        asm volatile("" ::: "memory");
+    }
+}
+#endif
+
 static int arg_eq_ci(const char *a, const char *b)
 {
     unsigned char ca, cb;
@@ -257,7 +269,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
     DPRINTF("%s: stage2 launch='%s' argc=%d loader='%s' gsm='%s'\n",
             __func__, stage2_launch, stage2_argc, loader_args, gsm_arg);
 #ifdef SCR_PRINT
-    sleep(1);
+    DebugScreenPause();
 #endif
 
     if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {

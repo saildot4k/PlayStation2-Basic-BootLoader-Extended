@@ -41,7 +41,14 @@ PS2_DISABLE_AUTOSTART_PTHREAD();
 #define USER_MEM_END_ADDR 0x2000000
 
 #ifdef SCR_PRINT
-static void stage2DebugPause(void) { sleep(1); }
+static void stage2DebugPause(void) {
+  volatile unsigned int spin;
+
+  // Busy-wait because sleep() has been unreliable in this handoff path on hardware.
+  for (spin = 0; spin < 160000000u; spin++) {
+    asm volatile("" ::: "memory");
+  }
+}
 #define STAGE2_DPRINTF(...)                                                                      \
   do {                                                                                           \
     DPRINTF(__VA_ARGS__);                                                                        \
