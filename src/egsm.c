@@ -14,7 +14,7 @@
 #define EGSM_TRACE 0
 #endif
 
-#if EGSM_TRACE
+#if EGSM_TRACE > 1
 #define EGSM_LOG(...) DPRINTF(__VA_ARGS__)
 #else
 #define EGSM_LOG(...)
@@ -77,8 +77,8 @@ struct gsm_state {
   uint64_t last_display1;
   uint64_t last_display2;
 
-  uint32_t trace_setgscrt_hits;
-  uint32_t trace_el2_hits;
+  uint8_t trace_setgscrt_hits;
+  uint8_t trace_el2_hits;
 };
 static struct gsm_state state = {NULL};
 
@@ -664,19 +664,16 @@ void enableGSM(uint32_t flags) {
   state.flags = flags;
   state.trace_setgscrt_hits = 0;
   state.trace_el2_hits = 0;
-  EGSM_LOG("eGSM on fl=%08x\n", (unsigned int)flags);
 
   // Hook SetGsCrt
   org_handler = GetSyscallHandler(__NR_SetGsCrt);
   if (org_handler == NULL) {
-    EGSM_LOG("eGSM hook fail: org null\n");
     return;
   }
   state.org_SetGsCrt = org_handler;
   SetSyscall(__NR_SetGsCrt, (void *)(((uint32_t)(hook_SetGsCrt) & ~0xE0000000) | 0x80000000));
   new_handler = GetSyscallHandler(__NR_SetGsCrt);
   if (new_handler == NULL) {
-    EGSM_LOG("eGSM hook fail: new null\n");
     return;
   }
   EGSM_LOGV("eGSM hook org=%p new=%p ins=%p\n", org_handler, hook_SetGsCrt, new_handler);
