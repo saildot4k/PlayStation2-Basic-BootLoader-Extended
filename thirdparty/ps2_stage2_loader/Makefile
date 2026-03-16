@@ -3,7 +3,7 @@ EE_BIN = ps2_stage2_loader.elf
 EE_INCS = -I./include -I../../include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
 EE_LINKFILE = linkfile
 
-EE_OBJS = main.o ps2logo.o egsm.o ee_exception_l2.o
+EE_OBJS = main.o ps2logo.o egsm.o ee_exception_l2.o egsm_parse.o
 EE_OBJS_DIR = obj/
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%)
 
@@ -15,7 +15,7 @@ NEWLIB_NANO = 1
 
 EE_LIBS += -lfileXio -liopreboot -lpatches -lcdvd -lcglue -lpthread -lpthreadglue
 
-vpath %.c src src/egsm
+vpath %.c src src/egsm ../../src
 vpath %.S src/egsm
 
 .PHONY: all clean

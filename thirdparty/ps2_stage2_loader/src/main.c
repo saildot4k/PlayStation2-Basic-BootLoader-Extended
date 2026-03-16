@@ -11,6 +11,7 @@
 */
 
 #include "egsm_api.h"
+#include "egsm_parse.h"
 #include "ps2logo.h"
 #include <iopcontrol.h>
 #include <iopcontrol_special.h>
@@ -469,74 +470,5 @@ void resetIOP() {
 
 // Parses the loader eGSM argument into the eGSM flags
 uint32_t parseGSMFlags(char *gsmArg) {
-  uint32_t flags = 0;
-  if (!gsmArg)
-    return 0;
-
-  if (!strncmp(gsmArg, "fp", 2)) {
-    switch (gsmArg[2]) {
-    case '1':
-      flags |= EGSM_FLAG_VMODE_FP1;
-      break;
-    case '2':
-      flags |= EGSM_FLAG_VMODE_FP2;
-      break;
-    default:
-      return 0;
-    }
-    gsmArg += 3;
-  } else if (!strncmp(gsmArg, "1080ix", 6)) {
-    switch (gsmArg[6]) {
-    case '1':
-      flags |= EGSM_FLAG_VMODE_1080I_X1;
-      break;
-    case '2':
-      flags |= EGSM_FLAG_VMODE_1080I_X2;
-      break;
-    case '3':
-      flags |= EGSM_FLAG_VMODE_1080I_X3;
-      break;
-    default:
-      return 0;
-    }
-    gsmArg += 7;
-  } else
-    return 0;
-
-  if (gsmArg[0] == ':') {
-    // Compatibility mode
-    gsmArg++;
-    switch (gsmArg[0]) {
-    case '1': // Mode 1
-      flags |= EGSM_FLAG_COMP_1;
-      break;
-    case '2': // Mode 2
-      flags |= EGSM_FLAG_COMP_2;
-      break;
-    case '3': // Mode 3
-      flags |= EGSM_FLAG_COMP_3;
-      break;
-    }
-    gsmArg += 1;
-  }
-
-  if (flags) {
-    // 576p mode is unsupported on PS2s with ROMVER <210, so check the ROMVER
-    // and force disable progressive PAL mode if the console is earlier
-    int fd = fileXioOpen("rom0:ROMVER", FIO_O_RDONLY);
-    if (fd < 0) // If ROMVER couldn't be opened for some reason, disable 576p just to be safe
-      flags |= EGSM_FLAG_NO_576P;
-    else {
-      char romver[4] = {0};
-
-      // Read ROM version
-      fileXioRead(fd, romver, 4);
-      fileXioClose(fd);
-
-      if (romver[1] < '2' || romver[2] < '1')
-        flags |= EGSM_FLAG_NO_576P;
-    }
-  }
-
-  return flags;
+  return parse_egsm_flags_common(gsmArg);
 }
