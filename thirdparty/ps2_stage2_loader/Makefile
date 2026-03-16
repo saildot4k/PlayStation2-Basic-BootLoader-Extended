@@ -19,6 +19,7 @@ EE_LIBS += -lfileXio -liopreboot -lpatches -lcdvd -lcglue -lpthread -lpthreadglu
 ifeq ($(PRINTF), NONE)
 else ifeq ($(PRINTF), SCR)
   EE_CFLAGS += -DSCR_PRINT
+  EE_LIBS += -ldebug
 else ifeq ($(PRINTF), EE_SIO)
   EE_CFLAGS += -DEE_SIO_DEBUG
   EE_LIBS += -lsiocookie
