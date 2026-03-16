@@ -256,6 +256,9 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
 
     DPRINTF("%s: stage2 launch='%s' argc=%d loader='%s' gsm='%s'\n",
             __func__, stage2_launch, stage2_argc, loader_args, gsm_arg);
+#ifdef SCR_PRINT
+    DelayThread(1000 * 1000);
+#endif
 
     if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {
         free(stage2_argv);

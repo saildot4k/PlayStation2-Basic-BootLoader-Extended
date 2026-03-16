@@ -12,6 +12,7 @@
 
 #include "egsm_api.h"
 #include "ps2logo.h"
+#include "debugprintf.h"
 #include <iopcontrol.h>
 #include <iopcontrol_special.h>
 #include <kernel.h>
@@ -37,6 +38,17 @@ PS2_DISABLE_AUTOSTART_PTHREAD();
 
 #define USER_MEM_START_ADDR 0x100000
 #define USER_MEM_END_ADDR 0x2000000
+
+#ifdef SCR_PRINT
+static void stage2DebugPause(void) { DelayThread(1000 * 1000); }
+#define STAGE2_DPRINTF(...)                                                                      \
+  do {                                                                                           \
+    DPRINTF(__VA_ARGS__);                                                                        \
+    stage2DebugPause();                                                                          \
+  } while (0)
+#else
+#define STAGE2_DPRINTF(...) DPRINTF(__VA_ARGS__)
+#endif
 
 typedef enum { ShutdownType_None, ShutdownType_HDD, ShutdownType_All } ShutdownType;
 
@@ -144,6 +156,8 @@ int main(int argc, char *argv[]) {
 
   // Init SIF RPC
   sceSifInitRpc(0);
+  DPRINTF_INIT();
+  STAGE2_DPRINTF("stage2: start argc=%d argv0=%s\n", argc, (argv[0] != NULL) ? argv[0] : "<null>");
 
   // Parse loader argument if argv[argc-1] starts with "-la"
   if (!strncmp(argv[argc - 1], "-la=", 4)) {
@@ -173,6 +187,7 @@ int main(int argc, char *argv[]) {
       case 'G':
         // Force video mode via eGSM
         eGSMFlags = parseGSMFlags(argv[argc - 2]);
+        STAGE2_DPRINTF("stage2: parsed -la=G arg '%s' -> flags=0x%08x\n", argv[argc - 2], eGSMFlags);
         argc--;
         break;
       case 'A':
@@ -208,6 +223,7 @@ int main(int argc, char *argv[]) {
   }
 
   // Handle in-memory ELF file
+  STAGE2_DPRINTF("stage2: elfPath=%s argc=%d eGSMFlags=0x%08x\n", elfPath, argc, eGSMFlags);
   if (!strncmp(elfPath, "mem:", 4))
     return loadEmbeddedELF(argc, argv);
 
@@ -245,6 +261,7 @@ int loadELF(int elfMem) {
 // Loads and executes the ELF elfPath points to.
 // elfPath must be mem:<8-char address in HEX>:<8-char file size in HEX>
 int loadEmbeddedELF(int argc, char *argv[]) {
+  STAGE2_DPRINTF("stage2: loadEmbeddedELF argc=%d path=%s\n", argc, elfPath);
   // Shutdown DEV9
   shutdownDEV9(dev9ShutdownType);
 
@@ -276,14 +293,18 @@ int loadEmbeddedELF(int argc, char *argv[]) {
   if (entry < 0)
     return -1;
 
+  STAGE2_DPRINTF("stage2: embedded entry=0x%08x flags=0x%08x\n", entry, eGSMFlags);
   if (eGSMFlags)
     enableGSM(eGSMFlags);
 
+  STAGE2_DPRINTF("stage2: ExecPS2 embedded entry=0x%08x argc=%d\n", entry, argc);
   return ExecPS2((void *)entry, NULL, argc, argv);
 }
 
 // Loads and executes the ELF elfPath points to.
 int loadELFFromFile(int argc, char *argv[]) {
+  STAGE2_DPRINTF("stage2: loadELFFromFile argc=%d path=%s argv0=%s\n",
+                 argc, elfPath, (argc > 0 && argv[0] != NULL) ? argv[0] : "<null>");
   // Handle ELF files
   if (ioprpPath && !strncmp(ioprpPath, "mem:", 4)) {
     // Clear the memory without touching the loaded IOPRP
@@ -319,6 +340,9 @@ int loadELFFromFile(int argc, char *argv[]) {
     return ret;
   SifLoadFileExit();
 
+  STAGE2_DPRINTF("stage2: SifLoadElf ret=%d epc=0x%08x gp=0x%08x\n",
+                 ret, (unsigned int)elfdata.epc, (unsigned int)elfdata.gp);
+
   FlushCache(0);
   FlushCache(2);
 
@@ -345,12 +369,17 @@ int loadELFFromFile(int argc, char *argv[]) {
   sceSifExitRpc();
   sceSifExitCmd();
 
-  if (ret != 0 || elfdata.epc == 0)
+  if (ret != 0 || elfdata.epc == 0) {
+    STAGE2_DPRINTF("stage2: refusing launch ret=%d epc=0x%08x\n", ret, (unsigned int)elfdata.epc);
     return -ENOENT;
+  }
 
+  STAGE2_DPRINTF("stage2: enableGSM flags=0x%08x\n", eGSMFlags);
   if (eGSMFlags)
     enableGSM(eGSMFlags);
 
+  STAGE2_DPRINTF("stage2: ExecPS2 epc=0x%08x gp=0x%08x argc=%d\n",
+                 (unsigned int)elfdata.epc, (unsigned int)elfdata.gp, argc);
   return ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, argc, argv);
 }
 
