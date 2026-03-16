@@ -46,7 +46,7 @@ PS2_STAGE2_DIR := thirdparty/ps2_stage2_loader
 PS2_STAGE2_ELF := $(PS2_STAGE2_DIR)/ps2_stage2_loader.elf
 
 $(PS2_STAGE2_ELF):
-	$(MAKE) -C $(PS2_STAGE2_DIR)
+	$(MAKE) -C $(PS2_STAGE2_DIR) PRINTF=$(PRINTF)
 
 $(EE_ASM_DIR)ps2_stage2_loader_elf.c: $(PS2_STAGE2_ELF) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2_stage2_loader_elf
