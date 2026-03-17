@@ -9,6 +9,16 @@
 
 static int g_pending_command_argc;
 static char **g_pending_command_argv;
+static int g_is_psx_desr = 0;
+
+static void SplashDrawCenteredStatusWithInfo(const char *text,
+                                             u32 color,
+                                             const char *model,
+                                             const char *rom_fmt,
+                                             const char *dvdver,
+                                             const char *ps1ver,
+                                             const char *temp_celsius,
+                                             const char *source);
 
 static void ClearStaleEEDebugState(void)
 {
@@ -1154,7 +1164,6 @@ static void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
 
 char *EXECPATHS[CONFIG_KEY_INDEXES];
 u8 ROMVER[16];
-static int g_is_psx_desr = 0;
 static int g_cdvd_cancelled = 0;
 static int g_pending_command_argc = 0;
 static char **g_pending_command_argv = NULL;
