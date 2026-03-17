@@ -143,8 +143,8 @@ const char *KEYS_ID[KEY_COUNT] = {
     const char *DEFAULT_KEYNAMES_PSX[KEY_COUNT] = {
         "wLE ISR (MMCE -> MX -> exFAT",
         "DISC NO LOGO",
-        "L3",
-        "R3",
+        "",
+        "",
         "DISC",
         "OSD-XMB",
         "RETROLauncher",
@@ -163,8 +163,8 @@ const char *KEYS_ID[KEY_COUNT] = {
     const char *DEFAULT_KEYNAMES_PS2[KEY_COUNT] = {
         "HACKED OSDSYS",
         "DISC NO LOGO",
-        "L3",
-        "R3",
+        "",
+        "",
         "DISC",
         "OSD-XMB",
         "RETROLauncher",
@@ -219,9 +219,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "", // R3 [CONFIG_KEY_INDEXES * 3]
-        "",
-        "",
+        "mass:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf", // R3 [CONFIG_KEY_INDEXES * 3]
+        "mmce?:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
+        "massX:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
         "",
         "",
         "",
@@ -392,9 +392,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "", // R3 [CONFIG_KEY_INDEXES * 3]
-        "",
-        "",
+        "mass:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf", // R3 [CONFIG_KEY_INDEXES * 3]
+        "mmce?:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
+        "massX:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
         "",
         "",
         "",
