@@ -691,15 +691,16 @@ static void SplashDrawCenteredStatusWithInfo(const char *text,
     SplashRenderPresent();
 }
 
-static void SplashDrawNoDiscPromptWithInfo(int dots,
-                                           const char *model,
-                                           const char *rom_fmt,
-                                           const char *dvdver,
-                                           const char *ps1ver,
-                                           const char *temp_celsius,
-                                           const char *source)
+static void SplashDrawRetryPromptWithInfo(const char *line1,
+                                          u32 line1_color,
+                                          int dots,
+                                          const char *model,
+                                          const char *rom_fmt,
+                                          const char *dvdver,
+                                          const char *ps1ver,
+                                          const char *temp_celsius,
+                                          const char *source)
 {
-    const char *line1 = "NO DISC FOUND!";
     const char *base2 = "INSERT DISC OR PRESS START TO RETRY HOTKEYS";
     char dots_buf[4];
     int i, dot_count;
@@ -719,6 +720,8 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
     int logo_h;
 
     if (!SplashRenderIsActive())
+        return;
+    if (line1 == NULL)
         return;
 
     if (dots < 0)
@@ -780,7 +783,7 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
         x2 = 8;
     dot_x = x2 + base2_w;
 
-    SplashRenderDrawTextPxScaled(x1, y1, 0xffff00, line1, 1);
+    SplashRenderDrawTextPxScaled(x1, y1, line1_color, line1, 1);
     SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, base2, 1);
     if (dots_buf[0] != '\0')
         SplashRenderDrawTextPxScaled(dot_x, y2, 0xffffff, dots_buf, 1);
@@ -3071,8 +3074,8 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
     int cancel_requested = 0;
     int start_was_down;
     u64 start_hold_deadline = 0;
-    int nodisc_dots = 0;
-    u64 nodisc_next_tick = 0;
+    int prompt_dots = 0;
+    u64 prompt_next_tick = 0;
     int use_splash_ui;
     char model_buf[64];
     char ps1_buf[64];
@@ -3175,15 +3178,17 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                         first_run = 0;
                     }
                     if (use_splash_ui) {
-                        nodisc_dots = 0;
-                        nodisc_next_tick = Timer() + 1000;
-                        SplashDrawNoDiscPromptWithInfo(nodisc_dots,
-                                                       model,
-                                                       rom_fmt,
-                                                       dvdver,
-                                                       ps1ver,
-                                                       temp_celsius,
-                                                       source);
+                        prompt_dots = 0;
+                        prompt_next_tick = Timer() + 1000;
+                        SplashDrawRetryPromptWithInfo("NO DISC FOUND!",
+                                                      0xffff00,
+                                                      prompt_dots,
+                                                      model,
+                                                      rom_fmt,
+                                                      dvdver,
+                                                      ps1ver,
+                                                      temp_celsius,
+                                                      source);
                     } else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x0000ff);
@@ -3196,6 +3201,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                 case SCECdDETCTCD:
                 case SCECdDETCTDVDS:
                 case SCECdDETCTDVDD:
+                    prompt_next_tick = 0;
                     if (use_splash_ui)
                         SplashDrawCenteredStatusWithInfo("Reading Disc...",
                                                          0xffffff,
@@ -3213,6 +3219,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
 
                 case SCECdPSCD:
                 case SCECdPSCDDA:
+                    prompt_next_tick = 0;
                     if (use_splash_ui)
                         SplashDrawCenteredStatusWithInfo("PlayStation Disc",
                                                          0x00ff00,
@@ -3234,6 +3241,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                 case SCECdPS2CD:
                 case SCECdPS2CDDA:
                 case SCECdPS2DVD:
+                    prompt_next_tick = 0;
                     if (use_splash_ui)
                         SplashDrawCenteredStatusWithInfo("PlayStation 2 Disc",
                                                          0x00ff00,
@@ -3253,15 +3261,19 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                     break;
 
                 case SCECdCDDA:
-                    if (use_splash_ui)
-                        SplashDrawCenteredStatusWithInfo("Audio Disc Not Supported",
-                                                         0xffff00,
-                                                         model,
-                                                         rom_fmt,
-                                                         dvdver,
-                                                         ps1ver,
-                                                         temp_celsius,
-                                                         source);
+                    if (use_splash_ui) {
+                        prompt_dots = 0;
+                        prompt_next_tick = Timer() + 1000;
+                        SplashDrawRetryPromptWithInfo("Audio Disc Not Supported",
+                                                      0xffff00,
+                                                      prompt_dots,
+                                                      model,
+                                                      rom_fmt,
+                                                      dvdver,
+                                                      ps1ver,
+                                                      temp_celsius,
+                                                      source);
+                    }
                     else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0xffff00);
@@ -3271,6 +3283,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                     break;
 
                 case SCECdDVDV:
+                    prompt_next_tick = 0;
                     if (use_splash_ui)
                         SplashDrawCenteredStatusWithInfo("DVD Video",
                                                          0x00ff00,
@@ -3291,14 +3304,17 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                 default:
                     if (use_splash_ui) {
                         snprintf(disc_status, sizeof(disc_status), "Unknown Disc (%d)", DiscType);
-                        SplashDrawCenteredStatusWithInfo(disc_status,
-                                                         0x8080ff,
-                                                         model,
-                                                         rom_fmt,
-                                                         dvdver,
-                                                         ps1ver,
-                                                         temp_celsius,
-                                                         source);
+                        prompt_dots = 0;
+                        prompt_next_tick = Timer() + 1000;
+                        SplashDrawRetryPromptWithInfo(disc_status,
+                                                      0x8080ff,
+                                                      prompt_dots,
+                                                      model,
+                                                      rom_fmt,
+                                                      dvdver,
+                                                      ps1ver,
+                                                      temp_celsius,
+                                                      source);
                     } else {
                         scr_printf("\tNew Disc:\t");
                         scr_setfontcolor(0x0000ff);
@@ -3308,16 +3324,60 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
             }
         }
 
-        if (use_splash_ui && DiscType == SCECdNODISC && Timer() >= nodisc_next_tick) {
-            nodisc_dots = (nodisc_dots + 1) % 4;
-            nodisc_next_tick = Timer() + 1000;
-            SplashDrawNoDiscPromptWithInfo(nodisc_dots,
-                                           model,
-                                           rom_fmt,
-                                           dvdver,
-                                           ps1ver,
-                                           temp_celsius,
-                                           source);
+        if (use_splash_ui && prompt_next_tick != 0 && Timer() >= prompt_next_tick) {
+            switch (DiscType) {
+                case SCECdNODISC:
+                    prompt_dots = (prompt_dots + 1) % 4;
+                    prompt_next_tick = Timer() + 1000;
+                    SplashDrawRetryPromptWithInfo("NO DISC FOUND!",
+                                                  0xffff00,
+                                                  prompt_dots,
+                                                  model,
+                                                  rom_fmt,
+                                                  dvdver,
+                                                  ps1ver,
+                                                  temp_celsius,
+                                                  source);
+                    break;
+                case SCECdCDDA:
+                    prompt_dots = (prompt_dots + 1) % 4;
+                    prompt_next_tick = Timer() + 1000;
+                    SplashDrawRetryPromptWithInfo("Audio Disc Not Supported",
+                                                  0xffff00,
+                                                  prompt_dots,
+                                                  model,
+                                                  rom_fmt,
+                                                  dvdver,
+                                                  ps1ver,
+                                                  temp_celsius,
+                                                  source);
+                    break;
+                case SCECdDETCT:
+                case SCECdDETCTCD:
+                case SCECdDETCTDVDS:
+                case SCECdDETCTDVDD:
+                case SCECdPSCD:
+                case SCECdPSCDDA:
+                case SCECdPS2CD:
+                case SCECdPS2CDDA:
+                case SCECdPS2DVD:
+                case SCECdDVDV:
+                    break;
+                default:
+                    prompt_dots = (prompt_dots + 1) % 4;
+                    prompt_next_tick = Timer() + 1000;
+                    snprintf(disc_status, sizeof(disc_status), "Unknown Disc (%d)", DiscType);
+                    SplashDrawRetryPromptWithInfo(disc_status,
+                                                  0x8080ff,
+                                                  prompt_dots,
+                                                  model,
+                                                  rom_fmt,
+                                                  dvdver,
+                                                  ps1ver,
+                                                  temp_celsius,
+                                                  source);
+                    break;
+            }
         }
 
         // Avoid spamming the IOP with sceCdGetDiskType(), or there may be a deadlock.
