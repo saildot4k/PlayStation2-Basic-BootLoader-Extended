@@ -11,6 +11,10 @@ static int g_pending_command_argc;
 static char **g_pending_command_argv;
 static int g_is_psx_desr = 0;
 
+#define VIDEO_SELECTOR_TEXT_COLOR 0xffffff
+#define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
+#define VIDEO_SELECTOR_SELECT_COLOR 0xffff00
+
 static void SplashDrawCenteredStatusWithInfo(const char *text,
                                              u32 color,
                                              const char *model,
@@ -701,13 +705,20 @@ static void SplashDrawRetryPromptWithInfo(const char *line1,
                                           const char *temp_celsius,
                                           const char *source)
 {
-    const char *base2 = "INSERT DISC OR PRESS START TO RETRY HOTKEYS";
+    const char *line2_prefix = "INSERT DISC OR PRESS ";
+    const char *line2_word = "START";
+    const char *line2_suffix = " TO RETRY HOTKEYS";
     char dots_buf[4];
     int i, dot_count;
     int line1_w;
-    int base2_w;
+    int line2_prefix_w;
+    int line2_word_w;
+    int line2_suffix_w;
+    int line2_w;
     int x1;
     int x2;
+    int x2_word;
+    int x2_suffix;
     int dot_x;
     int y1;
     int y2;
@@ -752,7 +763,10 @@ static void SplashDrawRetryPromptWithInfo(const char *line1,
     screen_w = SplashRenderGetScreenWidth();
     screen_h = SplashRenderGetScreenHeight();
     line1_w = (int)strlen(line1) * 6;
-    base2_w = (int)strlen(base2) * 6;
+    line2_prefix_w = (int)strlen(line2_prefix) * 6;
+    line2_word_w = (int)strlen(line2_word) * 6;
+    line2_suffix_w = (int)strlen(line2_suffix) * 6;
+    line2_w = line2_prefix_w + line2_word_w + line2_suffix_w;
     if (GLOBCFG.LOGO_DISP >= 2) {
         logo_x = SplashRenderGetLogoX();
         logo_y = SplashRenderGetLogoY();
@@ -766,14 +780,14 @@ static void SplashDrawRetryPromptWithInfo(const char *line1,
             y1 = 0;
         y2 = y1 + 18;
         x1 = anchor_center_x - (line1_w / 2);
-        x2 = anchor_center_x - (base2_w / 2);
+        x2 = anchor_center_x - (line2_w / 2);
         if (x1 + line1_w > screen_w - 8)
             x1 = screen_w - line1_w - 8;
-        if (x2 + base2_w > screen_w - 8)
-            x2 = screen_w - base2_w - 8;
+        if (x2 + line2_w > screen_w - 8)
+            x2 = screen_w - line2_w - 8;
     } else {
         x1 = SplashRenderGetScreenCenterX() - (line1_w / 2);
-        x2 = SplashRenderGetScreenCenterX() - (base2_w / 2);
+        x2 = SplashRenderGetScreenCenterX() - (line2_w / 2);
         y1 = SplashRenderGetScreenCenterY() - 16;
         y2 = SplashRenderGetScreenCenterY() + 2;
     }
@@ -781,10 +795,14 @@ static void SplashDrawRetryPromptWithInfo(const char *line1,
         x1 = 8;
     if (x2 < 8)
         x2 = 8;
-    dot_x = x2 + base2_w;
+    x2_word = x2 + line2_prefix_w;
+    x2_suffix = x2_word + line2_word_w;
+    dot_x = x2 + line2_w;
 
     SplashRenderDrawTextPxScaled(x1, y1, line1_color, line1, 1);
-    SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, base2, 1);
+    SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, line2_prefix, 1);
+    SplashRenderDrawTextPxScaled(x2_word, y2, VIDEO_SELECTOR_HIGHLIGHT_COLOR, line2_word, 1);
+    SplashRenderDrawTextPxScaled(x2_suffix, y2, 0xffffff, line2_suffix, 1);
     if (dots_buf[0] != '\0')
         SplashRenderDrawTextPxScaled(dot_x, y2, 0xffffff, dots_buf, 1);
     SplashRenderPresent();
@@ -1239,11 +1257,8 @@ static int g_hotkey_launches_enabled = 1;
 static char g_config_path_in_use[256] = "";
 
 #define RESCUE_COMBO_WINDOW_MS 2000
-#define VIDEO_SELECTOR_TEXT_COLOR 0xffffff
-#define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
-#define VIDEO_SELECTOR_SELECT_COLOR 0xffff00
 #define VIDEO_SELECTOR_BOX_BG_COLOR 0x606060
-#define VIDEO_SELECTOR_BOX_BG_OPACITY_PERCENT 55
+#define VIDEO_SELECTOR_BOX_BG_OPACITY_PERCENT 80
 #define VIDEO_SELECTOR_BOX_TEXT_PAD_X 10
 #define VIDEO_SELECTOR_BOX_TEXT_PAD_Y 20
 #define VIDEO_SELECTOR_LINE_SPACING 22
@@ -1603,7 +1618,7 @@ static void RunEmergencyVideoModeSelector(void)
             char save_path_display[56];
             const char *line_start_prefix = "PRESS ";
             const char *line_start_word = "START";
-            const char *line_start_suffix = " TO JUMP TO HOTKEY DISPLAY";
+            const char *line_start_suffix = " TO JUMP TO LAUNCH KEY DISPLAY";
             const char *line_change = "PRESS LEFT/RIGHT TO CHANGE MODES";
             const char *line_select_prefix = "PRESS ";
             const char *line_select_word = "SELECT";
