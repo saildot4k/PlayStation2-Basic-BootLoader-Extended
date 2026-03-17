@@ -641,6 +641,13 @@ static void SplashDrawCenteredStatusWithInfo(const char *text,
     int line_width;
     int x;
     int y;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
 
     if (text == NULL || !SplashRenderIsActive())
         return;
@@ -655,9 +662,29 @@ static void SplashDrawCenteredStatusWithInfo(const char *text,
                                 temp_celsius,
                                 "",
                                 source);
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
     line_width = (int)strlen(text) * 6;
-    x = SplashRenderGetScreenCenterX() - (line_width / 2);
-    y = SplashRenderGetScreenCenterY() - 4;
+    if (GLOBCFG.LOGO_DISP >= 2) {
+        logo_x = SplashRenderGetLogoX();
+        logo_y = SplashRenderGetLogoY();
+        logo_w = SplashRenderGetLogoWidth();
+        logo_h = SplashRenderGetLogoHeight();
+        anchor_center_x = logo_x + (logo_w / 2);
+        y = logo_y + logo_h + 6;
+        if (y > screen_h - 20)
+            y = screen_h - 20;
+        if (y < 0)
+            y = 0;
+        x = anchor_center_x - (line_width / 2);
+        if (x < 8)
+            x = 8;
+        if (x + line_width > screen_w - 8)
+            x = screen_w - line_width - 8;
+    } else {
+        x = SplashRenderGetScreenCenterX() - (line_width / 2);
+        y = SplashRenderGetScreenCenterY() - 4;
+    }
     if (x < 8)
         x = 8;
     SplashRenderDrawTextPxScaled(x, y, color, text, 1);
@@ -683,6 +710,13 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
     int dot_x;
     int y1;
     int y2;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
 
     if (!SplashRenderIsActive())
         return;
@@ -712,12 +746,34 @@ static void SplashDrawNoDiscPromptWithInfo(int dots,
                                 "",
                                 source);
 
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
     line1_w = (int)strlen(line1) * 6;
     base2_w = (int)strlen(base2) * 6;
-    x1 = SplashRenderGetScreenCenterX() - (line1_w / 2);
-    x2 = SplashRenderGetScreenCenterX() - (base2_w / 2);
-    y1 = SplashRenderGetScreenCenterY() - 16;
-    y2 = SplashRenderGetScreenCenterY() + 2;
+    if (GLOBCFG.LOGO_DISP >= 2) {
+        logo_x = SplashRenderGetLogoX();
+        logo_y = SplashRenderGetLogoY();
+        logo_w = SplashRenderGetLogoWidth();
+        logo_h = SplashRenderGetLogoHeight();
+        anchor_center_x = logo_x + (logo_w / 2);
+        y1 = logo_y + logo_h + 2;
+        if (y1 > screen_h - 28)
+            y1 = screen_h - 28;
+        if (y1 < 0)
+            y1 = 0;
+        y2 = y1 + 18;
+        x1 = anchor_center_x - (line1_w / 2);
+        x2 = anchor_center_x - (base2_w / 2);
+        if (x1 + line1_w > screen_w - 8)
+            x1 = screen_w - line1_w - 8;
+        if (x2 + base2_w > screen_w - 8)
+            x2 = screen_w - base2_w - 8;
+    } else {
+        x1 = SplashRenderGetScreenCenterX() - (line1_w / 2);
+        x2 = SplashRenderGetScreenCenterX() - (base2_w / 2);
+        y1 = SplashRenderGetScreenCenterY() - 16;
+        y2 = SplashRenderGetScreenCenterY() + 2;
+    }
     if (x1 < 8)
         x1 = 8;
     if (x2 < 8)
@@ -784,7 +840,7 @@ static void ShowLaunchStatus(const char *path)
         return;
 
     snprintf(loading_line, sizeof(loading_line), "Loading %s", safe_path);
-    SplashDrawStatusForLaunch(GLOBCFG.LOGO_DISP, loading_line, 0xffffff);
+    SplashDrawStatusForLaunch(GLOBCFG.LOGO_DISP, loading_line, 0x00ff00);
 }
 
 static int device_available_for_path_cached(const char *path, const int *dev_ok)
@@ -3045,7 +3101,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
 
     use_splash_ui = SplashRenderIsActive();
 
-    if (use_splash_ui && GLOBCFG.LOGO_DISP > 0) {
+    if (use_splash_ui) {
         model = strip_crlf_copy(ModelNameGet(), model_buf, sizeof(model_buf));
         ps1ver = strip_crlf_copy(PS1DRVGetVersion(), ps1_buf, sizeof(ps1_buf));
         dvdver = strip_crlf_copy(DVDPlayerGetVersion(), dvd_buf, sizeof(dvd_buf));
