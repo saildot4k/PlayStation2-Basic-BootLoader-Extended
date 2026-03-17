@@ -473,24 +473,60 @@ static int IsCdvdCommandToken(const char *path)
     return (!strcmp(path, "$CDVD") || !strcmp(path, "$CDVD_NO_PS2LOGO"));
 }
 
-static void SplashDrawCenteredStatus(const char *text, u32 color)
+static void SplashDrawStatusBelowLogo(const char *text, u32 color)
 {
     int line_width;
     int x;
     int y;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
 
     if (text == NULL || !SplashRenderIsActive())
         return;
 
-    SplashRenderSetHotkeysVisible(0);
-    SplashRenderBeginFrame();
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    logo_x = SplashRenderGetLogoX();
+    logo_y = SplashRenderGetLogoY();
+    logo_w = SplashRenderGetLogoWidth();
+    logo_h = SplashRenderGetLogoHeight();
+    anchor_center_x = logo_x + (logo_w / 2);
+    y = logo_y + logo_h + 6;
+
+    if (y > screen_h - 20)
+        y = screen_h - 20;
+    if (y < 0)
+        y = 0;
+
     line_width = (int)strlen(text) * 6;
-    x = SplashRenderGetScreenCenterX() - (line_width / 2);
-    y = SplashRenderGetScreenCenterY() - 4;
+    x = anchor_center_x - (line_width / 2);
     if (x < 8)
         x = 8;
+    if (x + line_width > screen_w - 8)
+        x = screen_w - line_width - 8;
+    if (x < 8)
+        x = 8;
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
     SplashRenderDrawTextPxScaled(x, y, color, text, 1);
     SplashRenderPresent();
+}
+
+static void SplashDrawStatusForLaunch(int logo_disp, const char *text, u32 color)
+{
+    if (text == NULL || !SplashRenderIsActive())
+        return;
+
+    if (logo_disp >= 2)
+        SplashDrawStatusBelowLogo(text, color);
+    else
+        SplashDrawCenteredStatusWithInfo(text, color, "", "", "", "", NULL, "");
 }
 
 static void SplashDrawLoadingStatus(int logo_disp)
@@ -729,13 +765,16 @@ static void ShowLaunchStatus(const char *path)
     }
 
     if (!SplashRenderIsActive()) {
-        scr_setfontcolor(0x00ff00);
-        scr_printf("  Loading %s\n", safe_path);
-        return;
+        int launch_status_logo_disp = (GLOBCFG.LOGO_DISP >= 1) ? GLOBCFG.LOGO_DISP : 1;
+
+        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+        SplashRenderTextBody(launch_status_logo_disp, g_is_psx_desr);
     }
+    if (!SplashRenderIsActive())
+        return;
 
     snprintf(loading_line, sizeof(loading_line), "Loading %s", safe_path);
-    SplashDrawCenteredStatus(loading_line, 0x00ff00);
+    SplashDrawStatusForLaunch(GLOBCFG.LOGO_DISP, loading_line, 0xffffff);
 }
 
 static int device_available_for_path_cached(const char *path, const int *dev_ok)
@@ -1825,6 +1864,7 @@ int main(int argc, char *argv[])
     u64 rescue_combo_deadline = 0;
     int button, x, j, cnf_size, result;
     int splash_early_presented = 0;
+    int video_mode_applied = 0;
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
@@ -2088,9 +2128,14 @@ int main(int argc, char *argv[])
                     }
                     if (ci_eq(name, "VIDEO_MODE")) {
                         int parsed_video_mode;
-                        if (parse_video_mode_value(value, &parsed_video_mode))
+                        if (parse_video_mode_value(value, &parsed_video_mode)) {
                             GLOBCFG.VIDEO_MODE = parsed_video_mode;
-                        else
+                            // Apply video mode as soon as it is known so scalers/displays
+                            // can start re-syncing while the rest of config parsing continues.
+                            apply_loader_video_mode(parsed_video_mode);
+                            SplashRenderSetVideoMode(parsed_video_mode, g_native_video_mode);
+                            video_mode_applied = 1;
+                        } else
                             DPRINTF("Ignoring invalid VIDEO_MODE value '%s'\n", value);
                         continue;
                     }
@@ -2172,21 +2217,28 @@ int main(int argc, char *argv[])
         GLOBCFG.LOGO_DISP = normalize_logo_display(GLOBCFG.LOGO_DISP);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
-        // Apply configured video mode as early as possible so displays/scalers
-        // can re-sync before splash/countdown work starts.
-        apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+        // If config parsing did not produce a valid VIDEO_MODE, fall back to
+        // the default AUTO/native mode now.
+        if (!video_mode_applied)
+            apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
 
         // Show splash immediately after video mode is known so users can read it
-        // while path validation runs.
+        // while path validation runs. For LOGO_DISPLAY=3, skip the transient
+        // Loading... overlay so the first visible hotkey frame is the final
+        // NAME_* splash/countdown render.
         if (GLOBCFG.LOGO_DISP > 0) {
+            int show_loading_overlay = (GLOBCFG.HOTKEY_DISPLAY != 1);
+
             if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
                 for (x = 0; x < KEY_COUNT; x++)
                     GLOBCFG.KEYNAMES[x] = "";
             }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
-            splash_early_presented = 1;
+            if (show_loading_overlay) {
+                SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
+                splash_early_presented = 1;
+            }
         }
 
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
@@ -2203,20 +2255,28 @@ int main(int argc, char *argv[])
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         g_pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
-        // Keep behavior consistent when no config exists (AUTO/native default).
-        apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+        // No config means no valid VIDEO_MODE was parsed, so apply the default
+        // AUTO/native mode now.
+        if (!video_mode_applied)
+            apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
 
         // Keep fallback path consistent: show a quick loading overlay once
-        // video mode is selected (AUTO/native by default).
+        // video mode is selected (AUTO/native by default). For LOGO_DISPLAY=3,
+        // skip the transient Loading... overlay so the first visible hotkey
+        // frame is the final NAME_* splash/countdown render.
         if (GLOBCFG.LOGO_DISP > 0) {
+            int show_loading_overlay = (GLOBCFG.HOTKEY_DISPLAY != 1);
+
             if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
                 for (x = 0; x < KEY_COUNT; x++)
                     GLOBCFG.KEYNAMES[x] = "";
             }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, g_is_psx_desr);
-            SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
-            splash_early_presented = 1;
+            if (show_loading_overlay) {
+                SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
+                splash_early_presented = 1;
+            }
         }
 
         ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, g_pre_scanned);
