@@ -11,7 +11,7 @@
 #include <ctype.h>
 #include "debugprintf.h"
 #include "game_id.h"
-#include "egsm_api.h"
+#include "egsm_parse.h"
 #if defined(HDD) && defined(FILEXIO)
 #include <fileXio_rpc.h>
 #include <hdd-ioctl.h>
@@ -22,6 +22,12 @@
 #else
 #define DBGWAIT(T)
 #endif
+
+enum {
+    DEV9_DEFAULT = 0,
+    DEV9_NIC,
+    DEV9_NICHDD
+};
 
 static int arg_eq_ci(const char *a, const char *b)
 {
@@ -111,87 +117,6 @@ static int path_is_rom_binary(const char *path)
             (path[4] == ':'));
 }
 
-static uint32_t parse_gsm_flags(const char *gsm_arg)
-{
-    uint32_t flags = 0;
-    const char *p = gsm_arg;
-    int fd;
-    int nread;
-    char romver[4] = {0};
-
-    if (p == NULL || *p == '\0')
-        return 0;
-
-    DPRINTF("%s: parsing -gsm value '%s'\n", __func__, gsm_arg);
-
-    if (!strncmp(p, "fp", 2)) {
-        switch (p[2]) {
-            case '1':
-                flags |= EGSM_FLAG_VMODE_FP1;
-                break;
-            case '2':
-                flags |= EGSM_FLAG_VMODE_FP2;
-                break;
-            default:
-                return 0;
-        }
-        p += 3;
-    } else if (!strncmp(p, "1080ix", 6)) {
-        switch (p[6]) {
-            case '1':
-                flags |= EGSM_FLAG_VMODE_1080I_X1;
-                break;
-            case '2':
-                flags |= EGSM_FLAG_VMODE_1080I_X2;
-                break;
-            case '3':
-                flags |= EGSM_FLAG_VMODE_1080I_X3;
-                break;
-            default:
-                return 0;
-        }
-        p += 7;
-    } else {
-        return 0;
-    }
-
-    if (*p == ':') {
-        p++;
-        switch (*p) {
-            case '1':
-                flags |= EGSM_FLAG_COMP_1;
-                break;
-            case '2':
-                flags |= EGSM_FLAG_COMP_2;
-                break;
-            case '3':
-                flags |= EGSM_FLAG_COMP_3;
-                break;
-            default:
-                break;
-        }
-    }
-
-    if (flags == 0)
-        return 0;
-
-    fd = open("rom0:ROMVER", O_RDONLY);
-    if (fd < 0) {
-        flags |= EGSM_FLAG_NO_576P;
-    } else {
-        nread = read(fd, romver, sizeof(romver));
-        close(fd);
-        if (nread < (int)sizeof(romver) ||
-            romver[1] < '0' || romver[1] > '9' ||
-            romver[2] < '0' || romver[2] > '9' ||
-            romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
-            flags |= EGSM_FLAG_NO_576P;
-    }
-
-    DPRINTF("%s: parsed -gsm flags=0x%08x\n", __func__, flags);
-    return flags;
-}
-
 static void apply_dev9_policy(int dev9_mode)
 {
 #if defined(HDD) && defined(FILEXIO)
@@ -205,14 +130,145 @@ static void apply_dev9_policy(int dev9_mode)
 #endif
 }
 
+#if EGSM_BUILD
+extern unsigned char ps2_stage2_loader_elf[];
+extern unsigned int size_ps2_stage2_loader_elf;
+
+#define ELF_PT_LOAD 1
+
+typedef struct
+{
+    uint8_t ident[16];
+    uint16_t type;
+    uint16_t machine;
+    uint32_t version;
+    uint32_t entry;
+    uint32_t phoff;
+    uint32_t shoff;
+    uint32_t flags;
+    uint16_t ehsize;
+    uint16_t phentsize;
+    uint16_t phnum;
+    uint16_t shentsize;
+    uint16_t shnum;
+    uint16_t shstrndx;
+} embedded_elf_header_t;
+
+typedef struct
+{
+    uint32_t type;
+    uint32_t offset;
+    void *vaddr;
+    uint32_t paddr;
+    uint32_t filesz;
+    uint32_t memsz;
+    uint32_t flags;
+    uint32_t align;
+} embedded_elf_pheader_t;
+
+static int path_is_pfs_prefix(const char *path)
+{
+    return (path != NULL &&
+            (path[0] == 'p' || path[0] == 'P') &&
+            (path[1] == 'f' || path[1] == 'F') &&
+            (path[2] == 's' || path[2] == 'S') &&
+            path[3] == ':');
+}
+
+static int ExecEmbeddedStage2(unsigned char *elf, unsigned int elf_size, int argc, char *argv[])
+{
+    embedded_elf_header_t *eh;
+    embedded_elf_pheader_t *eph;
+    int i;
+
+    if (elf == NULL || elf_size < sizeof(embedded_elf_header_t))
+        return -1;
+
+    eh = (embedded_elf_header_t *)elf;
+    if (memcmp(eh->ident, "\x7f""ELF", 4) != 0)
+        return -1;
+    if ((uint32_t)eh->phoff + ((uint32_t)eh->phnum * (uint32_t)sizeof(embedded_elf_pheader_t)) > elf_size)
+        return -1;
+
+    eph = (embedded_elf_pheader_t *)(elf + eh->phoff);
+    for (i = 0; i < eh->phnum; i++) {
+        void *pdata;
+
+        if (eph[i].type != ELF_PT_LOAD)
+            continue;
+        if ((uint32_t)eph[i].offset > elf_size || (uint32_t)eph[i].filesz > (elf_size - (uint32_t)eph[i].offset))
+            return -1;
+
+        pdata = (void *)(elf + eph[i].offset);
+        memcpy(eph[i].vaddr, pdata, eph[i].filesz);
+        if (eph[i].memsz > eph[i].filesz)
+            memset((uint8_t *)eph[i].vaddr + eph[i].filesz, 0, eph[i].memsz - eph[i].filesz);
+    }
+
+    FlushCache(0);
+    FlushCache(2);
+    ExecPS2((void *)eh->entry, NULL, argc, argv);
+    return 0;
+}
+
+static int RunLoaderElfViaStage2(const char *launch_filename, const char *party, int argc, char *argv[], const char *gsm_arg, int dev9_mode)
+{
+    char full_launch_path[MAX_PATH];
+    char loader_args[16] = "-la=G";
+    char **stage2_argv;
+    const char *stage2_launch = launch_filename;
+    int i;
+    int stage2_argc;
+
+    if (launch_filename == NULL || *launch_filename == '\0' || gsm_arg == NULL || *gsm_arg == '\0')
+        return -1;
+    if (size_ps2_stage2_loader_elf < sizeof(embedded_elf_header_t))
+        return -1;
+
+    if (party != NULL && *party != '\0') {
+        if (path_is_pfs_prefix(launch_filename)) {
+            snprintf(full_launch_path, sizeof(full_launch_path), "%s%s", party, launch_filename);
+            stage2_launch = full_launch_path;
+        } else if (strchr(launch_filename, ':') == NULL) {
+            snprintf(full_launch_path, sizeof(full_launch_path), "%spfs:%s%s",
+                     party,
+                     (launch_filename[0] == '/') ? "" : "/",
+                     launch_filename);
+            stage2_launch = full_launch_path;
+        }
+    }
+
+    i = (int)strlen(loader_args);
+    if (dev9_mode == DEV9_NIC) {
+        loader_args[i++] = 'N';
+    } else if (dev9_mode == DEV9_NICHDD) {
+        loader_args[i++] = 'D';
+    }
+    loader_args[i] = '\0';
+
+    stage2_argc = argc + 3;
+    stage2_argv = malloc(sizeof(char *) * stage2_argc);
+    if (stage2_argv == NULL)
+        return -1;
+
+    stage2_argv[0] = (char *)stage2_launch;
+    for (i = 0; i < argc; i++)
+        stage2_argv[i + 1] = argv[i];
+    stage2_argv[argc + 1] = (char *)gsm_arg;
+    stage2_argv[argc + 2] = loader_args;
+
+    if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {
+        free(stage2_argv);
+        return -1;
+    }
+
+    free(stage2_argv);
+    return 0;
+}
+#endif
+
 void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[])
 {
-    enum {
-        DEV9_DEFAULT = 0,
-        DEV9_NIC,
-        DEV9_NICHDD
-    };
-
     DPRINTF("%s\n", __FUNCTION__);
     const char *launch_filename = filename;
     char patinfo_path[MAX_PATH];
@@ -221,6 +277,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     int use_patinfo_path = 0;
     int dev9_mode = DEV9_DEFAULT;
     uint32_t gsm_flags = 0;
+    const char *gsm_arg = NULL;
 
     if (argc > 0 && argv != NULL) {
         int out_argc = 0;
@@ -256,11 +313,13 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                     if (arg_prefix_ci(argv[i], "-gsm=", &val)) {
                         while (*val == ' ' || *val == '\t')
                             val++;
-                        gsm_flags = parse_gsm_flags(val);
+                        gsm_flags = parse_egsm_flags_common(val);
                         if (gsm_flags == 0)
                             DPRINTF("Ignoring invalid -gsm value: '%s'\n", val);
-                        else
-                            DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, gsm_flags);
+                        else {
+                            DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, (unsigned int)gsm_flags);
+                            gsm_arg = val;
+                        }
                         continue;
                     }
                     if (arg_prefix_ci(argv[i], "-dev9=", &val)) {
@@ -321,10 +380,11 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
             DPRINTF("Ignoring -gsm for ROM path '%s'\n", launch_filename);
         } else {
 #if EGSM_BUILD
-            DPRINTF("Applying -gsm flags 0x%08x before launch\n", gsm_flags);
-            enableGSM(gsm_flags);
+            if (RunLoaderElfViaStage2(launch_filename, party, argc, argv, gsm_arg, dev9_mode) == 0)
+                return;
+            DPRINTF("Unable to hand off -gsm launch to embedded stage2; continuing without eGSM\n");
 #else
-            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", gsm_flags);
+            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", (unsigned int)gsm_flags);
 #endif
         }
     }
