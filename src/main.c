@@ -1017,6 +1017,109 @@ static int WaitForMissingPathAction(const char *button_name,
     }
 }
 
+static void SplashDrawEmergencyModeStatus(const char *reason, int dots)
+{
+    const char *line1 = "USB EMERGENCY MODE!";
+    const char *line2 = (reason != NULL && *reason != '\0') ? reason : NULL;
+    const char *line3 = "Searching for mass:/RESCUE.ELF";
+    char dots_buf[4];
+    int line1_w;
+    int line2_w;
+    int line3_w;
+    int x1;
+    int x2 = 0;
+    int x3;
+    int dot_x;
+    int y1;
+    int y2 = 0;
+    int y3;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
+    int i;
+
+    if (!SplashRenderIsActive())
+        return;
+
+    if (dots < 0)
+        dots = 0;
+    if (dots > 3)
+        dots = 3;
+    for (i = 0; i < dots; i++)
+        dots_buf[i] = '.';
+    dots_buf[dots] = '\0';
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
+
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    line1_w = (int)strlen(line1) * 6;
+    line2_w = (line2 != NULL) ? (int)strlen(line2) * 6 : 0;
+    line3_w = (int)strlen(line3) * 6;
+
+    if (GLOBCFG.LOGO_DISP >= 2) {
+        logo_x = SplashRenderGetLogoX();
+        logo_y = SplashRenderGetLogoY();
+        logo_w = SplashRenderGetLogoWidth();
+        logo_h = SplashRenderGetLogoHeight();
+        anchor_center_x = logo_x + (logo_w / 2);
+        y1 = logo_y + logo_h + 2;
+        if (line2 != NULL) {
+            if (y1 > screen_h - 46)
+                y1 = screen_h - 46;
+        } else if (y1 > screen_h - 28)
+            y1 = screen_h - 28;
+        if (y1 < 0)
+            y1 = 0;
+    } else {
+        anchor_center_x = SplashRenderGetScreenCenterX();
+        y1 = (line2 != NULL) ? (SplashRenderGetScreenCenterY() - 20) : (SplashRenderGetScreenCenterY() - 10);
+    }
+
+    if (line2 != NULL) {
+        y2 = y1 + 18;
+        y3 = y2 + 18;
+    } else
+        y3 = y1 + 18;
+
+    x1 = anchor_center_x - (line1_w / 2);
+    if (line2 != NULL)
+        x2 = anchor_center_x - (line2_w / 2);
+    x3 = anchor_center_x - (line3_w / 2);
+    if (x1 < 8)
+        x1 = 8;
+    if (line2 != NULL && x2 < 8)
+        x2 = 8;
+    if (x3 < 8)
+        x3 = 8;
+    if (x1 + line1_w > screen_w - 8)
+        x1 = screen_w - line1_w - 8;
+    if (line2 != NULL && x2 + line2_w > screen_w - 8)
+        x2 = screen_w - line2_w - 8;
+    if (x3 + line3_w > screen_w - 8)
+        x3 = screen_w - line3_w - 8;
+    if (x1 < 8)
+        x1 = 8;
+    if (line2 != NULL && x2 < 8)
+        x2 = 8;
+    if (x3 < 8)
+        x3 = 8;
+    dot_x = x3 + line3_w;
+
+    SplashRenderDrawTextPxScaled(x1, y1, 0x0000ff, line1, 1);
+    if (line2 != NULL)
+        SplashRenderDrawTextPxScaled(x2, y2, 0xffff00, line2, 1);
+    SplashRenderDrawTextPxScaled(x3, y3, 0x00ffff, line3, 1);
+    if (dots_buf[0] != '\0')
+        SplashRenderDrawTextPxScaled(dot_x, y3, 0xffffff, dots_buf, 1);
+    SplashRenderPresent();
+}
+
 static void RestoreSplashInteractiveUi(int logo_disp,
                                        const char *const hotkey_lines[KEY_COUNT],
                                        const char *model,
@@ -2906,30 +3009,25 @@ int main(int argc, char *argv[])
 
 static void RunEmergencyMode(const char *reason)
 {
-    if (SplashRenderIsActive())
-        SplashRenderEnd();
-    scr_clear();
-    scr_setfontcolor(0x0000ff);
-    scr_printf("\n\n\n\t\tUSB EMERGENCY MODE!\n\n");
-    if (reason != NULL && *reason != '\0') {
-        scr_setfontcolor(0xffff00);
-        scr_printf("\t\t%s\n\n", reason);
-    }
-    scr_setfontcolor(0x00ffff);
-    scr_printf("\t\tSearching for mass:/RESCUE.ELF\n\n\t\tTIP: Download uLaunchELF/wLaunchELF\n\t\t\tand rename to RESCUE.ELF\n");
-    scr_setfontcolor(0xffffff);
-    const int dot_width = 40;
-    char dots[41];
-    int dot_count = 0;
+    int dot_count = 1;
 
-    dots[0] = '\0';
+    if (!SplashRenderIsActive()) {
+        int emergency_logo_disp = normalize_logo_display(GLOBCFG.LOGO_DISP);
+
+        if (emergency_logo_disp < 1)
+            emergency_logo_disp = 1;
+        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+        SplashRenderTextBody(emergency_logo_disp, g_is_psx_desr);
+    }
+
+    SplashDrawEmergencyModeStatus(reason, dot_count);
     while (1) {
-        dot_count = (dot_count % dot_width) + 1;
-        memset(dots, '.', dot_count);
-        dots[dot_count] = '\0';
-        scr_printf("\r\t\t%-*s", dot_width, dots);
+        dot_count = (dot_count + 1) % 4;
+        SplashDrawEmergencyModeStatus(reason, dot_count);
         sleep(100000);
         if (exist("mass:/RESCUE.ELF")) {
+            if (SplashRenderIsActive())
+                SplashRenderEnd();
             CleanUp();
             RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
         }
