@@ -1,6 +1,7 @@
 // Runtime utilities (ROM detection, cleanup, emergency/rescue mode).
 #include "main.h"
 #include "splash_render.h"
+#include "splash_screen.h"
 
 #define ROMVER_MODEL_PREFIX_LEN 5
 

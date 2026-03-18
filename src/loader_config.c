@@ -4,6 +4,8 @@
 #include "main.h"
 #include "loader_config.h"
 #include "loader_path.h"
+#include "splash_render.h"
+#include "splash_screen.h"
 
 extern unsigned char *config_buf;
 extern int g_is_psx_desr;
@@ -258,6 +260,7 @@ int LoaderParseConfigFile(FILE *fp,
             }
 
             module_id = SifLoadStartModule(CheckPath(value), 0, NULL, &module_ret);
+            (void)module_id;
             DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n",
                     name,
                     value,

@@ -3,6 +3,8 @@
 #include "console_info.h"
 #include "loader_launch.h"
 #include "loader_path.h"
+#include "splash_render.h"
+#include "splash_screen.h"
 
 #define PAD_MASK_ANY 0xffff
 

@@ -4,6 +4,8 @@
 #include "loader_path.h"
 #include "loader_video.h"
 #include "loader_video_selector.h"
+#include "splash_render.h"
+#include "splash_screen.h"
 
 #define VIDEO_SELECTOR_TEXT_COLOR 0xffffff
 #define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
