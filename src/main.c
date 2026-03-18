@@ -990,6 +990,13 @@ static int WaitForMissingPathAction(const char *button_name,
     int prev_pad = 0;
     u64 start_retry_deadline = 0;
 
+    if (!SplashRenderIsActive() && GLOBCFG.LOGO_DISP > 0) {
+        int missing_path_logo_disp = (GLOBCFG.LOGO_DISP >= 1) ? GLOBCFG.LOGO_DISP : 1;
+
+        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+        SplashRenderTextBody(missing_path_logo_disp, g_is_psx_desr);
+    }
+
     if (SplashRenderIsActive())
         SplashDrawMissingPathPromptWithInfo(button_name, model, rom_fmt, dvdver, ps1ver, temp_celsius, source);
     else
@@ -2777,6 +2784,7 @@ int main(int argc, char *argv[])
             }
         }
 
+restart_launch_key_countdown:
         DPRINTF("Timer starts!\n");
         PollEmergencyComboWindow(&rescue_combo_deadline);
         tstart = Timer();
@@ -2979,10 +2987,40 @@ int main(int argc, char *argv[])
         }
     }
 
-    RunEmergencyMode("COULD NOT FIND ANY DEFAULT APPLICATIONS");
+        {
+            int retry_requested;
 
-    return 0;
-}
+            TimerInit();
+            retry_requested = WaitForMissingPathAction("AUTO",
+                                                       model,
+                                                       rom_fmt,
+                                                       dvdver,
+                                                       ps1ver,
+                                                       temp_celsius,
+                                                       source);
+            if (retry_requested) {
+                if (SplashRenderIsActive())
+                    RestoreSplashInteractiveUi(GLOBCFG.LOGO_DISP,
+                                               hotkey_lines,
+                                               model,
+                                               rom_fmt,
+                                               dvdver,
+                                               ps1ver,
+                                               temp_celsius,
+                                               source);
+                else
+                    scr_clear();
+                g_block_hotkeys_until_release = 1;
+                rescue_combo_deadline = 0;
+                goto restart_launch_key_countdown;
+            }
+            TimerEnd();
+        }
+
+        RunEmergencyMode("COULD NOT FIND ANY DEFAULT APPLICATIONS");
+
+        return 0;
+    }
 
 static void RunEmergencyMode(const char *reason)
 {
