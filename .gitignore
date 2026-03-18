@@ -24,4 +24,4 @@ asm/
 bin/CONFIG.INI
 
 # Local external references
-thirdparty/OSDMenu/
+thirdparty/

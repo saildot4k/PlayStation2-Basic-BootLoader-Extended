@@ -1,3 +1,4 @@
+// Embedded splash image/font asset metadata and accessors.
 #include "splash_assets.h"
 
 extern const unsigned int splash_bg_ps2bble_width;

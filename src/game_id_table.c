@@ -1,3 +1,4 @@
+// Known game ID override table used by game_id.c policies.
 #include "game_id_table.h"
 
 const struct GameIDEntry gameIDTable[] = {

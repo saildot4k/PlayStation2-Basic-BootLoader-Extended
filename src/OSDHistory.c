@@ -1,3 +1,4 @@
+// OSD history read/write helpers for recent launch entries and icon assets.
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>

@@ -1,3 +1,4 @@
+// Misc utility helpers (filesystem existence, path helpers, etc.).
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>

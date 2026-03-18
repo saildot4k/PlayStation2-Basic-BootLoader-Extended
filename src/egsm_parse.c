@@ -1,3 +1,4 @@
+// eGSM argument parsing utilities shared by launch and disc workflows.
 #define NEWLIB_PORT_AWARE
 #include <fcntl.h>
 #include <stdint.h>

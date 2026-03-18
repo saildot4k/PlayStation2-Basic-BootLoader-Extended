@@ -1,7 +1,7 @@
 EE_BIN = ps2_stage2_loader.elf
 EGSM_BUILD ?= 1
 
-EE_INCS = -I./include -I../../include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
+EE_INCS = -I../../include/ps2_stage2_loader -I../../include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
 EE_LINKFILE = linkfile
 
 ifeq ($(EGSM_BUILD), 1)

@@ -31,7 +31,7 @@ embed/iop/mmceman.irx:
 	wget -q https://github.com/israpps/wLaunchELF_ISR/raw/refs/heads/master/iop/__precompiled/mmceman.irx -O $@
 
 ifeq ($(EMBED_PS1VN), 1)
-PS1VN_DIR := thirdparty/ps1vn
+PS1VN_DIR := src/ps1vn
 PS1VN_ELF := $(PS1VN_DIR)/ps1vn.elf
 
 $(PS1VN_ELF):
@@ -42,7 +42,7 @@ $(EE_ASM_DIR)ps1vn_elf.c: $(PS1VN_ELF) | $(EE_ASM_DIR)
 endif
 
 ifeq ($(EGSM_BUILD), 1)
-PS2_STAGE2_DIR := thirdparty/ps2_stage2_loader
+PS2_STAGE2_DIR := src/ps2_stage2_loader
 PS2_STAGE2_ELF := $(PS2_STAGE2_DIR)/ps2_stage2_loader.elf
 
 $(PS2_STAGE2_ELF):

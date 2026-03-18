@@ -1,3 +1,4 @@
+// Controller initialization and unified pad-state polling helpers.
 #include <kernel.h>
 #include <libpad.h>
 #include <stdio.h>

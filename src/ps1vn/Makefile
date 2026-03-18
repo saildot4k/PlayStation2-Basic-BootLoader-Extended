@@ -1,6 +1,6 @@
 EE_BIN = ps1vn.elf
 
-EE_INCS = -I./include -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
+EE_INCS = -I../../include/ps1vn -I$(PS2SDK)/ee/include -I$(PS2SDK)/common/include
 
 EE_LINKFILE = linkfile
 EE_OBJS := main.o patches.o

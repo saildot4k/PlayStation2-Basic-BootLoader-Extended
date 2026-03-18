@@ -1,3 +1,4 @@
+// ELF/KELF launch pipeline, argv construction, and optional stage2 handoff.
 #define NEWLIB_PORT_AWARE
 #include <stdio.h>
 #include <string.h>

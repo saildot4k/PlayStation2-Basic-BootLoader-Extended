@@ -1,3 +1,4 @@
+// PlayStation 2 disc boot support, loader args, and patch/handoff logic.
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -819,13 +820,19 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
     }
 
     size = lseek(fd, 0, SEEK_END);
-    lseek(fd, 0, SEEK_SET);
+    if (size < 0 || lseek(fd, 0, SEEK_SET) < 0) {
+        scr_setfontcolor(0x0000ff);
+        scr_printf("%s: Can't seek SYSTEM.CNF\n", __func__);
+        sleep(3);
+        scr_clear();
+        BootError();
+    }
 
     if (size >= CNF_LEN_MAX)
         size = CNF_LEN_MAX - 1;
 
     for (size_remaining = size; size_remaining > 0; size_remaining -= size_read) {
-        if ((size_read = read(fd, system_cnf, size_remaining)) <= 0) {
+        if ((size_read = read(fd, &system_cnf[size - size_remaining], size_remaining)) <= 0) {
             scr_setfontcolor(0x0000ff);
             scr_printf("%s: Can't read SYSTEM.CNF\n", __func__);
             sleep(3);

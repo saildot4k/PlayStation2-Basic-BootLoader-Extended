@@ -1,3 +1,4 @@
+// Minimal EE SIO printf backend for early debug output.
 #include <stdarg.h>
 #include <stdio.h>
 #include <sio.h>

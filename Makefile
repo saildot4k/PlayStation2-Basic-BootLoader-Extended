@@ -60,9 +60,9 @@ EE_OBJS_DIR = obj/
 EE_SRC_DIR = src/
 EE_ASM_DIR = asm/
 
-EE_OBJS = main.o \
+EE_OBJS = main.o common_data.o console_info.o loader_config.o loader_launch.o loader_path.o loader_video.o loader_video_selector.o loader_disc.o loader_modules.o loader_hdd.o loader_platform.o loader_runtime.o loader_utils.o loader_defaults.o loader_ui.o \
           util.o elf.o timer.o ps2.o ps1.o dvdplayer.o egsm_parse.o \
-          modelname.o libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash_screen.o splash_assets.o splash_render.o \
+          libcdvd_add.o OSDHistory.o OSDInit.o OSDConfig.o game_id.o game_id_table.o splash_screen.o splash_assets.o splash_render.o \
           xparam_irx.o \
           $(EMBEDDED_STUFF) \
 			      $(IOP_OBJS)
@@ -301,8 +301,8 @@ release:
 	@echo "$$HEADER"
 
 clean-subprojects:
-	@if [ -f thirdparty/ps1vn/Makefile ]; then $(MAKE) -C thirdparty/ps1vn clean; fi
-	@if [ -f thirdparty/ps2_stage2_loader/Makefile ]; then $(MAKE) -C thirdparty/ps2_stage2_loader clean; fi
+	@if [ -f src/ps1vn/Makefile ]; then $(MAKE) -C src/ps1vn clean; fi
+	@if [ -f src/ps2_stage2_loader/Makefile ]; then $(MAKE) -C src/ps2_stage2_loader clean; fi
 
 clean:
 	@rm -rf $(EE_BIN) $(EE_BIN_STRIPPED) $(EE_BIN_ENCRYPTED) $(EE_BIN_PACKED)
@@ -324,9 +324,9 @@ endif
 $(EE_BIN_ENCRYPTED): $(EE_BIN_PACKED)
 	@echo " -- Encrypting ($(KELFTYPE))"
 ifeq ($(KELFTYPE), MC)
-	thirdparty/kelftool encrypt dnasload $< $@
+	tools/kelftool encrypt dnasload $< $@
 else ifeq ($(KELFTYPE), HDD)
-	thirdparty/kelftool encrypt fhdb $< $@
+	tools/kelftool encrypt fhdb $< $@
 else
 	$(error UNKNOWN KELF TYPE: '$(KELFTYPE)')
 endif
@@ -370,7 +370,7 @@ endif
 #
 analize:
 	$(MAKE) rebuild DEBUG=1
-	python3 thirdparty/elf-size-analize.py $(EE_BIN) -R -t mips64r5900el-ps2-elf-
+	python3 tools/elf-size-analize.py $(EE_BIN) -R -t mips64r5900el-ps2-elf-
 
 celan: clean # a repetitive typo when quicktyping
 kelf: $(EE_BIN_ENCRYPTED) # alias of KELF creation

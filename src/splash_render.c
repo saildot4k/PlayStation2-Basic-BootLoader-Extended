@@ -1,3 +1,4 @@
+// Low-level GSKit splash renderer, frame lifecycle, and draw primitives.
 #include <malloc.h>
 #include <stdlib.h>
 #include <string.h>

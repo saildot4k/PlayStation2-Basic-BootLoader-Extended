@@ -1,3 +1,4 @@
+// Game ID detection and compatibility policy checks for launch/disc paths.
 #include "game_id.h"
 
 #include "OSDHistory.h"
