@@ -2993,16 +2993,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    scr_clear();
-    scr_setfontcolor(0x00ffff);
-    scr_printf("\n\n\t\tEND OF EXECUTION REACHED\n\t\tCould not find any of the default applications\n\t\tCheck your config file for the LK_AUTO_E# entries\n\t\tOr press a key while logo displays to run the bound application\n\n\t\tPress R1+START to launch mass:/RESCUE.ELF");
-    scr_setfontcolor(0xffffff);
-    while (1) {
-        sleep(1);
-        PAD = ReadCombinedPadStatus_raw();
-        if ((PAD & PAD_R1) && (PAD & PAD_START)) // if ONLY R1+START are pressed...
-            EMERGENCY();
-    }
+    RunEmergencyMode("COULD NOT FIND ANY DEFAULT APPLICATIONS");
 
     return 0;
 }
