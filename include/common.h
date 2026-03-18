@@ -141,9 +141,9 @@ const char *KEYS_ID[KEY_COUNT] = {
 /** default hotkey names used when LOGO_DISPLAY = 3 */
 #ifdef PSX
     const char *DEFAULT_KEYNAMES_PSX[KEY_COUNT] = {
-        "wLE ISR (MMCE -> MX -> exFAT",
+        "wLE ISR (MMCE -> MX4SIO -> exFAT)",
         "DISC NO LOGO",
-        "",
+        "R3CONFIGURATOR",
         "",
         "DISC",
         "OSD-XMB",
@@ -154,8 +154,8 @@ const char *KEYS_ID[KEY_COUNT] = {
         "OPL",
         "PSBBN FORWARDER",
         "NHDDL / NEUTRINO",
-        "wLE ISR (MMCE -> MX -> exFAT)",
-        "wLE ISR (exFAT -> MX -> MMCE)",
+        "wLE ISR (MMCE -> MX4SIO -> exFAT)",
+        "wLE ISR (exFAT -> MX4SIO -> MMCE)",
         "DKWDRV",
         "POPSLOADER",
     };
@@ -163,7 +163,7 @@ const char *KEYS_ID[KEY_COUNT] = {
     const char *DEFAULT_KEYNAMES_PS2[KEY_COUNT] = {
         "HACKED OSDSYS",
         "DISC NO LOGO",
-        "",
+        "R3CONFIGURATOR",
         "",
         "DISC",
         "OSD-XMB",
@@ -174,8 +174,8 @@ const char *KEYS_ID[KEY_COUNT] = {
         "OPL",
         "PSBBN FORWARDER",
         "NHDDL / NEUTRINO",
-        "wLE ISR (MMCE -> MX -> exFAT)",
-        "wLE ISR (exFAT -> MX -> MMCE)",
+        "wLE ISR (MMCE -> MX4SIO -> exFAT)",
+        "wLE ISR (exFAT -> MX4SIO -> MMCE)",
         "DKWDRV",
         "POPSLOADER",
     };

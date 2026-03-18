@@ -14,6 +14,13 @@ static int g_is_psx_desr = 0;
 #define VIDEO_SELECTOR_TEXT_COLOR 0xffffff
 #define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
 #define VIDEO_SELECTOR_SELECT_COLOR 0xffff00
+#define MISSING_PATH_RESCUE_CHORD_WINDOW_MS 250
+#define PAD_MASK_RIGHT 0x0020
+#define PAD_MASK_LEFT 0x0080
+#define PAD_MASK_SELECT 0x0001
+#define PAD_MASK_TRIANGLE 0x1000
+#define PAD_MASK_CROSS 0x4000
+#define PAD_MASK_ANY 0xffff
 
 static void SplashDrawCenteredStatusWithInfo(const char *text,
                                              u32 color,
@@ -23,6 +30,7 @@ static void SplashDrawCenteredStatusWithInfo(const char *text,
                                              const char *ps1ver,
                                              const char *temp_celsius,
                                              const char *source);
+static void RunEmergencyMode(const char *reason);
 
 static void ClearStaleEEDebugState(void)
 {
@@ -808,6 +816,207 @@ static void SplashDrawRetryPromptWithInfo(const char *line1,
     SplashRenderPresent();
 }
 
+static void SplashDrawMissingPathPromptWithInfo(const char *button_name,
+                                                const char *model,
+                                                const char *rom_fmt,
+                                                const char *dvdver,
+                                                const char *ps1ver,
+                                                const char *temp_celsius,
+                                                const char *source)
+{
+    char line1[96];
+    const char *safe_button = (button_name != NULL && *button_name != '\0') ? button_name : "BUTTON";
+    const char *line2_prefix = "PRESS ";
+    const char *line2_word = "START";
+    const char *line2_suffix = " TO RETRY LAUNCH KEYS";
+    const char *line3_prefix = "PRESS ";
+    const char *line3_word1 = "R1";
+    const char *line3_plus = "+";
+    const char *line3_word2 = "START";
+    const char *line3_suffix = " FOR RESCUE MODE";
+    int line1_w;
+    int line2_prefix_w;
+    int line2_word_w;
+    int line2_suffix_w;
+    int line2_w;
+    int line3_prefix_w;
+    int line3_word1_w;
+    int line3_plus_w;
+    int line3_word2_w;
+    int line3_suffix_w;
+    int line3_w;
+    int x1;
+    int x2;
+    int x2_word;
+    int x2_suffix;
+    int x3;
+    int x3_word1;
+    int x3_plus;
+    int x3_word2;
+    int x3_suffix;
+    int y1;
+    int y2;
+    int y3;
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
+
+    if (!SplashRenderIsActive())
+        return;
+
+    snprintf(line1, sizeof(line1), "NO VALID PATH FOUND FOR %s", safe_button);
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
+    SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                model,
+                                rom_fmt,
+                                dvdver,
+                                ps1ver,
+                                temp_celsius,
+                                "",
+                                source);
+
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    line1_w = (int)strlen(line1) * 6;
+    line2_prefix_w = (int)strlen(line2_prefix) * 6;
+    line2_word_w = (int)strlen(line2_word) * 6;
+    line2_suffix_w = (int)strlen(line2_suffix) * 6;
+    line2_w = line2_prefix_w + line2_word_w + line2_suffix_w;
+    line3_prefix_w = (int)strlen(line3_prefix) * 6;
+    line3_word1_w = (int)strlen(line3_word1) * 6;
+    line3_plus_w = (int)strlen(line3_plus) * 6;
+    line3_word2_w = (int)strlen(line3_word2) * 6;
+    line3_suffix_w = (int)strlen(line3_suffix) * 6;
+    line3_w = line3_prefix_w + line3_word1_w + line3_plus_w + line3_word2_w + line3_suffix_w;
+
+    if (GLOBCFG.LOGO_DISP >= 2) {
+        logo_x = SplashRenderGetLogoX();
+        logo_y = SplashRenderGetLogoY();
+        logo_w = SplashRenderGetLogoWidth();
+        logo_h = SplashRenderGetLogoHeight();
+        anchor_center_x = logo_x + (logo_w / 2);
+        y1 = logo_y + logo_h + 2;
+        if (y1 > screen_h - 46)
+            y1 = screen_h - 46;
+        if (y1 < 0)
+            y1 = 0;
+    } else {
+        anchor_center_x = SplashRenderGetScreenCenterX();
+        y1 = SplashRenderGetScreenCenterY() - 20;
+    }
+
+    y2 = y1 + 18;
+    y3 = y2 + 18;
+    x1 = anchor_center_x - (line1_w / 2);
+    x2 = anchor_center_x - (line2_w / 2);
+    x3 = anchor_center_x - (line3_w / 2);
+
+    if (x1 < 8)
+        x1 = 8;
+    if (x2 < 8)
+        x2 = 8;
+    if (x3 < 8)
+        x3 = 8;
+    if (x1 + line1_w > screen_w - 8)
+        x1 = screen_w - line1_w - 8;
+    if (x2 + line2_w > screen_w - 8)
+        x2 = screen_w - line2_w - 8;
+    if (x3 + line3_w > screen_w - 8)
+        x3 = screen_w - line3_w - 8;
+    if (x1 < 8)
+        x1 = 8;
+    if (x2 < 8)
+        x2 = 8;
+    if (x3 < 8)
+        x3 = 8;
+
+    x2_word = x2 + line2_prefix_w;
+    x2_suffix = x2_word + line2_word_w;
+    x3_word1 = x3 + line3_prefix_w;
+    x3_plus = x3_word1 + line3_word1_w;
+    x3_word2 = x3_plus + line3_plus_w;
+    x3_suffix = x3_word2 + line3_word2_w;
+
+    SplashRenderDrawTextPxScaled(x1, y1, 0xffff00, line1, 1);
+    SplashRenderDrawTextPxScaled(x2, y2, 0xffffff, line2_prefix, 1);
+    SplashRenderDrawTextPxScaled(x2_word, y2, VIDEO_SELECTOR_HIGHLIGHT_COLOR, line2_word, 1);
+    SplashRenderDrawTextPxScaled(x2_suffix, y2, 0xffffff, line2_suffix, 1);
+    SplashRenderDrawTextPxScaled(x3, y3, 0xffffff, line3_prefix, 1);
+    SplashRenderDrawTextPxScaled(x3_word1, y3, VIDEO_SELECTOR_HIGHLIGHT_COLOR, line3_word1, 1);
+    SplashRenderDrawTextPxScaled(x3_plus, y3, 0xffffff, line3_plus, 1);
+    SplashRenderDrawTextPxScaled(x3_word2, y3, VIDEO_SELECTOR_HIGHLIGHT_COLOR, line3_word2, 1);
+    SplashRenderDrawTextPxScaled(x3_suffix, y3, 0xffffff, line3_suffix, 1);
+    SplashRenderPresent();
+}
+
+static void DrawConsoleMissingPathPrompt(const char *button_name)
+{
+    const char *safe_button = (button_name != NULL && *button_name != '\0') ? button_name : "BUTTON";
+
+    scr_clear();
+    scr_setfontcolor(0xffff00);
+    scr_printf("\n\n\t\tNO VALID PATH FOUND FOR %s\n\n", safe_button);
+    scr_setfontcolor(0xffffff);
+    scr_printf("\t\tPRESS ");
+    scr_setfontcolor(VIDEO_SELECTOR_HIGHLIGHT_COLOR);
+    scr_printf("START");
+    scr_setfontcolor(0xffffff);
+    scr_printf(" TO RETRY LAUNCH KEYS\n");
+    scr_printf("\t\tPRESS ");
+    scr_setfontcolor(VIDEO_SELECTOR_HIGHLIGHT_COLOR);
+    scr_printf("R1");
+    scr_setfontcolor(0xffffff);
+    scr_printf("+");
+    scr_setfontcolor(VIDEO_SELECTOR_HIGHLIGHT_COLOR);
+    scr_printf("START");
+    scr_setfontcolor(0xffffff);
+    scr_printf(" FOR RESCUE MODE\n");
+}
+
+static int WaitForMissingPathAction(const char *button_name,
+                                    const char *model,
+                                    const char *rom_fmt,
+                                    const char *dvdver,
+                                    const char *ps1ver,
+                                    const char *temp_celsius,
+                                    const char *source)
+{
+    int prev_pad = 0;
+    u64 start_retry_deadline = 0;
+
+    if (SplashRenderIsActive())
+        SplashDrawMissingPathPromptWithInfo(button_name, model, rom_fmt, dvdver, ps1ver, temp_celsius, source);
+    else
+        DrawConsoleMissingPathPrompt(button_name);
+
+    while (ReadCombinedPadStatus_raw() & PAD_MASK_ANY) {
+    }
+
+    while (1) {
+        int pad = ReadCombinedPadStatus_raw();
+
+        if ((pad & PAD_R1) && (pad & PAD_START))
+            EMERGENCY();
+
+        if (!(prev_pad & PAD_START) && (pad & PAD_START) && start_retry_deadline == 0)
+            start_retry_deadline = Timer() + MISSING_PATH_RESCUE_CHORD_WINDOW_MS;
+
+        if (start_retry_deadline != 0 && Timer() >= start_retry_deadline) {
+            while (ReadCombinedPadStatus_raw() & PAD_MASK_ANY) {
+            }
+            return 1;
+        }
+
+        prev_pad = pad;
+    }
+}
+
 static void RestoreSplashInteractiveUi(int logo_disp,
                                        const char *const hotkey_lines[KEY_COUNT],
                                        const char *model,
@@ -1266,12 +1475,6 @@ static char g_config_path_in_use[256] = "";
 #define VIDEO_SELECTOR_BOX_GAP_FROM_LOGO 14
 #define VIDEO_SELECTOR_BOX_SCREEN_MARGIN 8
 #define VIDEO_SELECTOR_SAVE_FEEDBACK_MS 3000
-#define PAD_MASK_RIGHT 0x0020
-#define PAD_MASK_LEFT 0x0080
-#define PAD_MASK_SELECT 0x0001
-#define PAD_MASK_TRIANGLE 0x1000
-#define PAD_MASK_CROSS 0x4000
-#define PAD_MASK_ANY 0xffff
 
 static int is_space_or_tab(char c)
 {
@@ -1618,7 +1821,7 @@ static void RunEmergencyVideoModeSelector(void)
             char save_path_display[56];
             const char *line_start_prefix = "PRESS ";
             const char *line_start_word = "START";
-            const char *line_start_suffix = " TO JUMP TO LAUNCH KEY DISPLAY";
+            const char *line_start_suffix = " TO RETRY LAUNCH KEYS";
             const char *line_change = "PRESS LEFT/RIGHT TO CHANGE MODES";
             const char *line_select_prefix = "PRESS ";
             const char *line_select_word = "SELECT";
@@ -1948,6 +2151,8 @@ int main(int argc, char *argv[])
     int button, x, j, cnf_size, result;
     int splash_early_presented = 0;
     int video_mode_applied = 0;
+    int config_has_launch_key_entries = 0;
+    int config_read_success = 0;
     static int num_buttons = 16, pad_button = 0x0001; // Scan all 16 buttons
     char *CNFBUFF, *name, *value;
 
@@ -2152,6 +2357,7 @@ int main(int argc, char *argv[])
                 DPRINTF("Reading finished... Closing fp*\n");
                 fclose(fp);
                 CNFBUFF[cnf_size] = '\0';
+                config_read_success = 1;
                 int var_cnt = 0;
                 char TMP[64];
                 for (var_cnt = 0; get_CNF_string(&CNFBUFF, &name, &value); var_cnt++) {
@@ -2262,8 +2468,10 @@ int main(int argc, char *argv[])
                                     // Empty string means: skip this slot (try next E# when executing)
                                     if (value == NULL || *value == '\0')
                                         GLOBCFG.KEYPATHS[x][j] = NULL;
-                                    else
+                                    else {
                                         GLOBCFG.KEYPATHS[x][j] = value;
+                                        config_has_launch_key_entries = 1;
+                                    }
                                     break;
                                 }
                             }
@@ -2304,6 +2512,8 @@ int main(int argc, char *argv[])
         // the default AUTO/native mode now.
         if (!video_mode_applied)
             apply_loader_video_mode(GLOBCFG.VIDEO_MODE);
+        if (config_read_success && !config_has_launch_key_entries)
+            RunEmergencyMode("CONFIG FILE HAS NO LAUNCH KEY ENTRIES");
 
         // Show splash immediately after video mode is known so users can read it
         // while path validation runs. For LOGO_DISPLAY=3, skip the transient
@@ -2531,6 +2741,8 @@ int main(int argc, char *argv[])
         for (x = 0; x < num_buttons; x++) { // check all pad buttons
             if (PAD & button) {
                 int command_cancelled = 0;
+                int retry_requested = 0;
+                const char *button_name = KEYS_ID[x + 1];
                 DPRINTF("PAD detected\n");
                 // if button detected, copy path to corresponding index
                 for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
@@ -2598,7 +2810,30 @@ int main(int argc, char *argv[])
                         RunLoaderElf(EXECPATHS[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                     }
                 }
-                if (command_cancelled)
+                if (!command_cancelled) {
+                    retry_requested = WaitForMissingPathAction(button_name,
+                                                               model,
+                                                               rom_fmt,
+                                                               dvdver,
+                                                               ps1ver,
+                                                               temp_celsius,
+                                                               source);
+                    if (retry_requested) {
+                        if (SplashRenderIsActive())
+                            RestoreSplashInteractiveUi(GLOBCFG.LOGO_DISP,
+                                                       hotkey_lines,
+                                                       model,
+                                                       rom_fmt,
+                                                       dvdver,
+                                                       ps1ver,
+                                                       temp_celsius,
+                                                       source);
+                        else
+                            scr_clear();
+                        g_block_hotkeys_until_release = 1;
+                    }
+                }
+                if (command_cancelled || retry_requested)
                     deadline = Timer() + GLOBCFG.DELAY;
                 break;
             }
@@ -2669,11 +2904,17 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void EMERGENCY(void)
+static void RunEmergencyMode(const char *reason)
 {
+    if (SplashRenderIsActive())
+        SplashRenderEnd();
     scr_clear();
     scr_setfontcolor(0x0000ff);
     scr_printf("\n\n\n\t\tUSB EMERGENCY MODE!\n\n");
+    if (reason != NULL && *reason != '\0') {
+        scr_setfontcolor(0xffff00);
+        scr_printf("\t\t%s\n\n", reason);
+    }
     scr_setfontcolor(0x00ffff);
     scr_printf("\t\tSearching for mass:/RESCUE.ELF\n\n\t\tTIP: Download uLaunchELF/wLaunchELF\n\t\t\tand rename to RESCUE.ELF\n");
     scr_setfontcolor(0xffffff);
@@ -2693,6 +2934,11 @@ void EMERGENCY(void)
             RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
         }
     }
+}
+
+void EMERGENCY(void)
+{
+    RunEmergencyMode(NULL);
 }
 
 void runKELF(const char *kelfpath)
