@@ -1017,19 +1017,17 @@ static int WaitForMissingPathAction(const char *button_name,
     }
 }
 
-static void SplashDrawEmergencyModeStatus(const char *reason, int dots)
+static void SplashDrawEmergencyModeStatus(const char *reason)
 {
     const char *line1 = "USB EMERGENCY MODE!";
     const char *line2 = (reason != NULL && *reason != '\0') ? reason : NULL;
     const char *line3 = "Searching for mass:/RESCUE.ELF";
-    char dots_buf[4];
     int line1_w;
     int line2_w;
     int line3_w;
     int x1;
     int x2 = 0;
     int x3;
-    int dot_x;
     int y1;
     int y2 = 0;
     int y3;
@@ -1040,18 +1038,9 @@ static void SplashDrawEmergencyModeStatus(const char *reason, int dots)
     int logo_y;
     int logo_w;
     int logo_h;
-    int i;
 
     if (!SplashRenderIsActive())
         return;
-
-    if (dots < 0)
-        dots = 0;
-    if (dots > 3)
-        dots = 3;
-    for (i = 0; i < dots; i++)
-        dots_buf[i] = '.';
-    dots_buf[dots] = '\0';
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
@@ -1109,14 +1098,11 @@ static void SplashDrawEmergencyModeStatus(const char *reason, int dots)
         x2 = 8;
     if (x3 < 8)
         x3 = 8;
-    dot_x = x3 + line3_w;
 
     SplashRenderDrawTextPxScaled(x1, y1, 0x0000ff, line1, 1);
     if (line2 != NULL)
         SplashRenderDrawTextPxScaled(x2, y2, 0xffff00, line2, 1);
     SplashRenderDrawTextPxScaled(x3, y3, 0x00ffff, line3, 1);
-    if (dots_buf[0] != '\0')
-        SplashRenderDrawTextPxScaled(dot_x, y3, 0xffffff, dots_buf, 1);
     SplashRenderPresent();
 }
 
@@ -3000,9 +2986,6 @@ int main(int argc, char *argv[])
 
 static void RunEmergencyMode(const char *reason)
 {
-    int dot_count = 1;
-    int dot_tick = 0;
-
     if (!SplashRenderIsActive()) {
         int emergency_logo_disp = normalize_logo_display(GLOBCFG.LOGO_DISP);
 
@@ -3012,15 +2995,9 @@ static void RunEmergencyMode(const char *reason)
         SplashRenderTextBody(emergency_logo_disp, g_is_psx_desr);
     }
 
-    SplashDrawEmergencyModeStatus(reason, dot_count);
+    SplashDrawEmergencyModeStatus(reason);
     while (1) {
         usleep(100000);
-        dot_tick++;
-        if (dot_tick >= 5) {
-            dot_tick = 0;
-            dot_count = (dot_count % 3) + 1;
-            SplashDrawEmergencyModeStatus(reason, dot_count);
-        }
         if (exist("mass:/RESCUE.ELF")) {
             if (SplashRenderIsActive())
                 SplashRenderEnd();
