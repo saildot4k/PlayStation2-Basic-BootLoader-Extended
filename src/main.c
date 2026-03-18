@@ -3014,7 +3014,7 @@ static void RunEmergencyMode(const char *reason)
 
     SplashDrawEmergencyModeStatus(reason, dot_count);
     while (1) {
-        sleep(100000);
+        DelayThread(100000);
         dot_tick++;
         if (dot_tick >= 5) {
             dot_tick = 0;
