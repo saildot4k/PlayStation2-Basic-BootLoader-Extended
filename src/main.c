@@ -3010,6 +3010,7 @@ int main(int argc, char *argv[])
 static void RunEmergencyMode(const char *reason)
 {
     int dot_count = 1;
+    int dot_tick = 0;
 
     if (!SplashRenderIsActive()) {
         int emergency_logo_disp = normalize_logo_display(GLOBCFG.LOGO_DISP);
@@ -3022,9 +3023,13 @@ static void RunEmergencyMode(const char *reason)
 
     SplashDrawEmergencyModeStatus(reason, dot_count);
     while (1) {
-        dot_count = (dot_count + 1) % 4;
-        SplashDrawEmergencyModeStatus(reason, dot_count);
         sleep(100000);
+        dot_tick++;
+        if (dot_tick >= 5) {
+            dot_tick = 0;
+            dot_count = (dot_count % 3) + 1;
+            SplashDrawEmergencyModeStatus(reason, dot_count);
+        }
         if (exist("mass:/RESCUE.ELF")) {
             if (SplashRenderIsActive())
                 SplashRenderEnd();
