@@ -290,8 +290,6 @@ static const char *resolve_path_tokens(const char *path,
                                        size_t out_size,
                                        int require_existing_pairs)
 {
-    const char *pfs_path;
-
     if (!copy_string_safe(out, out_size, path))
         return NULL;
 
@@ -321,6 +319,8 @@ static const char *resolve_path_tokens(const char *path,
 
 #ifdef HDD
     if (!strncmp(path, "hdd", 3)) {
+        const char *pfs_path;
+
         if (MountParty(path) < 0) {
             DPRINTF("-{%s}-\n", path);
             return out;

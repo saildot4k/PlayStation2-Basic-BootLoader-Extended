@@ -3,7 +3,7 @@
  * @param filepath path to the file to check
  * @returns 1 if exists, 0 if not
 */
-int exist(char *filepath);
+int exist(const char *filepath);
 
 /**
  * @brief waits a specified ammount of time, usually used to provide the famous 'USB delay', wLaunchELF uses 3, KELFBinder used 5?

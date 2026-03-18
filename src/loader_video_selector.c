@@ -205,7 +205,7 @@ void LoaderRunEmergencyVideoModeSelector(int *pre_scanned,
                 if (save_feedback_path[0] != '\0') {
                     size_t path_len = strlen(save_feedback_path);
                     if (path_len < sizeof(save_path_display)) {
-                        snprintf(save_path_display, sizeof(save_path_display), "%s", save_feedback_path);
+                        memcpy(save_path_display, save_feedback_path, path_len + 1);
                     } else {
                         size_t keep_len = sizeof(save_path_display) - 4;
                         memcpy(save_path_display, save_feedback_path, keep_len);

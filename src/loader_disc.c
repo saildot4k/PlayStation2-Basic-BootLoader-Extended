@@ -4,6 +4,7 @@
 #include "main.h"
 #include "egsm_parse.h"
 #include "console_info.h"
+#include "splash_render.h"
 
 extern u8 ROMVER[16];
 

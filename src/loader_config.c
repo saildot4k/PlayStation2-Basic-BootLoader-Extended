@@ -251,21 +251,27 @@ int LoaderParseConfigFile(FILE *fp,
             continue;
 
         if (ci_starts_with(name, "LOAD_IRX_E")) {
-            int module_id;
             int module_ret;
+            int load_result;
 
             if (value == NULL || *value == '\0') {
                 DPRINTF("# Skipping empty IRX path for config entry [%s]\n", name);
                 continue;
             }
 
-            module_id = SifLoadStartModule(CheckPath(value), 0, NULL, &module_ret);
-            (void)module_id;
-            DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n",
-                    name,
-                    value,
-                    module_id,
-                    module_ret);
+            load_result = SifLoadStartModule(CheckPath(value), 0, NULL, &module_ret);
+            if (load_result < 0) {
+                DPRINTF("# Failed to load IRX from config entry [%s] -> [%s]: ret=%d\n",
+                        name,
+                        value,
+                        load_result);
+            } else {
+                DPRINTF("# Loaded IRX from config entry [%s] -> [%s]: ID=%d, ret=%d\n",
+                        name,
+                        value,
+                        load_result,
+                        module_ret);
+            }
             continue;
         }
 
