@@ -113,7 +113,6 @@ static void PS2DebugPrintStage2Argv(const char *label, int argc, char *argv[])
 static int PS2DiscBootViaStage2(const char *boot_path, int skip_PS2LOGO, const char *osdgsm_arg)
 {
     char *stage2_argv[4];
-    char loader_args[16] = "-la=G";
     int stage2_argc = 0;
 
     if (boot_path == NULL || *boot_path == '\0' || size_ps2_stage2_loader_elf < sizeof(ps2_elf_header_t))
@@ -128,7 +127,7 @@ static int PS2DiscBootViaStage2(const char *boot_path, int skip_PS2LOGO, const c
 
     if (osdgsm_arg != NULL && *osdgsm_arg != '\0') {
         stage2_argv[stage2_argc++] = (char *)osdgsm_arg;
-        stage2_argv[stage2_argc++] = loader_args;
+        stage2_argv[stage2_argc++] = "-la=G";
     }
 
     PS2DebugPrintStage2Argv(__func__, stage2_argc, stage2_argv);

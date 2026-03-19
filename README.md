@@ -95,6 +95,8 @@ NAME_SQUARE = POPSLOADER
 ```
 
 ### eGSM (external Graphics Synthesize Mode)
+For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required). See [here](https://github.com/pcm720/OSDMenu/blob/main/patcher/README.md#osdgsmcnf) for config file format.
+
 - `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
   - eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
   eGSM format (OSDMenu-style):
@@ -121,9 +123,6 @@ Usage example:
 LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
 ARG_TRIANGLE = -gsm=1080ix2
 ```
-
-For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required).
-
 
 ### PATINFO example:
 ```
