@@ -48,7 +48,7 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 - `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.
 - `PS1DRV_ENABLE_SMOOTH = 1` enables texture smoothing.
-- `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator.
+- `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator. This makes PS1 discs run in their repsective regions video mode. Useful for MechaPwn users where MechaPwn forces disc NTSC video. Modchip users may need to disable.
 
 ### App arguments
 Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
@@ -80,6 +80,7 @@ ARG_R1_E1 = -mode=ata
 5. If eGSM is active, stage2 handoff appends internal args in OSDMenu-style order: `[..., <gsm-value>, -la=G|GN|GD]`.
 6. User-provided `-la=` is always ignored (reserved for internal loader control).
 
+
 ### Hotkey names
 Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
   - `0` No Logo/Console info
@@ -93,24 +94,6 @@ Example:
 ```
 NAME_SQUARE = POPSLOADER
 ```
-
-### Custom splash logo from CWD
-If a custom logo file is found in the current working directory, it replaces the embedded PS2BBLE/PSXBBLE logo.
-
-- Filename: `LOGO.BIN` (uppercase only)
-- Required dimensions: `256 x 64`
-- Preferred format: indexed `LGB1` bin (8-bit pixel indices + RBGA palette)
-- Palette size: up to 255 colors by default (`--max-colors`), max supported 256
-- Legacy format is still accepted: raw headerless `RBGA` (`R, B, G, A`) at `65536` bytes
-- Runtime PNG decoding is intentionally not used, to avoid extra boot-time code size and CPU cost
-
-Convert a PNG to the expected raw file:
-
-```bash
-python tools/png_to_logo_rbga.py assets/my_logo.png -o LOGO.BIN --width 256 --height 64 --max-colors 255
-```
-
-Then place `LOGO.BIN` in the same CWD where PS2BBL resolves `CONFIG.INI`.
 
 ### eGSM (external Graphics Synthesize Mode)
 For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required). See [here](https://github.com/pcm720/OSDMenu/blob/main/patcher/README.md#osdgsmcnf) for config file format.
@@ -150,6 +133,21 @@ ARG_AUTO_E1 = -gsm=fp2:1
 ARG_AUTO_E1 = -dev9=NIC
 ARG_AUTO_E1 = pfs:/APPS/APP.ELF
 ```
+
+## Custom splash logo from CWD
+If a custom logo file is found in the current working directory, it replaces the embedded PS2BBLE/PSXBBLE logo.
+
+Convert a PNG to the expected raw file:
+ - PNG should be 8 Bit indexed 255 colors per channel and 256x64 resolution.
+
+Release package (script is in release root):
+```bash
+python png_to_logo_rbga.py my_logo.png
+```
+
+Then place the created `LOGO.BIN` in the same CWD where PS2BBL Extended exists and/or will be launched from.
+
+
 
 ## Known bugs/issues
 

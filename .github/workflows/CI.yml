@@ -110,6 +110,7 @@ jobs:
           mkdir -p "${{ env.REL_DIR }}"
           cp LICENSE "${{ env.REL_DIR }}/LICENSE.TXT"
           cp README.md "${{ env.REL_DIR }}/README.md"
+          cp tools/png_to_logo_rbga.py "${{ env.REL_DIR }}/png_to_logo_rbga.py"
           mv "${{ env.OUT_ROOT }}PS2/" "${{ env.REL_DIR }}/PS2/"
           mv "${{ env.OUT_ROOT }}PSX/" "${{ env.REL_DIR }}/PSX/"
           mv "${{ env.OUT_ROOT }}PS2_HDD/" "${{ env.REL_DIR }}/PS2_HDD/"
