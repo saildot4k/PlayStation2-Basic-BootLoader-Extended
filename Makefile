@@ -85,6 +85,9 @@ EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
 # Keep default PS2SDK linkfile for runtime stability.
 EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
 EE_LIBS += -lpng -lz
+# ps2sdk's default link order places one -lgcc pass before libc_nano; with libpng
+# this can expose late references from strtod helpers, so add a final pass.
+EE_LIBS += -lgcc
 EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2SDK)/common/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
 
