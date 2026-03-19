@@ -61,6 +61,7 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
   - note: on non-HDD builds this option has no effect.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
   This is mainly for HDD builds.
+- `-la=<flags>` is reserved for the internal stage2 loader and is ignored if provided by user config.
 You can pass up to 8 args per entry. Args are processed in the same order they are written in the INI.
 Example:
 ```
@@ -70,6 +71,14 @@ ARG_R1_E1 = -video=480p
 ARG_R1_E1 = -mode=mmce
 ARG_R1_E1 = -mode=ata
 ```
+
+#### Argument precedence and order
+1. PS2BBL first parses and consumes loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-gsm=`.
+2. For repeated control args, the last valid value wins (`-dev9`, `-gsm`). Invalid `-gsm` values are ignored and do not clear a prior valid one.
+3. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining app argument becomes the target ELF path and is removed from app argv.
+4. Remaining arguments preserve order and are passed to the launched app.
+5. If eGSM is active, stage2 handoff appends internal args in OSDMenu-style order: `[..., <gsm-value>, -la=G|GN|GD]`.
+6. User-provided `-la=` is always ignored (reserved for internal loader control).
 
 ### Hotkey names
 Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
@@ -85,7 +94,7 @@ Example:
 NAME_SQUARE = POPSLOADER
 ```
 
-### eGSM
+### eGSM (external Graphics Synthesize Mode)
 - `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
   - eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
   eGSM format (OSDMenu-style):
@@ -102,13 +111,21 @@ NAME_SQUARE = POPSLOADER
 - `2` = field flipping type 2
 - `3` = field flipping type 3
 
-eGSM examples:
+eGSM ARG examples:
 - `-gsm=fp2`
 - `-gsm=fp2:1`
 - `-gsm=1080ix2`
 
+Usage example:
+```
+LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
+ARG_TRIANGLE = -gsm=1080ix2
+```
+
 For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required).
-PATINFO example:
+
+
+### PATINFO example:
 ```
 LK_AUTO_E1 = hdd0:+OSDMENU:PATINFO
 ARG_AUTO_E1 = -patinfo
@@ -126,7 +143,7 @@ you tell me ;)
 - From saildot4k
   - @israpps for [PS2BBL](https://github.com/israpps/PlayStation2-Basic-BootLoader/)
   - @pcm720 for
-    - Retrogem gameid, PS1 Video Negator,  PS2LOGO code from [OSDMenu](https://github.com/pcm720/OSDMenu)
+    - Retrogem gameID, PS1 Video Negator, eGSM,  PS2LOGO code from [OSDMenu](https://github.com/pcm720/OSDMenu)
     - Video mode options from [NHDDL](https://github.com/pcm720/nhddl)
   - @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
   - @nathanneurotic for PS2BBLE 10path, ideas and persuasion

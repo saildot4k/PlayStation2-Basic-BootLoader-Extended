@@ -98,6 +98,18 @@ static int PS2ExecEmbeddedELF(unsigned char *elf, unsigned int elf_size, int arg
     return 0;
 }
 
+static void PS2DebugPrintStage2Argv(const char *label, int argc, char *argv[])
+{
+    int i;
+
+    DPRINTF("%s: stage2 handoff argc=%d\n", label, argc);
+    for (i = 0; i < argc; i++)
+        DPRINTF("%s: stage2 argv[%d] = %s\n",
+                label,
+                i,
+                (argv[i] != NULL) ? argv[i] : "<null>");
+}
+
 static int PS2DiscBootViaStage2(const char *boot_path, int skip_PS2LOGO, const char *osdgsm_arg)
 {
     char *stage2_argv[4];
@@ -118,7 +130,7 @@ static int PS2DiscBootViaStage2(const char *boot_path, int skip_PS2LOGO, const c
         stage2_argv[stage2_argc++] = "-la=G";
     }
 
-    DPRINTF("%s: stage2 argv0=%s argc=%d\n", __func__, stage2_argv[0], stage2_argc);
+    PS2DebugPrintStage2Argv(__func__, stage2_argc, stage2_argv);
     return PS2ExecEmbeddedELF(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv);
 }
 #endif

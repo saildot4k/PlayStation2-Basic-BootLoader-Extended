@@ -30,6 +30,17 @@ enum {
     DEV9_NICHDD
 };
 
+typedef struct
+{
+    const char *launch_filename;
+    char *title_override;
+    int force_appid;
+    int use_patinfo_path;
+    int dev9_mode;
+    uint32_t gsm_flags;
+    const char *gsm_arg;
+} LaunchIntent;
+
 static int arg_eq_ci(const char *a, const char *b)
 {
     unsigned char ca, cb;
@@ -118,6 +129,162 @@ static int path_is_rom_binary(const char *path)
             (path[4] == ':'));
 }
 
+static void LaunchIntentInit(LaunchIntent *intent, const char *default_launch)
+{
+    if (intent == NULL)
+        return;
+
+    intent->launch_filename = default_launch;
+    intent->title_override = NULL;
+    intent->force_appid = 0;
+    intent->use_patinfo_path = 0;
+    intent->dev9_mode = DEV9_DEFAULT;
+    intent->gsm_flags = 0;
+    intent->gsm_arg = NULL;
+}
+
+static void LaunchIntentRelease(LaunchIntent *intent)
+{
+    if (intent == NULL)
+        return;
+
+    if (intent->title_override != NULL) {
+        free(intent->title_override);
+        intent->title_override = NULL;
+    }
+}
+
+static void ParseTitleOverrideValue(LaunchIntent *intent, const char *value)
+{
+    int tlen = 0;
+
+    if (intent == NULL || value == NULL || *value == '\0')
+        return;
+    if (intent->title_override != NULL)
+        return;
+
+    intent->title_override = malloc(12);
+    if (intent->title_override == NULL)
+        return;
+
+    while (tlen < 11 && value[tlen] != '\0' && !isspace((unsigned char)value[tlen])) {
+        intent->title_override[tlen] = value[tlen];
+        tlen++;
+    }
+    intent->title_override[tlen] = '\0';
+}
+
+// Parse loader-control arguments and remove them from app argv.
+static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
+{
+    int out_argc = 0;
+    int i;
+
+    if (intent == NULL || argc <= 0 || argv == NULL)
+        return argc;
+
+    for (i = 0; i < argc; i++) {
+        const char *val = NULL;
+
+        if (argv[i] == NULL) {
+            argv[out_argc++] = argv[i];
+            continue;
+        }
+
+        if (argv[i][0] != '-' && argv[i][0] != '+') {
+            argv[out_argc++] = argv[i];
+            continue;
+        }
+
+        if (arg_eq_ci(argv[i], "-appid")) {
+            intent->force_appid = 1;
+            continue;
+        }
+        if (arg_eq_ci(argv[i], "-patinfo")) {
+            intent->use_patinfo_path = 1;
+            continue;
+        }
+        if (arg_prefix_ci(argv[i], "-titleid=", &val)) {
+            while (*val == ' ' || *val == '\t')
+                val++;
+            ParseTitleOverrideValue(intent, val);
+            continue;
+        }
+        if (arg_prefix_ci(argv[i], "-gsm=", &val)) {
+            uint32_t parsed_flags;
+
+            while (*val == ' ' || *val == '\t')
+                val++;
+            parsed_flags = parse_egsm_flags_common(val);
+            if (parsed_flags == 0)
+                DPRINTF("Ignoring invalid -gsm value: '%s'\n", val);
+            else {
+                intent->gsm_flags = parsed_flags;
+                DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, (unsigned int)intent->gsm_flags);
+                intent->gsm_arg = val;
+            }
+            continue;
+        }
+        if (arg_prefix_ci(argv[i], "-dev9=", &val)) {
+            while (*val == ' ' || *val == '\t')
+                val++;
+            if (arg_eq_ci(val, "NIC")) {
+                intent->dev9_mode = DEV9_NIC;
+            } else if (arg_eq_ci(val, "NICHDD")) {
+                intent->dev9_mode = DEV9_NICHDD;
+            } else {
+                DPRINTF("Ignoring unknown -dev9 value: '%s'\n", val);
+            }
+            continue;
+        }
+        if (arg_prefix_ci(argv[i], "-la=", &val)) {
+            (void)val;
+            DPRINTF("Ignoring reserved internal loader flag override '%s'\n", argv[i]);
+            continue;
+        }
+
+        argv[out_argc++] = argv[i];
+    }
+
+    return out_argc;
+}
+
+// Apply -patinfo target override from the first remaining app arg when path includes :PATINFO.
+static void ApplyPatinfoLaunchOverride(LaunchIntent *intent,
+                                       const char *original_filename,
+                                       const char *party,
+                                       int *argc_inout,
+                                       char *argv[],
+                                       char *patinfo_path,
+                                       size_t patinfo_path_size)
+{
+    int argc;
+
+    if (intent == NULL || argc_inout == NULL || argv == NULL || patinfo_path == NULL || patinfo_path_size == 0)
+        return;
+
+    if (!intent->use_patinfo_path || !path_has_patinfo_token(original_filename))
+        return;
+
+    argc = *argc_inout;
+    if (argc > 0 && argv[0] != NULL && argv[0][0] != '\0') {
+        intent->launch_filename = argv[0];
+        if (party != NULL && strchr(intent->launch_filename, ':') == NULL) {
+            snprintf(patinfo_path, patinfo_path_size, "pfs:%s%s",
+                     (intent->launch_filename[0] == '/') ? "" : "/",
+                     intent->launch_filename);
+            intent->launch_filename = patinfo_path;
+        }
+
+        argc--;
+        if (argc > 0)
+            memmove(argv, &argv[1], sizeof(char *) * argc);
+        *argc_inout = argc;
+    } else {
+        DPRINTF("Ignoring -patinfo for '%s': missing target ELF path argument\n", original_filename);
+    }
+}
+
 static void apply_dev9_policy(int dev9_mode)
 {
 #if defined(HDD) && defined(FILEXIO)
@@ -176,6 +343,18 @@ static int path_is_pfs_prefix(const char *path)
             path[3] == ':');
 }
 
+static void DebugPrintStage2Argv(const char *label, int argc, char *argv[])
+{
+    int i;
+
+    DPRINTF("%s: stage2 handoff argc=%d\n", label, argc);
+    for (i = 0; i < argc; i++)
+        DPRINTF("%s: stage2 argv[%d] = %s\n",
+                label,
+                i,
+                (argv[i] != NULL) ? argv[i] : "<null>");
+}
+
 static int ExecEmbeddedStage2(unsigned char *elf, unsigned int elf_size, int argc, char *argv[])
 {
     embedded_elf_header_t *eh;
@@ -214,12 +393,13 @@ static int ExecEmbeddedStage2(unsigned char *elf, unsigned int elf_size, int arg
 
 static int RunLoaderElfViaStage2(const char *launch_filename, const char *party, int argc, char *argv[], const char *gsm_arg, int dev9_mode)
 {
-    char full_launch_path[MAX_PATH];
-    char loader_args[16] = "-la=G";
+    const char *loader_args = "-la=G";
     char **stage2_argv;
+    char *owned_launch = NULL;
+    char *owned_gsm = NULL;
     const char *stage2_launch = launch_filename;
-    int i;
     int stage2_argc;
+    int i;
 
     if (launch_filename == NULL || *launch_filename == '\0' || gsm_arg == NULL || *gsm_arg == '\0')
         return -1;
@@ -228,42 +408,65 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
 
     if (party != NULL && *party != '\0') {
         if (path_is_pfs_prefix(launch_filename)) {
-            snprintf(full_launch_path, sizeof(full_launch_path), "%s%s", party, launch_filename);
-            stage2_launch = full_launch_path;
+            owned_launch = malloc(MAX_PATH);
+            if (owned_launch == NULL)
+                return -1;
+            snprintf(owned_launch, MAX_PATH, "%s%s", party, launch_filename);
+            stage2_launch = owned_launch;
         } else if (strchr(launch_filename, ':') == NULL) {
-            snprintf(full_launch_path, sizeof(full_launch_path), "%spfs:%s%s",
+            owned_launch = malloc(MAX_PATH);
+            if (owned_launch == NULL)
+                return -1;
+            snprintf(owned_launch, MAX_PATH, "%spfs:%s%s",
                      party,
                      (launch_filename[0] == '/') ? "" : "/",
                      launch_filename);
-            stage2_launch = full_launch_path;
+            stage2_launch = owned_launch;
         }
     }
 
-    i = (int)strlen(loader_args);
     if (dev9_mode == DEV9_NIC) {
-        loader_args[i++] = 'N';
+        loader_args = "-la=GN";
     } else if (dev9_mode == DEV9_NICHDD) {
-        loader_args[i++] = 'D';
+        loader_args = "-la=GD";
     }
-    loader_args[i] = '\0';
+
+    owned_gsm = malloc(strlen(gsm_arg) + 1);
+    if (owned_gsm == NULL) {
+        if (owned_launch != NULL)
+            free(owned_launch);
+        return -1;
+    }
+    strcpy(owned_gsm, gsm_arg);
 
     stage2_argc = argc + 3;
     stage2_argv = malloc(sizeof(char *) * stage2_argc);
-    if (stage2_argv == NULL)
+    if (stage2_argv == NULL) {
+        free(owned_gsm);
+        if (owned_launch != NULL)
+            free(owned_launch);
         return -1;
+    }
 
     stage2_argv[0] = (char *)stage2_launch;
     for (i = 0; i < argc; i++)
         stage2_argv[i + 1] = argv[i];
-    stage2_argv[argc + 1] = (char *)gsm_arg;
-    stage2_argv[argc + 2] = loader_args;
+    stage2_argv[argc + 1] = owned_gsm;
+    stage2_argv[argc + 2] = (char *)loader_args;
+    DebugPrintStage2Argv(__func__, stage2_argc, stage2_argv);
 
     if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {
         free(stage2_argv);
+        free(owned_gsm);
+        if (owned_launch != NULL)
+            free(owned_launch);
         return -1;
     }
 
     free(stage2_argv);
+    free(owned_gsm);
+    if (owned_launch != NULL)
+        free(owned_launch);
     return 0;
 }
 #endif
@@ -271,139 +474,67 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
 void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[])
 {
     DPRINTF("%s\n", __FUNCTION__);
-    const char *launch_filename = filename;
     char patinfo_path[MAX_PATH];
-    char *title_override = NULL;
-    int force_appid = 0;
-    int use_patinfo_path = 0;
-    int dev9_mode = DEV9_DEFAULT;
-    uint32_t gsm_flags = 0;
-    const char *gsm_arg = NULL;
+    LaunchIntent intent;
+    int show_app_id;
 
-    if (argc > 0 && argv != NULL) {
-        int out_argc = 0;
-        int i;
-        for (i = 0; i < argc; i++) {
-            if (argv[i] != NULL && (argv[i][0] == '-' || argv[i][0] == '+')) {
-                if (arg_eq_ci(argv[i], "-appid")) {
-                    force_appid = 1;
-                    continue;
-                }
-                if (arg_eq_ci(argv[i], "-patinfo")) {
-                    use_patinfo_path = 1;
-                    continue;
-                }
-                {
-                    const char *val = NULL;
-                    if (arg_prefix_ci(argv[i], "-titleid=", &val)) {
-                        while (*val == ' ' || *val == '\t')
-                            val++;
-                        if (*val != '\0' && title_override == NULL) {
-                            int tlen = 0;
-                            title_override = malloc(12);
-                            if (title_override) {
-                                while (tlen < 11 && val[tlen] != '\0' && !isspace((unsigned char)val[tlen])) {
-                                    title_override[tlen] = val[tlen];
-                                    tlen++;
-                                }
-                                title_override[tlen] = '\0';
-                            }
-                        }
-                        continue;
-                    }
-                    if (arg_prefix_ci(argv[i], "-gsm=", &val)) {
-                        while (*val == ' ' || *val == '\t')
-                            val++;
-                        gsm_flags = parse_egsm_flags_common(val);
-                        if (gsm_flags == 0)
-                            DPRINTF("Ignoring invalid -gsm value: '%s'\n", val);
-                        else {
-                            DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, (unsigned int)gsm_flags);
-                            gsm_arg = val;
-                        }
-                        continue;
-                    }
-                    if (arg_prefix_ci(argv[i], "-dev9=", &val)) {
-                        while (*val == ' ' || *val == '\t')
-                            val++;
-                        if (arg_eq_ci(val, "NIC")) {
-                            dev9_mode = DEV9_NIC;
-                        } else if (arg_eq_ci(val, "NICHDD")) {
-                            dev9_mode = DEV9_NICHDD;
-                        } else {
-                            DPRINTF("Ignoring unknown -dev9 value: '%s'\n", val);
-                        }
-                        continue;
-                    }
-                }
-            }
-            argv[out_argc++] = argv[i];
-        }
-        argc = out_argc;
-    }
+    LaunchIntentInit(&intent, filename);
+    patinfo_path[0] = '\0';
 
-    if (use_patinfo_path && path_has_patinfo_token(filename)) {
-        if (argc > 0 && argv[0] != NULL && argv[0][0] != '\0') {
-            launch_filename = argv[0];
-            if (party != NULL && strchr(launch_filename, ':') == NULL) {
-                snprintf(patinfo_path, sizeof(patinfo_path), "pfs:%s%s",
-                         (launch_filename[0] == '/') ? "" : "/",
-                         launch_filename);
-                launch_filename = patinfo_path;
-            }
+    argc = ParseLaunchControlArgs(&intent, argc, argv);
+    ApplyPatinfoLaunchOverride(&intent,
+                               filename,
+                               party,
+                               &argc,
+                               argv,
+                               patinfo_path,
+                               sizeof(patinfo_path));
 
-            argc--;
-            if (argc > 0)
-                memmove(argv, &argv[1], sizeof(char *) * argc);
-        } else {
-            DPRINTF("Ignoring -patinfo for '%s': missing target ELF path argument\n", filename);
-        }
-    }
-
-    int show_app_id = GameIDAppEnabled();
-    if (force_appid || title_override)
+    show_app_id = GameIDAppEnabled();
+    if (intent.force_appid || intent.title_override != NULL)
         show_app_id = 1;
 
     if (show_app_id) {
-        char *title_id = title_override ? title_override : generateTitleID(launch_filename);
+        char *title_id = (intent.title_override != NULL) ? intent.title_override : generateTitleID(intent.launch_filename);
         if (title_id) {
             GameIDHandleApp(title_id, show_app_id);
-            if (!title_override)
+            if (intent.title_override == NULL)
                 free(title_id);
         }
     }
 
-    if (title_override)
-        free(title_override);
-
-    if (gsm_flags != 0) {
-        if (path_is_rom_binary(launch_filename)) {
-            DPRINTF("Ignoring -gsm for ROM path '%s'\n", launch_filename);
+    if (intent.gsm_flags != 0) {
+        if (path_is_rom_binary(intent.launch_filename)) {
+            DPRINTF("Ignoring -gsm for ROM path '%s'\n", intent.launch_filename);
         } else {
 #if EGSM_BUILD
-            if (RunLoaderElfViaStage2(launch_filename, party, argc, argv, gsm_arg, dev9_mode) == 0)
+            if (RunLoaderElfViaStage2(intent.launch_filename, party, argc, argv, intent.gsm_arg, intent.dev9_mode) == 0) {
+                LaunchIntentRelease(&intent);
                 return;
+            }
             DPRINTF("Unable to hand off -gsm launch to embedded stage2; continuing without eGSM\n");
 #else
-            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", (unsigned int)gsm_flags);
+            DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", (unsigned int)intent.gsm_flags);
 #endif
         }
     }
 
-    if (dev9_mode == DEV9_NIC) {
+    if (intent.dev9_mode == DEV9_NIC) {
         DPRINTF("Applying -dev9=NIC (idle HDD, keep DEV9 on)\n");
-    } else if (dev9_mode == DEV9_NICHDD) {
+    } else if (intent.dev9_mode == DEV9_NICHDD) {
         DPRINTF("Applying -dev9=NICHDD (keep HDD and DEV9 on)\n");
     }
-    apply_dev9_policy(dev9_mode);
+    apply_dev9_policy(intent.dev9_mode);
 
     if (party == NULL) {
-        DPRINTF("LoadELFFromFile(%s, %d, %p)\n", launch_filename, argc, argv);
+        DPRINTF("LoadELFFromFile(%s, %d, %p)\n", intent.launch_filename, argc, argv);
         DBGWAIT(2);
-        LoadELFFromFile(launch_filename, argc, argv);
+        LoadELFFromFile(intent.launch_filename, argc, argv);
     } else {
-        DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", launch_filename, party, argc, argv);
+        DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", intent.launch_filename, party, argc, argv);
         DBGWAIT(2);
-        LoadELFFromFileWithPartition(launch_filename, party, argc, argv);
+        LoadELFFromFileWithPartition(intent.launch_filename, party, argc, argv);
     }
+
+    LaunchIntentRelease(&intent);
 }
