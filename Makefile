@@ -84,6 +84,7 @@ EE_LDFLAGS += -L$(PS2SDK)/ports/lib -L$(PS2DEV)/gsKit/lib
 EE_LDFLAGS += -Wl,--gc-sections -Wno-sign-compare
 # Keep default PS2SDK linkfile for runtime stability.
 EE_LIBS += -ldebug -lmc -lpatches -lgskit -ldmakit
+EE_LIBS += -lpng -lz
 EE_INCS += -Iinclude -I$(PS2SDK)/ports/include -I$(PS2SDK)/common/include -I$(PS2DEV)/gsKit/include
 EE_CFLAGS += -DVERSION=\"$(VERSION)\" -DSUBVERSION=\"$(SUBVERSION)\" -DPATCHLEVEL=\"$(PATCHLEVEL)\" -DSTATUS=\"$(STATUS)\"
 
