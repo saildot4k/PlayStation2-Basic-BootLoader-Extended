@@ -393,7 +393,7 @@ static int ExecEmbeddedStage2(unsigned char *elf, unsigned int elf_size, int arg
 
 static int RunLoaderElfViaStage2(const char *launch_filename, const char *party, int argc, char *argv[], const char *gsm_arg, int dev9_mode)
 {
-    const char *loader_args = "-la=G";
+    char loader_args[16] = "-la=G";
     char **stage2_argv;
     char *owned_launch = NULL;
     char *owned_gsm = NULL;
@@ -425,11 +425,13 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
         }
     }
 
+    i = (int)strlen(loader_args);
     if (dev9_mode == DEV9_NIC) {
-        loader_args = "-la=GN";
+        loader_args[i++] = 'N';
     } else if (dev9_mode == DEV9_NICHDD) {
-        loader_args = "-la=GD";
+        loader_args[i++] = 'D';
     }
+    loader_args[i] = '\0';
 
     owned_gsm = malloc(strlen(gsm_arg) + 1);
     if (owned_gsm == NULL) {
@@ -452,7 +454,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename, const char *party,
     for (i = 0; i < argc; i++)
         stage2_argv[i + 1] = argv[i];
     stage2_argv[argc + 1] = owned_gsm;
-    stage2_argv[argc + 2] = (char *)loader_args;
+    stage2_argv[argc + 2] = loader_args;
     DebugPrintStage2Argv(__func__, stage2_argc, stage2_argv);
 
     if (ExecEmbeddedStage2(ps2_stage2_loader_elf, size_ps2_stage2_loader_elf, stage2_argc, stage2_argv) != 0) {
