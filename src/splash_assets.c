@@ -1,6 +1,7 @@
 // Embedded splash image/font asset metadata and accessors.
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "debugprintf.h"
 #include "splash_assets.h"
@@ -8,6 +9,8 @@
 #define CUSTOM_LOGO_WIDTH 256u
 #define CUSTOM_LOGO_HEIGHT 64u
 #define CUSTOM_LOGO_PIXELS_SIZE (CUSTOM_LOGO_WIDTH * CUSTOM_LOGO_HEIGHT * 4u)
+#define CUSTOM_LOGO_INDEXED_MAGIC "LGB1"
+#define CUSTOM_LOGO_INDEXED_HEADER_SIZE 12u
 
 enum {
     CUSTOM_LOGO_UNCHECKED = 0,
@@ -25,29 +28,245 @@ static const char *const g_custom_logo_candidates[] = {
 
 extern const unsigned int splash_bg_ps2bble_width;
 extern const unsigned int splash_bg_ps2bble_height;
-extern const unsigned char splash_bg_ps2bble_rbga[];
+extern const unsigned int splash_bg_ps2bble_lgb1_size;
+extern const unsigned char splash_bg_ps2bble_lgb1[];
 
 extern const unsigned int splash_bg_psxbble_width;
 extern const unsigned int splash_bg_psxbble_height;
-extern const unsigned char splash_bg_psxbble_rbga[];
+extern const unsigned int splash_bg_psxbble_lgb1_size;
+extern const unsigned char splash_bg_psxbble_lgb1[];
 
 extern const unsigned int splash_logo_ps2bble_width;
 extern const unsigned int splash_logo_ps2bble_height;
-extern const unsigned char splash_logo_ps2bble_rbga[];
+extern const unsigned int splash_logo_ps2bble_lgb1_size;
+extern const unsigned char splash_logo_ps2bble_lgb1[];
 
 extern const unsigned int splash_logo_psxbble_width;
 extern const unsigned int splash_logo_psxbble_height;
-extern const unsigned char splash_logo_psxbble_rbga[];
+extern const unsigned int splash_logo_psxbble_lgb1_size;
+extern const unsigned char splash_logo_psxbble_lgb1[];
 
 extern const unsigned int splash_hotkeys_width;
 extern const unsigned int splash_hotkeys_height;
-extern const unsigned char splash_hotkeys_rbga[];
+extern const unsigned int splash_hotkeys_lgb1_size;
+extern const unsigned char splash_hotkeys_lgb1[];
+
+static unsigned char *g_bg_ps2_pixels = NULL;
+static unsigned char *g_bg_psx_pixels = NULL;
+static unsigned char *g_logo_ps2_pixels = NULL;
+static unsigned char *g_logo_psx_pixels = NULL;
+static unsigned char *g_hotkeys_pixels = NULL;
+
+static unsigned int read_u16_le(const unsigned char *p)
+{
+    return (unsigned int)p[0] | ((unsigned int)p[1] << 8);
+}
+
+static int decode_lgb1_to_rbga(const unsigned char *blob,
+                               unsigned int blob_size,
+                               unsigned int expected_width,
+                               unsigned int expected_height,
+                               unsigned char **pixels_out)
+{
+    unsigned int width;
+    unsigned int height;
+    unsigned int palette_count;
+    unsigned int pixel_count;
+    unsigned int expected_size;
+    const unsigned char *palette;
+    const unsigned char *indices;
+    unsigned char *out;
+    unsigned int i;
+
+    if (pixels_out == NULL)
+        return 0;
+    if (blob == NULL || blob_size < CUSTOM_LOGO_INDEXED_HEADER_SIZE)
+        return 0;
+    if (memcmp(blob, CUSTOM_LOGO_INDEXED_MAGIC, 4) != 0)
+        return 0;
+
+    width = read_u16_le(&blob[4]);
+    height = read_u16_le(&blob[6]);
+    if (width != expected_width || height != expected_height)
+        return 0;
+
+    palette_count = (unsigned int)blob[8];
+    if (palette_count == 0)
+        palette_count = 256u;
+    if (palette_count < 1u || palette_count > 256u)
+        return 0;
+
+    pixel_count = width * height;
+    expected_size = CUSTOM_LOGO_INDEXED_HEADER_SIZE + (palette_count * 4u) + pixel_count;
+    if (blob_size != expected_size)
+        return 0;
+
+    palette = blob + CUSTOM_LOGO_INDEXED_HEADER_SIZE;
+    indices = palette + (palette_count * 4u);
+    out = (unsigned char *)malloc(pixel_count * 4u);
+    if (out == NULL)
+        return 0;
+
+    for (i = 0; i < pixel_count; i++) {
+        unsigned int idx = (unsigned int)indices[i];
+        unsigned int dst = i * 4u;
+
+        if (idx >= palette_count)
+            idx = 0;
+
+        out[dst + 0] = palette[(idx * 4u) + 0u];
+        out[dst + 1] = palette[(idx * 4u) + 1u];
+        out[dst + 2] = palette[(idx * 4u) + 2u];
+        out[dst + 3] = palette[(idx * 4u) + 3u];
+    }
+
+    *pixels_out = out;
+    return 1;
+}
+
+static void init_embedded_image(SPLASH_IMAGE *img,
+                                unsigned char **cache,
+                                unsigned int width,
+                                unsigned int height,
+                                const unsigned char *lgb1,
+                                unsigned int lgb1_size,
+                                const char *label)
+{
+    if (img == NULL || cache == NULL)
+        return;
+
+    if (*cache == NULL) {
+        if (!decode_lgb1_to_rbga(lgb1, lgb1_size, width, height, cache)) {
+            DPRINTF("Failed to decode embedded splash asset: %s\n", label);
+            img->pixels_rbga = NULL;
+            img->width = 0;
+            img->height = 0;
+            return;
+        }
+    }
+
+    img->pixels_rbga = *cache;
+    img->width = width;
+    img->height = height;
+}
+
+static int load_custom_logo_raw_rbga(FILE *fp, const char *path)
+{
+    size_t bytes_read;
+
+    g_custom_logo_pixels = (unsigned char *)malloc(CUSTOM_LOGO_PIXELS_SIZE);
+    if (g_custom_logo_pixels == NULL) {
+        DPRINTF("Ignoring custom splash logo '%s': out of memory\n", path);
+        return 0;
+    }
+
+    bytes_read = fread(g_custom_logo_pixels, 1, CUSTOM_LOGO_PIXELS_SIZE, fp);
+    if (bytes_read != CUSTOM_LOGO_PIXELS_SIZE) {
+        DPRINTF("Ignoring custom splash logo '%s': read %u/%u bytes\n",
+                path,
+                (unsigned int)bytes_read,
+                (unsigned int)CUSTOM_LOGO_PIXELS_SIZE);
+        free(g_custom_logo_pixels);
+        g_custom_logo_pixels = NULL;
+        return 0;
+    }
+
+    return 1;
+}
+
+static int load_custom_logo_indexed(FILE *fp, long file_size, const char *path)
+{
+    unsigned char header[CUSTOM_LOGO_INDEXED_HEADER_SIZE];
+    unsigned int width;
+    unsigned int height;
+    unsigned int palette_count;
+    unsigned int pixel_count = CUSTOM_LOGO_WIDTH * CUSTOM_LOGO_HEIGHT;
+    unsigned int expected_size;
+    unsigned char *palette = NULL;
+    unsigned char *indices = NULL;
+    unsigned int i;
+
+    if (fread(header, 1, sizeof(header), fp) != sizeof(header)) {
+        DPRINTF("Ignoring custom splash logo '%s': could not read indexed header\n", path);
+        return 0;
+    }
+
+    if (memcmp(header, CUSTOM_LOGO_INDEXED_MAGIC, 4) != 0)
+        return 0;
+
+    width = read_u16_le(&header[4]);
+    height = read_u16_le(&header[6]);
+    palette_count = (unsigned int)header[8];
+    if (palette_count == 0)
+        palette_count = 256u;
+
+    if (width != CUSTOM_LOGO_WIDTH || height != CUSTOM_LOGO_HEIGHT) {
+        DPRINTF("Ignoring custom splash logo '%s': indexed header size mismatch (%ux%u)\n",
+                path,
+                width,
+                height);
+        return 0;
+    }
+
+    if (palette_count < 1u || palette_count > 256u) {
+        DPRINTF("Ignoring custom splash logo '%s': invalid palette count %u\n", path, palette_count);
+        return 0;
+    }
+
+    expected_size = CUSTOM_LOGO_INDEXED_HEADER_SIZE + (palette_count * 4u) + pixel_count;
+    if (file_size < 0 || (unsigned long)file_size != (unsigned long)expected_size) {
+        DPRINTF("Ignoring custom splash logo '%s': indexed size mismatch (%ld, expected %u)\n",
+                path,
+                file_size,
+                expected_size);
+        return 0;
+    }
+
+    palette = (unsigned char *)malloc(palette_count * 4u);
+    indices = (unsigned char *)malloc(pixel_count);
+    g_custom_logo_pixels = (unsigned char *)malloc(CUSTOM_LOGO_PIXELS_SIZE);
+    if (palette == NULL || indices == NULL || g_custom_logo_pixels == NULL) {
+        DPRINTF("Ignoring custom splash logo '%s': out of memory\n", path);
+        free(palette);
+        free(indices);
+        free(g_custom_logo_pixels);
+        g_custom_logo_pixels = NULL;
+        return 0;
+    }
+
+    if (fread(palette, 1, palette_count * 4u, fp) != palette_count * 4u ||
+        fread(indices, 1, pixel_count, fp) != pixel_count) {
+        DPRINTF("Ignoring custom splash logo '%s': could not read indexed payload\n", path);
+        free(palette);
+        free(indices);
+        free(g_custom_logo_pixels);
+        g_custom_logo_pixels = NULL;
+        return 0;
+    }
+
+    for (i = 0; i < pixel_count; i++) {
+        unsigned int idx = (unsigned int)indices[i];
+        unsigned int dst = i * 4u;
+
+        if (idx >= palette_count)
+            idx = 0;
+
+        g_custom_logo_pixels[dst + 0] = palette[(idx * 4u) + 0];
+        g_custom_logo_pixels[dst + 1] = palette[(idx * 4u) + 1];
+        g_custom_logo_pixels[dst + 2] = palette[(idx * 4u) + 2];
+        g_custom_logo_pixels[dst + 3] = palette[(idx * 4u) + 3];
+    }
+
+    free(palette);
+    free(indices);
+    return 1;
+}
 
 static int load_custom_logo_from_path(const char *path)
 {
     FILE *fp;
     long file_size;
-    size_t bytes_read;
+    int loaded = 0;
 
     if (path == NULL || *path == '\0')
         return 0;
@@ -62,12 +281,8 @@ static int load_custom_logo_from_path(const char *path)
     }
 
     file_size = ftell(fp);
-    if (file_size < 0 || (unsigned long)file_size != CUSTOM_LOGO_PIXELS_SIZE) {
+    if (file_size < 0) {
         fclose(fp);
-        DPRINTF("Ignoring custom splash logo '%s': expected %u bytes (256x64 RBGA) but got %ld\n",
-                path,
-                (unsigned int)CUSTOM_LOGO_PIXELS_SIZE,
-                file_size);
         return 0;
     }
 
@@ -76,29 +291,27 @@ static int load_custom_logo_from_path(const char *path)
         return 0;
     }
 
-    g_custom_logo_pixels = (unsigned char *)malloc(CUSTOM_LOGO_PIXELS_SIZE);
-    if (g_custom_logo_pixels == NULL) {
-        fclose(fp);
-        DPRINTF("Ignoring custom splash logo '%s': out of memory\n", path);
-        return 0;
-    }
+    if ((unsigned long)file_size == CUSTOM_LOGO_PIXELS_SIZE)
+        loaded = load_custom_logo_raw_rbga(fp, path);
+    else
+        loaded = load_custom_logo_indexed(fp, file_size, path);
 
-    bytes_read = fread(g_custom_logo_pixels, 1, CUSTOM_LOGO_PIXELS_SIZE, fp);
     fclose(fp);
-    if (bytes_read != CUSTOM_LOGO_PIXELS_SIZE) {
-        DPRINTF("Ignoring custom splash logo '%s': read %u/%u bytes\n",
-                path,
-                (unsigned int)bytes_read,
-                (unsigned int)CUSTOM_LOGO_PIXELS_SIZE);
-        free(g_custom_logo_pixels);
-        g_custom_logo_pixels = NULL;
+    if (!loaded) {
+        if ((unsigned long)file_size != CUSTOM_LOGO_PIXELS_SIZE) {
+            DPRINTF("Ignoring custom splash logo '%s': unsupported file format or size (%ld)\n",
+                    path,
+                    file_size);
+        }
         return 0;
     }
 
     g_custom_logo.pixels_rbga = g_custom_logo_pixels;
     g_custom_logo.width = CUSTOM_LOGO_WIDTH;
     g_custom_logo.height = CUSTOM_LOGO_HEIGHT;
-    DPRINTF("Loaded custom splash logo from CWD: %s\n", path);
+    DPRINTF("Loaded custom splash logo from CWD: %s (%s)\n",
+            path,
+            ((unsigned long)file_size == CUSTOM_LOGO_PIXELS_SIZE) ? "raw RBGA" : "indexed");
     return 1;
 }
 
@@ -124,13 +337,21 @@ const SPLASH_IMAGE *SplashGetBackgroundImage(int is_psx_desr)
     static SPLASH_IMAGE bg_ps2;
     static SPLASH_IMAGE bg_psx;
 
-    bg_ps2.pixels_rbga = splash_bg_ps2bble_rbga;
-    bg_ps2.width = splash_bg_ps2bble_width;
-    bg_ps2.height = splash_bg_ps2bble_height;
+    init_embedded_image(&bg_ps2,
+                        &g_bg_ps2_pixels,
+                        splash_bg_ps2bble_width,
+                        splash_bg_ps2bble_height,
+                        splash_bg_ps2bble_lgb1,
+                        splash_bg_ps2bble_lgb1_size,
+                        "bg_ps2bble");
 
-    bg_psx.pixels_rbga = splash_bg_psxbble_rbga;
-    bg_psx.width = splash_bg_psxbble_width;
-    bg_psx.height = splash_bg_psxbble_height;
+    init_embedded_image(&bg_psx,
+                        &g_bg_psx_pixels,
+                        splash_bg_psxbble_width,
+                        splash_bg_psxbble_height,
+                        splash_bg_psxbble_lgb1,
+                        splash_bg_psxbble_lgb1_size,
+                        "bg_psxbble");
 
     return is_psx_desr ? &bg_psx : &bg_ps2;
 }
@@ -144,13 +365,21 @@ const SPLASH_IMAGE *SplashGetLogoImage(int is_psx_desr)
     if (g_custom_logo_state == CUSTOM_LOGO_READY)
         return &g_custom_logo;
 
-    logo_ps2.pixels_rbga = splash_logo_ps2bble_rbga;
-    logo_ps2.width = splash_logo_ps2bble_width;
-    logo_ps2.height = splash_logo_ps2bble_height;
+    init_embedded_image(&logo_ps2,
+                        &g_logo_ps2_pixels,
+                        splash_logo_ps2bble_width,
+                        splash_logo_ps2bble_height,
+                        splash_logo_ps2bble_lgb1,
+                        splash_logo_ps2bble_lgb1_size,
+                        "logo_ps2bble");
 
-    logo_psx.pixels_rbga = splash_logo_psxbble_rbga;
-    logo_psx.width = splash_logo_psxbble_width;
-    logo_psx.height = splash_logo_psxbble_height;
+    init_embedded_image(&logo_psx,
+                        &g_logo_psx_pixels,
+                        splash_logo_psxbble_width,
+                        splash_logo_psxbble_height,
+                        splash_logo_psxbble_lgb1,
+                        splash_logo_psxbble_lgb1_size,
+                        "logo_psxbble");
 
     return is_psx_desr ? &logo_psx : &logo_ps2;
 }
@@ -159,9 +388,13 @@ const SPLASH_IMAGE *SplashGetHotkeysImage(void)
 {
     static SPLASH_IMAGE hotkeys;
 
-    hotkeys.pixels_rbga = splash_hotkeys_rbga;
-    hotkeys.width = splash_hotkeys_width;
-    hotkeys.height = splash_hotkeys_height;
+    init_embedded_image(&hotkeys,
+                        &g_hotkeys_pixels,
+                        splash_hotkeys_width,
+                        splash_hotkeys_height,
+                        splash_hotkeys_lgb1,
+                        splash_hotkeys_lgb1_size,
+                        "hotkeys");
 
     return &hotkeys;
 }

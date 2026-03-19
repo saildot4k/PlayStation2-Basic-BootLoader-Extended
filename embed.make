@@ -70,4 +70,4 @@ SPLASH_IMAGE_INPUTS = \
 	assets/embedded/hotkeys.png
 
 $(EE_ASM_DIR)splash_images_rbg.c: $(SPLASH_IMAGE_INPUTS) tools/png_rgba_to_rbg_c.py | $(EE_ASM_DIR)
-	$(PYTHON) tools/png_rgba_to_rbg_c.py --output $@ $(SPLASH_IMAGE_INPUTS)
+	$(PYTHON) tools/png_rgba_to_rbg_c.py --output $@ --max-colors 255 $(SPLASH_IMAGE_INPUTS)

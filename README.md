@@ -99,14 +99,15 @@ If a custom logo file is found in the current working directory, it replaces the
 
 - Filename: `LOGO.BIN` (uppercase only)
 - Required dimensions: `256 x 64`
-- Required format: raw headerless `RBGA` bytes (`R, B, G, A`) at 8 bits per channel
-- Required size: `256 * 64 * 4 = 65536` bytes
-- Runtime PNG decoding is intentionally not used, to avoid boot-time CPU cost on target hardware
+- Preferred format: indexed `LGB1` bin (8-bit pixel indices + RBGA palette)
+- Palette size: up to 255 colors by default (`--max-colors`), max supported 256
+- Legacy format is still accepted: raw headerless `RBGA` (`R, B, G, A`) at `65536` bytes
+- Runtime PNG decoding is intentionally not used, to avoid extra boot-time code size and CPU cost
 
 Convert a PNG to the expected raw file:
 
 ```bash
-python tools/png_to_logo_rbga.py assets/my_logo.png -o LOGO.BIN --width 256 --height 64
+python tools/png_to_logo_rbga.py assets/my_logo.png -o LOGO.BIN --width 256 --height 64 --max-colors 255
 ```
 
 Then place `LOGO.BIN` in the same CWD where PS2BBL resolves `CONFIG.INI`.
