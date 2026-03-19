@@ -1,5 +1,6 @@
 // Default runtime configuration values and key/path initializers.
 #include "main.h"
+#include "game_id.h"
 
 extern int g_is_psx_desr;
 
