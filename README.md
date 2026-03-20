@@ -60,10 +60,14 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
   - if omitted, PS2BBL does not force a DEV9 policy override.
   - note: on non-HDD builds this option has no effect.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
-  This is mainly for HDD builds.
-- `-la=<flags>` is reserved for the internal stage2 loader and is ignored if provided by user config.
-You can pass up to 8 args per entry. Args are processed in the same order they are written in the INI.
-Example:
+  This is for HDD builds.
+  PATINFO example:
+   ```
+   LK_AUTO_E1 = hdd0:__system:pfs:PATINFO.KELF
+   ARG_AUTO_E1 = -patinfo
+   ```
+
+Example to launch NHDDL with video mode 480p and look for isos on mmce and exfat hdd without needing nhddl.yml
 ```
 NAME_R1 = NHDDL
 LK_R1_E1 = mmce?:/NEUTRINO/nhddl.elf
@@ -87,13 +91,14 @@ Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be define
   - `1` Console Info
   - `2` PS2BBLE/PSXBBLE Logo and Console Info
   - `3` Hotkey Graphic Display with `NAME_BUTTON = <TITLE>` displayed from config file
-  - `4` Hotkey Graphic Display with first found file as defined in config
-  - `5` Hotkey Graphic Display with first found file path as defined in config
-Use `NAME_<BUTTON> =` to set the label displayed for a hotkey when `LOGO_DISPLAY = 3` (banner + names).
-Example:
-```
-NAME_SQUARE = POPSLOADER
-```
+    - Example:
+      ```
+      NAME_SQUARE = POPSLOADER
+      ```
+  - `4` Hotkey Graphic Display with first found file as defined in config (slower)
+  - `5` Hotkey Graphic Display with first found file path as defined in config (slower)
+
+
 
 ### eGSM (external Graphics Synthesize Mode)
 For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required). See [here](https://github.com/pcm720/OSDMenu/blob/main/patcher/README.md#osdgsmcnf) for config file format.
@@ -125,14 +130,6 @@ LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
 ARG_TRIANGLE = -gsm=1080ix2
 ```
 
-### PATINFO example:
-```
-LK_AUTO_E1 = hdd0:+OSDMENU:PATINFO
-ARG_AUTO_E1 = -patinfo
-ARG_AUTO_E1 = -gsm=fp2:1
-ARG_AUTO_E1 = -dev9=NIC
-ARG_AUTO_E1 = pfs:/APPS/APP.ELF
-```
 
 ## Custom splash logo from CWD
 If a custom logo file is found in the current working directory, it replaces the embedded PS2BBLE/PSXBBLE logo.
