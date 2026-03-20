@@ -1,3 +1,4 @@
+// Extra CDVD SCMD wrappers used on PSX/DESR paths.
 /*
 # _____     ___ ____     ___ ____
 #  ____|   |    ____|   |        | |____|

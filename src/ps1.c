@@ -1,3 +1,4 @@
+// PlayStation disc boot support and PS1 driver handoff utilities.
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -17,7 +18,6 @@
 #include "game_id.h"
 #ifndef EMBED_PS1VN
 #include "util.h"
-extern char *CheckPath(char *path);
 #endif
 
 #define PS1DRV_CFG_FAST 0x01
@@ -289,8 +289,11 @@ static int ParseBootCNF(void)
         const char *pChar;
         int size, i, len;
 
-        size = read(fd, system_cnf, sizeof(system_cnf));
+        size = read(fd, system_cnf, sizeof(system_cnf) - 1);
         close(fd);
+
+        if (size <= 0)
+            return 0;
 
         system_cnf[size] = '\0';
         line[0] = '\0';

@@ -1,3 +1,4 @@
+// Low-level GSKit splash renderer, frame lifecycle, and draw primitives.
 #include <malloc.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +41,7 @@
 #define MODE2_LOGO_Y_FROM_CENTER 0
 
 // LOGO_DISPLAY = 3-5 layout:
-// - Logo centered using the logo visual-center ratio.
+// - Logo geometrically centered on screen.
 // - Hotkeys image left aligned and vertically centered on screen.
 // Logo Y and hotkeys Y values are center-relative tuning offsets in pixels.
 #define MODE35_HOTKEYS_LEFT_PERCENT 10
@@ -48,11 +49,6 @@
 #define MODE35_LOGO_Y_FROM_CENTER 0
 #define MODE35_HOTKEYS_X_ADJUST 0
 #define MODE35_HOTKEYS_Y_FROM_CENTER 0
-
-// Visual center of the logo graphic from the top, expressed as a ratio of logo height.
-// 21/64 keeps the visual center consistent if the logo is scaled later.
-#define LOGO_VISUAL_CENTER_Y_NUMERATOR 21
-#define LOGO_VISUAL_CENTER_Y_DENOMINATOR 64
 
 typedef struct
 {
@@ -148,13 +144,6 @@ void SplashRenderSetVideoMode(int cfg_mode, int native_mode)
     if (cfg_mode < SPLASH_CFG_VIDEO_MODE_AUTO || cfg_mode > SPLASH_CFG_VIDEO_MODE_480P)
         cfg_mode = SPLASH_CFG_VIDEO_MODE_AUTO;
     g_video_cfg_mode = cfg_mode;
-}
-
-static int logo_visual_center_y(unsigned int logo_height)
-{
-    return (int)(((logo_height * LOGO_VISUAL_CENTER_Y_NUMERATOR) +
-                  (LOGO_VISUAL_CENTER_Y_DENOMINATOR / 2)) /
-                 LOGO_VISUAL_CENTER_Y_DENOMINATOR);
 }
 
 static unsigned char transparency_percent_to_gs_alpha(unsigned int transparency_percent)
@@ -892,7 +881,6 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
 {
     const SPLASH_IMAGE *bg;
     const SPLASH_IMAGE *logo;
-    int logo_center_y;
     int center_x;
     int center_y;
     int pass;
@@ -950,11 +938,10 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
     compute_logo_visible_bounds_from_image(logo,
                                            &g_logo_shimmer_visible_left,
                                            &g_logo_shimmer_visible_right);
-    logo_center_y = logo_visual_center_y(logo->height);
 
     if (logo_disp == 2) {
         g_logo_x = center_x - ((int)logo->width / 2) + MODE2_LOGO_X_FROM_CENTER;
-        g_logo_y = center_y - logo_center_y + MODE2_LOGO_Y_FROM_CENTER;
+        g_logo_y = center_y - ((int)logo->height / 2) + MODE2_LOGO_Y_FROM_CENTER;
         g_logo_visible = 1;
         g_hotkeys_visible = 0;
         init_logo_shimmer_state();
@@ -976,7 +963,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         }
 
         logo_x = center_x - ((int)logo->width / 2) + MODE35_LOGO_X_FROM_CENTER;
-        logo_y = center_y - logo_center_y + MODE35_LOGO_Y_FROM_CENTER;
+        logo_y = center_y - ((int)logo->height / 2) + MODE35_LOGO_Y_FROM_CENTER;
 
         hotkeys_x = ((g_screen_w * MODE35_HOTKEYS_LEFT_PERCENT) + 50) / 100 + MODE35_HOTKEYS_X_ADJUST;
         hotkeys_y = center_y - ((int)hotkeys->height / 2) + MODE35_HOTKEYS_Y_FROM_CENTER;

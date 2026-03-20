@@ -48,7 +48,7 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 - `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.
 - `PS1DRV_ENABLE_SMOOTH = 1` enables texture smoothing.
-- `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator.
+- `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator. This makes PS1 discs run in their repsective regions video mode. Useful for MechaPwn users where MechaPwn forces disc NTSC video. Modchip users may need to disable.
 
 ### App arguments
 Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
@@ -60,9 +60,16 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
   - if omitted, PS2BBL does not force a DEV9 policy override.
   - note: on non-HDD builds this option has no effect.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
-  This is mainly for HDD builds.
-You can pass up to 8 args per entry. Args are processed in the same order they are written in the INI.
-Example:
+  This is for HDD builds.  
+  PATINFO example:  
+    ```
+    NAME_R1 = My App via PATINFO
+    LK_R1_E1 = hdd0:+OSDMENU:PATINFO
+    ARG_R1_E1 = -patinfo
+    ARG_R1_E1 = pfs:/APPS/MYAPP.ELF
+    ```
+
+Example to launch NHDDL with video mode 480p and look for isos on mmce and exfat hdd without needing nhddl.yaml. The benefit is no wasted time loading drivers, finding and loading nhddl.yaml. This is the quickest way to boot NHDDL and show ISO list.
 ```
 NAME_R1 = NHDDL
 LK_R1_E1 = mmce?:/NEUTRINO/nhddl.elf
@@ -71,22 +78,33 @@ ARG_R1_E1 = -mode=mmce
 ARG_R1_E1 = -mode=ata
 ```
 
+#### Argument precedence and order
+1. PS2BBL first parses and consumes loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-gsm=`.
+2. For repeated control args, the last valid value wins (`-dev9`, `-gsm`). Invalid `-gsm` values are ignored and do not clear a prior valid one.
+3. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining app argument becomes the target ELF path and is removed from app argv.
+4. Remaining arguments preserve order and are passed to the launched app.
+5. If eGSM is active, stage2 handoff appends internal args in OSDMenu-style order: `[..., <gsm-value>, -la=G|GN|GD]`.
+6. User-provided `-la=` is always ignored (reserved for internal loader control).
+
+
 ### Hotkey names
 Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
   - `0` No Logo/Console info
   - `1` Console Info
   - `2` PS2BBLE/PSXBBLE Logo and Console Info
   - `3` Hotkey Graphic Display with `NAME_BUTTON = <TITLE>` displayed from config file
-  - `4` Hotkey Graphic Display with first found file as defined in config
-  - `5` Hotkey Graphic Display with first found file path as defined in config
-Use `NAME_<BUTTON> =` to set the label displayed for a hotkey when `LOGO_DISPLAY = 3` (banner + names).
-Example:
-```
-NAME_SQUARE = POPSLOADER
-```
+    - Example:
+      ```
+      NAME_SQUARE = POPSLOADER
+      ```
+  - `4` Hotkey Graphic Display with first found file as defined in config (slower)
+  - `5` Hotkey Graphic Display with first found file path as defined in config (slower)
 
-### NOT YET IMPLEMENTED
-__eGSM NOT YET IMPLEMENTED__
+
+
+### eGSM (external Graphics Synthesize Mode)
+For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required). See [here](https://github.com/pcm720/OSDMenu/blob/main/patcher/README.md#osdgsmcnf) for config file format.
+
 - `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths).
   - eGSM is applied to the launched target (ELF/disc), not to PS2BBL itself.
   eGSM format (OSDMenu-style):
@@ -103,20 +121,32 @@ __eGSM NOT YET IMPLEMENTED__
 - `2` = field flipping type 2
 - `3` = field flipping type 3
 
-eGSM examples:
+eGSM ARG examples:
 - `-gsm=fp2`
 - `-gsm=fp2:1`
 - `-gsm=1080ix2`
 
-For PS2 discs, eGSM is read from `OSDGSM.CNF` automatically (no INI path setting required).
-PATINFO example:
+Usage example:
 ```
-LK_AUTO_E1 = hdd0:+OSDMENU:PATINFO
-ARG_AUTO_E1 = -patinfo
-ARG_AUTO_E1 = -gsm=fp2:1
-ARG_AUTO_E1 = -dev9=NIC
-ARG_AUTO_E1 = pfs:/APPS/APP.ELF
+LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
+ARG_TRIANGLE = -gsm=1080ix2
 ```
+
+
+## Custom splash logo from CWD
+If a custom logo file is found in the current working directory, it replaces the embedded PS2BBLE/PSXBBLE logo.
+
+Convert a PNG to the expected raw file:
+ - PNG should be 8 Bit indexed 255 colors per channel and 256x64 resolution.
+
+Release package (script is in release root):
+```bash
+python png_to_logo_rbga.py my_logo.png
+```
+
+Then place the created `LOGO.BIN` in the same CWD where PS2BBL Extended exists and/or will be launched from.
+
+
 
 ## Known bugs/issues
 
@@ -127,7 +157,7 @@ you tell me ;)
 - From saildot4k
   - @israpps for [PS2BBL](https://github.com/israpps/PlayStation2-Basic-BootLoader/)
   - @pcm720 for
-    - Retrogem gameid, PS1 Video Negator,  PS2LOGO code from [OSDMenu](https://github.com/pcm720/OSDMenu)
+    - Retrogem gameID, PS1 Video Negator, eGSM,  PS2LOGO code from [OSDMenu](https://github.com/pcm720/OSDMenu)
     - Video mode options from [NHDDL](https://github.com/pcm720/nhddl)
   - @sp193 for [PS1 Video Negator](https://github.com/ps2homebrew/PS1VModeNeg)
   - @nathanneurotic for PS2BBLE 10path, ideas and persuasion

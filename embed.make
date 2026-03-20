@@ -31,7 +31,7 @@ embed/iop/mmceman.irx:
 	wget -q https://github.com/israpps/wLaunchELF_ISR/raw/refs/heads/master/iop/__precompiled/mmceman.irx -O $@
 
 ifeq ($(EMBED_PS1VN), 1)
-PS1VN_DIR := thirdparty/ps1vn
+PS1VN_DIR := src/ps1vn
 PS1VN_ELF := $(PS1VN_DIR)/ps1vn.elf
 
 $(PS1VN_ELF):
@@ -39,6 +39,17 @@ $(PS1VN_ELF):
 
 $(EE_ASM_DIR)ps1vn_elf.c: $(PS1VN_ELF) | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps1vn_elf
+endif
+
+ifeq ($(EGSM_BUILD), 1)
+PS2_STAGE2_DIR := src/ps2_stage2_loader
+PS2_STAGE2_ELF := $(PS2_STAGE2_DIR)/ps2_stage2_loader.elf
+
+$(PS2_STAGE2_ELF):
+	$(MAKE) -C $(PS2_STAGE2_DIR) EGSM_BUILD=$(EGSM_BUILD)
+
+$(EE_ASM_DIR)ps2_stage2_loader_elf.c: $(PS2_STAGE2_ELF) | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ ps2_stage2_loader_elf
 endif
 
 # ---{ EMBEDDED RESOURCES }--- #
@@ -59,4 +70,4 @@ SPLASH_IMAGE_INPUTS = \
 	assets/embedded/hotkeys.png
 
 $(EE_ASM_DIR)splash_images_rbg.c: $(SPLASH_IMAGE_INPUTS) tools/png_rgba_to_rbg_c.py | $(EE_ASM_DIR)
-	$(PYTHON) tools/png_rgba_to_rbg_c.py --output $@ $(SPLASH_IMAGE_INPUTS)
+	$(PYTHON) tools/png_rgba_to_rbg_c.py --output $@ --max-colors 255 $(SPLASH_IMAGE_INPUTS)

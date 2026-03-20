@@ -1,3 +1,4 @@
+// DVD player version detection and boot handoff logic.
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>

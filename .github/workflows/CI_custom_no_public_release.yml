@@ -33,9 +33,13 @@ jobs:
         run: |
           git ls-files -i --exclude-standard -c
 
+      - name: include logo converter script
+        run: |
+          cp tools/png_to_logo_rbga.py PS2BBL_CUSTOM_BUILD/png_to_logo_rbga.py
+
       - name: Upload artifacts
         if: ${{ success() }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: PS2BBL_CUSTOM_BUILD
           path: |

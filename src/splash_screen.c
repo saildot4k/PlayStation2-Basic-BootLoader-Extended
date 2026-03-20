@@ -1,3 +1,4 @@
+// Splash layout composition for hotkeys, clock/date, and console info text.
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>

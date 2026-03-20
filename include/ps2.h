@@ -1,4 +1,6 @@
 
+#include <stdint.h>
+
 /**
  * @brief Hint used for OSDMenu-like OSDGSM.CNF lookup order.
  */
@@ -18,9 +20,11 @@ void PS2DiscSetConfigHint(int hint);
 /**
  * @brief  Boots the inserted PlayStation 2 game disc
  * @param skip_PS2LOGO wheter to load the game main executable via rom0:PS2LOGO or run it directly
+ * @param egsm_override_flags optional explicit eGSM flags from a command entry (-gsm=...)
+ * @param egsm_override_arg original override string for logging/debugging
  * @returns 0 on success.
 */
-int PS2DiscBoot(int skip_PS2LOGO);
+int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm_override_arg);
 
 /**
  * @brief Function that reboots the browser with the "BootError" argument.

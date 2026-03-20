@@ -1,3 +1,4 @@
+// OSD settings accessors and NVRAM serialization for browser/system options.
 #include <stdio.h>
 #include <osd_config.h>
 #include <kernel.h>

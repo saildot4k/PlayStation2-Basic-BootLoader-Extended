@@ -61,33 +61,44 @@ jobs:
         run: |
           echo "DEBUG=$(echo DEBUG=1)" >> $GITHUB_ENV
 
+      - name: Resolve printf args
+        run: |
+          PRINTF_INPUT="${{ github.event.inputs.printf }}"
+          if [ -z "$PRINTF_INPUT" ] || [ "$PRINTF_INPUT" = "NONE" ]; then
+            echo "PRINTF_ARGS=PRINTF=NONE" >> $GITHUB_ENV
+          elif [ "$PRINTF_INPUT" = "UDPTTY" ]; then
+            echo "PRINTF_ARGS=UDPTTY=1" >> $GITHUB_ENV
+          else
+            echo "PRINTF_ARGS=PRINTF=$PRINTF_INPUT" >> $GITHUB_ENV
+          fi
+
       - name: Compile PS2 build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2/ ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2/ EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: Compile PS2 MX4SIO build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2_MX4SIO/ MX4SIO=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2_MX4SIO/ MX4SIO=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: Compile PSX build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX/ PSX=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX/ PSX=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: Compile PS2 HDD build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2_HDD/ HDD=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2_HDD/ HDD=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: Compile PS2 MMCE build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2_MMCE/ MMCE=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2_MMCE/ MMCE=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: Compile PSX MMCE build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MMCE/ PSX=1 MMCE=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MMCE/ PSX=1 MMCE=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: Compile PSX MX4SIO build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MX4SIO/ PSX=1 MX4SIO=1 ${{ env.DEBUG }} PRINTF=${{ github.event.inputs.name }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MX4SIO/ PSX=1 MX4SIO=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: list
         run: |
@@ -99,6 +110,7 @@ jobs:
           mkdir -p "${{ env.REL_DIR }}"
           cp LICENSE "${{ env.REL_DIR }}/LICENSE.TXT"
           cp README.md "${{ env.REL_DIR }}/README.md"
+          cp tools/png_to_logo_rbga.py "${{ env.REL_DIR }}/png_to_logo_rbga.py"
           mv "${{ env.OUT_ROOT }}PS2/" "${{ env.REL_DIR }}/PS2/"
           mv "${{ env.OUT_ROOT }}PSX/" "${{ env.REL_DIR }}/PSX/"
           mv "${{ env.OUT_ROOT }}PS2_HDD/" "${{ env.REL_DIR }}/PS2_HDD/"

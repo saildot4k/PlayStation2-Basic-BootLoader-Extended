@@ -1,3 +1,4 @@
+// Lightweight timer abstraction used by boot countdown and UI animations.
 /*
   _____     ___ ____
    ____|   |    ____|      PS2 Open Source Project

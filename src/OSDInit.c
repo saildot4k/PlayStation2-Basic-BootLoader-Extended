@@ -1,3 +1,4 @@
+// OSD boot-time initialization helpers and system path setup.
 #include <stdio.h>
 #include <fcntl.h>
 #include <kernel.h>

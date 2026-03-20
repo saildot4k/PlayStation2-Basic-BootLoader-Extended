@@ -1,3 +1,4 @@
+// Supplemental libcdvd wrappers used by older PS2SDK builds.
 #include <kernel.h>
 #include <sifrpc.h>
 #include <string.h>

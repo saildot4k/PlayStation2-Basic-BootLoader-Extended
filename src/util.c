@@ -1,3 +1,4 @@
+// Misc utility helpers (filesystem existence, path helpers, etc.).
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -11,7 +12,7 @@
 
 #include "util.h"
 
-int exist(char *filepath)
+int exist(const char *filepath)
 {
     int fd;
     if (filepath == NULL)
