@@ -60,14 +60,16 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
   - if omitted, PS2BBL does not force a DEV9 policy override.
   - note: on non-HDD builds this option has no effect.
 - `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
-  This is for HDD builds.
-  PATINFO example:
-   ```
-   LK_AUTO_E1 = hdd0:__system:pfs:PATINFO.KELF
-   ARG_AUTO_E1 = -patinfo
-   ```
+  This is for HDD builds.  
+  PATINFO example:  
+    ```
+    NAME_R1 = My App via PATINFO
+    LK_R1_E1 = hdd0:+OSDMENU:PATINFO
+    ARG_R1_E1 = -patinfo
+    ARG_R1_E1 = pfs:/APPS/MYAPP.ELF
+    ```
 
-Example to launch NHDDL with video mode 480p and look for isos on mmce and exfat hdd without needing nhddl.yml
+Example to launch NHDDL with video mode 480p and look for isos on mmce and exfat hdd without needing nhddl.yaml. The benefit is no wasted time loading drivers, finding and loading nhddl.yaml. This is the quickest way to boot NHDDL and show ISO list.
 ```
 NAME_R1 = NHDDL
 LK_R1_E1 = mmce?:/NEUTRINO/nhddl.elf
