@@ -23,6 +23,32 @@ It is hosted on [github pages](https://israpps.github.io/PlayStation2-Basic-Boot
 
 Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths are alredy pre-set to align with downloads from [PS2 Homebrw Store](https://ps2homebrewstore.com) This means you should only need to edit your Auto choice and best to set args for NHDDL as needed for the device you are loading ISOS from.
 
+### LOGO_DISPLAY
+Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
+  - `0` No Logo/Console info
+  - `1` Console Info
+  - `2` PS2BBLE/PSXBBLE Logo and Console Info
+  - `3` Hotkey Graphic Display with `NAME_BUTTON = <TITLE>` displayed from config file
+    - Example:
+      ```
+      NAME_SQUARE = POPSLOADER
+      ```
+  - `4` Hotkey Graphic Display with first found file as defined in config (slower)
+  - `5` Hotkey Graphic Display with first found file path as defined in config (slower)
+
+#### Custom splash logo from CWD
+If a custom logo file (LOGO.BIN) is found in CWD (current working directory), it replaces the embedded PS2BBLE/PSXBBLE logo.
+
+Convert a PNG to the expected raw file:
+  - PNG should be RGBA 8 Bit indexed 255 colors per channel and 256x64 resolution.
+
+  - Release package (script is in release root):
+  ```bash
+  python png_to_logo_rbga.py my_logo.png
+  ```
+
+  - Place the created `LOGO.BIN` next to PS2BBL Extended. This should be `mc?:/BOOT/` if using downloads from [PS2 Homebrew Store](https://ps2store.com)
+
 ### Retrogem Visual game ID
 - `APP_GAMEID = 1` enables visual game ID for apps/homebrew up to 11 characters derived from filename or PS1/2 Disc
 - `CDROM_DISABLE_GAMEID = 1` disables visual game ID for discs launched via `$CDVD`.
@@ -54,6 +80,7 @@ These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
+- `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths). See eGSM below for how to use.
 - `-dev9=<mode>` sets DEV9/HDD policy before launching the target ELF. Supported modes:
   - `NICHDD` keeps both DEV9 (network adapter) and HDD powered/on.
   - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
@@ -88,24 +115,6 @@ ARG_R1_E1 = -mode=ata
 3. For `:PATINFO` launch paths, PS2BBL parses partition-attribute `SYSTEM.CNF` and appends CNF `arg*` entries after user app arguments.
 4. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining user app argument becomes the target ELF path (overrides CNF boot path) and is removed from app argv. If no remaining argument exists, launch is aborted (OSDMenu parity), and CNF `BOOT2/BOOT/path` is not used.
 5. Remaining arguments preserve order and are passed to the launched app.
-6. If PATINFO requires embedded ELF/IOPRP or `skip_argv0`, PS2BBL uses internal stage2 handoff with `-la` flags (`E`, `I`, `A`, plus optional `N`/`D`).
-7. If eGSM is active, stage2 handoff appends internal args in OSDMenu-style order: `[..., <elf-mem?>, <ioprp?>, <gsm?>, -la=G|I|E|N|D|A]`.
-8. User-provided `-la=` is always ignored (reserved for internal loader control).
-
-
-### Hotkey names
-Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
-  - `0` No Logo/Console info
-  - `1` Console Info
-  - `2` PS2BBLE/PSXBBLE Logo and Console Info
-  - `3` Hotkey Graphic Display with `NAME_BUTTON = <TITLE>` displayed from config file
-    - Example:
-      ```
-      NAME_SQUARE = POPSLOADER
-      ```
-  - `4` Hotkey Graphic Display with first found file as defined in config (slower)
-  - `5` Hotkey Graphic Display with first found file path as defined in config (slower)
-
 
 
 ### eGSM (external Graphics Synthesize Mode)
@@ -137,21 +146,6 @@ Usage example:
 LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
 ARG_TRIANGLE = -gsm=1080ix2
 ```
-
-
-## Custom splash logo from CWD
-If a custom logo file is found in the current working directory, it replaces the embedded PS2BBLE/PSXBBLE logo.
-
-Convert a PNG to the expected raw file:
- - PNG should be 8 Bit indexed 255 colors per channel and 256x64 resolution.
-
-Release package (script is in release root):
-```bash
-python png_to_logo_rbga.py my_logo.png
-```
-
-Then place the created `LOGO.BIN` in the same CWD where PS2BBL Extended exists and/or will be launched from.
-
 
 
 ## Known bugs/issues

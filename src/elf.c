@@ -22,7 +22,6 @@
 #include <io_common.h>
 #endif
 #define MAX_PATH 1025
-#define PATINFO_MAX_ARGS 16
 #define PATINFO_MAX_CNF 4096
 #define PATINFO_ELF_MEM_ADDR 0x01000000
 #define PATINFO_IOPRP_MEM_ADDR 0x01F00000
@@ -56,8 +55,9 @@ typedef struct
     char *boot_path;
     char *ioprp_path;
     char *title_id;
-    char *args[PATINFO_MAX_ARGS];
+    char **args;
     int arg_count;
+    int arg_capacity;
     int skip_argv0;
     int dev9_mode;
 } PatinfoCnfOptions;
@@ -83,19 +83,17 @@ typedef struct
 
 static void PatinfoOptionsInit(PatinfoCnfOptions *opts)
 {
-    int i;
-
     if (opts == NULL)
         return;
 
     opts->boot_path = NULL;
     opts->ioprp_path = NULL;
     opts->title_id = NULL;
+    opts->args = NULL;
     opts->arg_count = 0;
+    opts->arg_capacity = 0;
     opts->skip_argv0 = 0;
     opts->dev9_mode = DEV9_DEFAULT;
-    for (i = 0; i < PATINFO_MAX_ARGS; i++)
-        opts->args[i] = NULL;
 }
 
 static void PatinfoOptionsRelease(PatinfoCnfOptions *opts)
@@ -117,7 +115,38 @@ static void PatinfoOptionsRelease(PatinfoCnfOptions *opts)
             free(opts->args[i]);
     }
 
+    if (opts->args != NULL)
+        free(opts->args);
+
     PatinfoOptionsInit(opts);
+}
+
+static int PatinfoOptionsAppendArg(PatinfoCnfOptions *opts, const char *value)
+{
+    char *dup;
+    char **new_args;
+    int new_capacity;
+
+    if (opts == NULL || value == NULL)
+        return -1;
+
+    if (opts->arg_count >= opts->arg_capacity) {
+        new_capacity = (opts->arg_capacity == 0) ? 8 : (opts->arg_capacity * 2);
+        new_args = realloc(opts->args, sizeof(char *) * (size_t)new_capacity);
+        if (new_args == NULL)
+            return -1;
+        opts->args = new_args;
+        opts->arg_capacity = new_capacity;
+    }
+
+    dup = strdup(value);
+    if (dup == NULL)
+        return -1;
+
+    opts->args[opts->arg_count] = dup;
+
+    opts->arg_count++;
+    return 0;
 }
 
 static int is_space_char(char c)
@@ -221,9 +250,11 @@ static int parse_patinfo_cnf_text(char *cnf_text, PatinfoCnfOptions *opts)
 
         if ((name[0] == 'a' || name[0] == 'A') &&
             (name[1] == 'r' || name[1] == 'R') &&
-            (name[2] == 'g' || name[2] == 'G') &&
-            opts->arg_count < PATINFO_MAX_ARGS) {
-            opts->args[opts->arg_count++] = strdup(value);
+            (name[2] == 'g' || name[2] == 'G')) {
+            if (PatinfoOptionsAppendArg(opts, value) != 0) {
+                DPRINTF("PATINFO: failed to append arg entry due to memory exhaustion\n");
+                return -1;
+            }
             continue;
         }
     }
@@ -305,7 +336,10 @@ static int read_patinfo_system_cnf(const char *launch_path, PatinfoCnfOptions *o
     }
     cnf_text[read_res] = '\0';
 
-    parse_patinfo_cnf_text(cnf_text, opts);
+    if (parse_patinfo_cnf_text(cnf_text, opts) != 0) {
+        free(cnf_text);
+        return -1;
+    }
     free(cnf_text);
 
     if (opts->boot_path == NULL || opts->boot_path[0] == '\0') {
@@ -921,10 +955,11 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 {
     DPRINTF("%s\n", __FUNCTION__);
     char patinfo_path[MAX_PATH];
-    char *launch_argv_buf[MAX_ARGS_PER_ENTRY + PATINFO_MAX_ARGS];
     LaunchIntent intent;
     int launch_argc;
     char **launch_argv;
+    char **launch_argv_owned = NULL;
+    int launch_argv_capacity;
     char *stage2_ioprp_arg = NULL;
     char *stage2_elf_arg = NULL;
     int force_stage2 = 0;
@@ -1036,14 +1071,33 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #endif
 
     launch_argc = 0;
-    launch_argv = launch_argv_buf;
+    launch_argv_capacity = argc;
 
-    for (i = 0; i < argc && launch_argc < (int)(sizeof(launch_argv_buf) / sizeof(launch_argv_buf[0])); i++)
+#ifdef HDD
+    if (patinfo_cnf_ok)
+        launch_argv_capacity += patinfo_opts.arg_count;
+#endif
+
+    if (launch_argv_capacity < 1)
+        launch_argv_capacity = 1;
+
+    launch_argv_owned = malloc(sizeof(char *) * (size_t)launch_argv_capacity);
+    if (launch_argv_owned == NULL) {
+        DPRINTF("Launch argv allocation failed for %d entries\n", launch_argv_capacity);
+        LaunchIntentRelease(&intent);
+#ifdef HDD
+        PatinfoOptionsRelease(&patinfo_opts);
+#endif
+        return;
+    }
+
+    launch_argv = launch_argv_owned;
+    for (i = 0; i < argc; i++)
         launch_argv[launch_argc++] = argv[i];
 
 #ifdef HDD
     if (patinfo_cnf_ok) {
-        for (i = 0; i < patinfo_opts.arg_count && launch_argc < (int)(sizeof(launch_argv_buf) / sizeof(launch_argv_buf[0])); i++) {
+        for (i = 0; i < patinfo_opts.arg_count; i++) {
             if (patinfo_opts.args[i] != NULL && patinfo_opts.args[i][0] != '\0')
                 launch_argv[launch_argc++] = patinfo_opts.args[i];
         }
@@ -1077,6 +1131,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                                       stage2_elf_arg,
                                       intent.dev9_mode,
                                       intent.skip_argv0) == 0) {
+                free(launch_argv_owned);
                 LaunchIntentRelease(&intent);
 #ifdef HDD
                 PatinfoOptionsRelease(&patinfo_opts);
@@ -1101,6 +1156,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                                   stage2_elf_arg,
                                   intent.dev9_mode,
                                   intent.skip_argv0) == 0) {
+            free(launch_argv_owned);
             LaunchIntentRelease(&intent);
 #ifdef HDD
             PatinfoOptionsRelease(&patinfo_opts);
@@ -1135,6 +1191,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         LoadELFFromFileWithPartition(intent.launch_filename, party, launch_argc, launch_argv);
     }
 
+    free(launch_argv_owned);
     LaunchIntentRelease(&intent);
 #ifdef HDD
     PatinfoOptionsRelease(&patinfo_opts);
