@@ -37,6 +37,8 @@ enum {
     DEV9_NICHDD
 };
 
+static int arg_eq_ci(const char *a, const char *b);
+
 typedef struct
 {
     const char *launch_filename;
