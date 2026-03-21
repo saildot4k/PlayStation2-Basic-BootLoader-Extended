@@ -59,7 +59,11 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
   - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
   - if omitted, PS2BBL does not force a DEV9 policy override.
   - note: on non-HDD builds this option has no effect.
-- `-patinfo` enables PATINFO handling: if launch path contains `:PATINFO`, the first remaining arg is used as target ELF path.
+- `-patinfo` enables PATINFO handling for `:PATINFO` entries.
+  - PS2BBL reads `SYSTEM.CNF` from the partition attribute area (`PS2ICON3D`) and applies `BOOT2/BOOT/path`, `arg*`, `skip_argv0`, and `HDDUNITPOWER`.
+  - if `BOOT2/BOOT/path=PATINFO`, PS2BBL loads the embedded ELF from partition attribute area and uses internal `-la=E...` handoff.
+  - if `IOPRP=PATINFO` (or custom path), PS2BBL passes it to stage2 via internal `-la=I...` handoff.
+  - if `-patinfo` is present, the first remaining arg overrides the CNF `BOOT2/BOOT/path` target.
   This is for HDD builds.  
   PATINFO example:  
     ```
@@ -81,10 +85,12 @@ ARG_R1_E1 = -mode=ata
 #### Argument precedence and order
 1. PS2BBL first parses and consumes loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-gsm=`.
 2. For repeated control args, the last valid value wins (`-dev9`, `-gsm`). Invalid `-gsm` values are ignored and do not clear a prior valid one.
-3. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining app argument becomes the target ELF path and is removed from app argv.
-4. Remaining arguments preserve order and are passed to the launched app.
-5. If eGSM is active, stage2 handoff appends internal args in OSDMenu-style order: `[..., <gsm-value>, -la=G|GN|GD]`.
-6. User-provided `-la=` is always ignored (reserved for internal loader control).
+3. For `:PATINFO` launch paths, PS2BBL parses partition-attribute `SYSTEM.CNF` and appends CNF `arg*` entries after user app arguments.
+4. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining user app argument becomes the target ELF path (overrides CNF boot path) and is removed from app argv. If no remaining argument exists, launch is aborted (OSDMenu parity), and CNF `BOOT2/BOOT/path` is not used.
+5. Remaining arguments preserve order and are passed to the launched app.
+6. If PATINFO requires embedded ELF/IOPRP or `skip_argv0`, PS2BBL uses internal stage2 handoff with `-la` flags (`E`, `I`, `A`, plus optional `N`/`D`).
+7. If eGSM is active, stage2 handoff appends internal args in OSDMenu-style order: `[..., <elf-mem?>, <ioprp?>, <gsm?>, -la=G|I|E|N|D|A]`.
+8. User-provided `-la=` is always ignored (reserved for internal loader control).
 
 
 ### Hotkey names

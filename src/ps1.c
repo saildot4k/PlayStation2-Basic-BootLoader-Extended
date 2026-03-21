@@ -318,14 +318,14 @@ static int ParseBootCNF(void)
             }
         }
 
-        // Copy the filename
+        // Copy executable filename portion as TitleID (e.g. SLUS_123.45)
         --len;
         strncpy(ps1drv_boot, pChar + 1, len);
         ps1drv_boot[len] = '\0';
 
-        // Get the version number
+        // Parse title version from SYSTEM.CNF
         ps1drv_ver[0] = '\0';
-        CNFGetKey((unsigned char *)ps1drv_boot, ps1drv_ver, "VER");
+        CNFGetKey((unsigned char *)system_cnf, ps1drv_ver, "VER");
         if (ps1drv_ver[0] == '\0')
             strcpy(ps1drv_ver, "???");
 
@@ -351,6 +351,8 @@ static int ParseBootCNF(void)
 int PS1DRVBoot(void)
 {
     char *args[2];
+    const char *title_id;
+    const char *title_ver;
 #ifndef EMBED_PS1VN
     const char *ps1vn_exec = NULL;
 #endif
@@ -366,15 +368,18 @@ int PS1DRVBoot(void)
         }
     }
 
-    args[0] = ps1drv_boot;
-    args[1] = ps1drv_ver;
+    title_id = ps1drv_boot;
+    title_ver = ps1drv_ver;
+
+    args[0] = (char *)title_id;
+    args[1] = (char *)title_ver;
 
 #ifndef EMBED_PS1VN
     if (g_ps1drv_use_ps1vn)
         ps1vn_exec = find_ps1vn_path();
 #endif
 
-    GameIDHandleDisc(ps1drv_boot, GameIDDiscEnabled());
+    GameIDHandleDisc((char *)title_id, GameIDDiscEnabled());
 
     if (g_ps1drv_enable_fast || g_ps1drv_enable_smooth) {
         int cfg = OSDConfigGetPSConfig();
@@ -393,17 +398,20 @@ int PS1DRVBoot(void)
     if (g_ps1drv_use_ps1vn) {
         void *entry = NULL;
         if (load_elf_from_buffer(ps1vn_elf, &entry) == 0 && entry != NULL) {
+            DPRINTF("PS1VN(embedded): argv[0]=%s argv[1]=%s\n", args[0], args[1]);
             ExecPS2(entry, NULL, 2, args);
             return 0;
         }
     }
 #else
     if (ps1vn_exec != NULL) {
+        DPRINTF("PS1VN(external): argv[0]=%s argv[1]=%s\n", args[0], args[1]);
         LoadExecPS2(ps1vn_exec, 2, args);
         return 0;
     }
 #endif
 
+    DPRINTF("PS1DRV(rom0): argv[0]=%s argv[1]=%s\n", args[0], args[1]);
     LoadExecPS2("rom0:PS1DRV", 2, args);
 
     return 0;
