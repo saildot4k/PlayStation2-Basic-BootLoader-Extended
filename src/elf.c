@@ -825,16 +825,18 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
 
     if (party != NULL && *party != '\0') {
         if (path_is_pfs_prefix(launch_filename)) {
-            owned_launch = malloc(MAX_PATH);
+            size_t needed = strlen(party) + strlen(launch_filename) + 1;
+            owned_launch = malloc(needed);
             if (owned_launch == NULL)
                 return -1;
-            snprintf(owned_launch, MAX_PATH, "%s%s", party, launch_filename);
+            snprintf(owned_launch, needed, "%s%s", party, launch_filename);
             stage2_launch = owned_launch;
         } else if (strchr(launch_filename, ':') == NULL) {
-            owned_launch = malloc(MAX_PATH);
+            size_t needed = strlen(party) + 4 + ((launch_filename[0] == '/') ? 0 : 1) + strlen(launch_filename) + 1;
+            owned_launch = malloc(needed);
             if (owned_launch == NULL)
                 return -1;
-            snprintf(owned_launch, MAX_PATH, "%spfs:%s%s",
+            snprintf(owned_launch, needed, "%spfs:%s%s",
                      party,
                      (launch_filename[0] == '/') ? "" : "/",
                      launch_filename);
@@ -978,6 +980,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     patinfo_path[0] = '\0';
     patinfo_mem_elf[0] = '\0';
     patinfo_mem_ioprp[0] = '\0';
+#if !EGSM_BUILD
+    (void)patinfo_mem_elf;
+    (void)patinfo_mem_ioprp;
+#endif
 #ifdef HDD
     PatinfoOptionsInit(&patinfo_opts);
 #endif

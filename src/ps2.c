@@ -572,6 +572,7 @@ static void PS2ApplyDeckardXParamIfNeeded(const char *title_id)
      */
     ret = SifExecModuleBuffer(xparam_irx, size_xparam_irx, (int)strlen(title_id) + 1, title_id, &mod_ret);
     DPRINTF("%s: title_id=%s ret=%d mod_ret=%d\n", __func__, title_id, ret, mod_ret);
+    (void)ret;
 }
 
 #define CNF_PATH_LEN_MAX 64

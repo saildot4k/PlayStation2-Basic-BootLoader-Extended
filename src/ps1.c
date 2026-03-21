@@ -10,6 +10,7 @@
 #include <libcdvd.h>
 #include "libcdvd_add.h"
 #include <unistd.h>
+#include "debugprintf.h"
 
 #include "ps1.h"
 #include "OSDInit.h"
