@@ -439,7 +439,7 @@ static int entry_has_arg_ci(int key_idx, int entry_idx, const char *arg)
     if (entry_idx < 0 || entry_idx >= CONFIG_KEY_INDEXES)
         return 0;
 
-    for (i = 0; i < GLOBCFG.KEYARGC[key_idx][entry_idx] && i < MAX_ARGS_PER_ENTRY; i++) {
+    for (i = 0; i < GLOBCFG.KEYARGC[key_idx][entry_idx]; i++) {
         const char *entry_arg = GLOBCFG.KEYARGS[key_idx][entry_idx][i];
 
         if (entry_arg == NULL)

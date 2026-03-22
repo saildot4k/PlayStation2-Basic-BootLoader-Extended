@@ -60,6 +60,7 @@ typedef struct
     char **args;
     int arg_count;
     int arg_capacity;
+    int no_history;
     int skip_argv0;
     int dev9_mode;
 } PatinfoCnfOptions;
@@ -94,6 +95,7 @@ static void PatinfoOptionsInit(PatinfoCnfOptions *opts)
     opts->args = NULL;
     opts->arg_count = 0;
     opts->arg_capacity = 0;
+    opts->no_history = 0;
     opts->skip_argv0 = 0;
     opts->dev9_mode = DEV9_DEFAULT;
 }
@@ -242,6 +244,11 @@ static int parse_patinfo_cnf_text(char *cnf_text, PatinfoCnfOptions *opts)
             continue;
         }
 
+        if (arg_eq_ci(name, "nohistory")) {
+            opts->no_history = atoi(value) ? 1 : 0;
+            continue;
+        }
+
         if (arg_eq_ci(name, "HDDUNITPOWER")) {
             if (arg_eq_ci(value, "NIC"))
                 opts->dev9_mode = DEV9_NIC;
@@ -347,6 +354,16 @@ static int read_patinfo_system_cnf(const char *launch_path, PatinfoCnfOptions *o
     if (opts->boot_path == NULL || opts->boot_path[0] == '\0') {
         DPRINTF("PATINFO: SYSTEM.CNF did not contain BOOT/path\n");
         return -1;
+    }
+
+    // Match OSDMenu PATINFO behavior: when titleid is missing, derive from
+    // partition name and keep only valid Title IDs.
+    if (opts->title_id == NULL) {
+        opts->title_id = generateTitleID(launch_path);
+        if (opts->title_id != NULL && !validateTitleID(opts->title_id)) {
+            free(opts->title_id);
+            opts->title_id = NULL;
+        }
     }
 
     DPRINTF("PATINFO: parsed BOOT/path='%s', args=%d, skip_argv0=%d\n",
@@ -571,11 +588,19 @@ static void ParseTitleOverrideValue(LaunchIntent *intent, const char *value)
 static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
 {
     int i;
+    int min_index;
 
-    if (intent == NULL || argc <= 1 || argv == NULL)
+    if (intent == NULL || argc <= 0 || argv == NULL)
         return argc;
 
-    for (i = argc - 1; i > 0; i--) {
+    // Config ARG_* entries are passed without argv0, so argv[0] can be a
+    // control switch (e.g. -gsm=...). If argv[0] looks like a normal program
+    // path, preserve legacy behavior and never consume it as a control arg.
+    min_index = 0;
+    if (argv[0] != NULL && argv[0][0] != '\0' && argv[0][0] != '-' && argv[0][0] != '+')
+        min_index = 1;
+
+    for (i = argc - 1; i >= min_index; i--) {
         const char *val = NULL;
 
         if (argv[i] == NULL)
@@ -971,6 +996,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     char patinfo_mem_ioprp[MAX_PATH];
     int i;
     int show_app_id;
+    int patinfo_no_history = 0;
     int patinfo_override_used = 0;
 #ifdef HDD
     PatinfoCnfOptions patinfo_opts;
@@ -989,8 +1015,6 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     PatinfoOptionsInit(&patinfo_opts);
 #endif
 
-    argc = ParseLaunchControlArgs(&intent, argc, argv);
-
 #ifdef HDD
     if (path_has_patinfo_token(filename)) {
         if (read_patinfo_system_cnf(filename, &patinfo_opts) == 0)
@@ -1000,24 +1024,75 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     }
 #endif
 
-        patinfo_override_used = ApplyPatinfoLaunchOverride(&intent,
-                                   filename,
-                                   party,
-                                   &argc,
-                                   argv,
-                                   patinfo_path,
-                                   sizeof(patinfo_path));
+#ifdef HDD
+    if (patinfo_cnf_ok) {
+        patinfo_no_history = patinfo_opts.no_history;
+        if (intent.dev9_mode == DEV9_DEFAULT)
+            intent.dev9_mode = patinfo_opts.dev9_mode;
+        if (intent.title_override == NULL && patinfo_opts.title_id != NULL)
+            intent.title_override = strdup(patinfo_opts.title_id);
+    }
+#endif
 
-        if (patinfo_override_used < 0) {
-        DPRINTF("PATINFO: -patinfo requested without target argument, aborting launch for '%s'\n", filename);
-        LaunchIntentRelease(&intent);
-    #ifdef HDD
-        PatinfoOptionsRelease(&patinfo_opts);
-    #endif
-        return;
-        }
+    launch_argc = 0;
+    launch_argv_capacity = argc;
 
 #ifdef HDD
+    if (patinfo_cnf_ok)
+        launch_argv_capacity += patinfo_opts.arg_count;
+#endif
+
+    if (launch_argv_capacity < 1)
+        launch_argv_capacity = 1;
+
+    launch_argv_owned = malloc(sizeof(char *) * (size_t)launch_argv_capacity);
+    if (launch_argv_owned == NULL) {
+        DPRINTF("Launch argv allocation failed for %d entries\n", launch_argv_capacity);
+        LaunchIntentRelease(&intent);
+#ifdef HDD
+        PatinfoOptionsRelease(&patinfo_opts);
+#endif
+        return;
+    }
+
+    launch_argv = launch_argv_owned;
+    for (i = 0; i < argc; i++)
+        launch_argv[launch_argc++] = argv[i];
+
+#ifdef HDD
+    if (patinfo_cnf_ok) {
+        for (i = 0; i < patinfo_opts.arg_count; i++) {
+            if (patinfo_opts.args[i] != NULL && patinfo_opts.args[i][0] != '\0')
+                launch_argv[launch_argc++] = patinfo_opts.args[i];
+        }
+    }
+#endif
+
+    // Match OSDMenu behavior: consume loader-control args from the merged argv
+    // (caller-provided args plus SYSTEM.CNF args) before launch handling.
+    launch_argc = ParseLaunchControlArgs(&intent, launch_argc, launch_argv);
+
+    patinfo_override_used = ApplyPatinfoLaunchOverride(&intent,
+                                                       filename,
+                                                       party,
+                                                       &launch_argc,
+                                                       launch_argv,
+                                                       patinfo_path,
+                                                       sizeof(patinfo_path));
+
+    if (patinfo_override_used < 0) {
+        DPRINTF("PATINFO: -patinfo requested without target argument, aborting launch for '%s'\n", filename);
+        free(launch_argv_owned);
+        LaunchIntentRelease(&intent);
+#ifdef HDD
+        PatinfoOptionsRelease(&patinfo_opts);
+#endif
+        return;
+    }
+
+#ifdef HDD
+    // Match OSDMenu PATINFO override semantics: when -patinfo is requested,
+    // ignore BOOT/path and IOPRP from SYSTEM.CNF and launch the explicit target.
     if (patinfo_cnf_ok && !patinfo_override_used && patinfo_opts.boot_path != NULL) {
         if (arg_eq_ci(patinfo_opts.boot_path, "PATINFO")) {
             uint32_t elf_size = 0;
@@ -1063,50 +1138,12 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
             }
         }
 
-        if (intent.dev9_mode == DEV9_DEFAULT)
-            intent.dev9_mode = patinfo_opts.dev9_mode;
-        if (intent.title_override == NULL && patinfo_opts.title_id != NULL)
-            intent.title_override = strdup(patinfo_opts.title_id);
         if (patinfo_opts.skip_argv0)
             intent.skip_argv0 = 1;
 
         if (intent.skip_argv0) {
             force_stage2 = 1;
             force_stage2_without_gsm = 1;
-        }
-    }
-#endif
-
-    launch_argc = 0;
-    launch_argv_capacity = argc;
-
-#ifdef HDD
-    if (patinfo_cnf_ok)
-        launch_argv_capacity += patinfo_opts.arg_count;
-#endif
-
-    if (launch_argv_capacity < 1)
-        launch_argv_capacity = 1;
-
-    launch_argv_owned = malloc(sizeof(char *) * (size_t)launch_argv_capacity);
-    if (launch_argv_owned == NULL) {
-        DPRINTF("Launch argv allocation failed for %d entries\n", launch_argv_capacity);
-        LaunchIntentRelease(&intent);
-#ifdef HDD
-        PatinfoOptionsRelease(&patinfo_opts);
-#endif
-        return;
-    }
-
-    launch_argv = launch_argv_owned;
-    for (i = 0; i < argc; i++)
-        launch_argv[launch_argc++] = argv[i];
-
-#ifdef HDD
-    if (patinfo_cnf_ok) {
-        for (i = 0; i < patinfo_opts.arg_count; i++) {
-            if (patinfo_opts.args[i] != NULL && patinfo_opts.args[i][0] != '\0')
-                launch_argv[launch_argc++] = patinfo_opts.args[i];
         }
     }
 #endif
@@ -1118,7 +1155,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     if (show_app_id) {
         char *title_id = (intent.title_override != NULL) ? intent.title_override : generateTitleID(intent.launch_filename);
         if (title_id) {
-            GameIDHandleApp(title_id, show_app_id);
+            if (patinfo_no_history)
+                gsDisplayGameID(title_id);
+            else
+                GameIDHandleApp(title_id, show_app_id);
             if (intent.title_override == NULL)
                 free(title_id);
         }

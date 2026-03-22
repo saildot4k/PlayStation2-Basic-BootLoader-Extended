@@ -668,7 +668,7 @@ void SplashDrawEmergencyModeStatus(const char *reason)
     if (x3 < 8)
         x3 = 8;
 
-    SplashRenderDrawTextPxScaled(x1, y1, 0x0000ff, line1, 1);
+    SplashRenderDrawTextPxScaled(x1, y1, 0xff0000, line1, 1);
     if (line2 != NULL)
         SplashRenderDrawTextPxScaled(x2, y2, 0xffff00, line2, 1);
     SplashRenderDrawTextPxScaled(x3, y3, 0x00ffff, line3, 1);
