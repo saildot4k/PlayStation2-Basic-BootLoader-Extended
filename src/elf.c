@@ -588,11 +588,19 @@ static void ParseTitleOverrideValue(LaunchIntent *intent, const char *value)
 static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
 {
     int i;
+    int min_index;
 
-    if (intent == NULL || argc <= 1 || argv == NULL)
+    if (intent == NULL || argc <= 0 || argv == NULL)
         return argc;
 
-    for (i = argc - 1; i > 0; i--) {
+    // Config ARG_* entries are passed without argv0, so argv[0] can be a
+    // control switch (e.g. -gsm=...). If argv[0] looks like a normal program
+    // path, preserve legacy behavior and never consume it as a control arg.
+    min_index = 0;
+    if (argv[0] != NULL && argv[0][0] != '\0' && argv[0][0] != '-' && argv[0][0] != '+')
+        min_index = 1;
+
+    for (i = argc - 1; i >= min_index; i--) {
         const char *val = NULL;
 
         if (argv[i] == NULL)
