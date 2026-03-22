@@ -15,8 +15,8 @@ char *CONFIG_PATHS[SOURCE_COUNT] = {
     "xfrom:/PS2BBL/CONFIG.INI",
 #endif
 #ifdef MMCE
-    "mmce0:/PS2BBL/PS2BBL.INI",
-    "mmce1:/PS2BBL/PS2BBL.INI",
+    "mmce0:/PS2BBL/CONFIG.INI",
+    "mmce1:/PS2BBL/CONFIG.INI",
 #endif
 #ifdef PSX
     "mc?:/SYS-CONF/PSXBBL.INI",

@@ -4,6 +4,22 @@
 
 extern int g_is_psx_desr;
 
+static void ResetKeyArgs(void)
+{
+    int i;
+    int j;
+
+    for (i = 0; i < KEY_COUNT; i++) {
+        for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
+            if (GLOBCFG.KEYARGS[i][j] != NULL)
+                free(GLOBCFG.KEYARGS[i][j]);
+            GLOBCFG.KEYARGS[i][j] = NULL;
+            GLOBCFG.KEYARGC[i][j] = 0;
+            GLOBCFG.KEYARGCAP[i][j] = 0;
+        }
+    }
+}
+
 void SetDefaultSettings(void)
 {
     int i, j;
@@ -13,11 +29,11 @@ void SetDefaultSettings(void)
     const char **default_keynames = DEFAULT_KEYNAMES;
 #endif
 
+    ResetKeyArgs();
+
     for (i = 0; i < KEY_COUNT; i++)
         for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             GLOBCFG.KEYPATHS[i][j] = "isra:/";
-            GLOBCFG.KEYARGC[i][j] = 0;
-            memset(GLOBCFG.KEYARGS[i][j], 0, sizeof(GLOBCFG.KEYARGS[i][j]));
         }
 
     for (i = 0; i < KEY_COUNT; i++)

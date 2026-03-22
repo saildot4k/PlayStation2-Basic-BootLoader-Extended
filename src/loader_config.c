@@ -64,7 +64,7 @@ static int parse_name_entry(const char *name, char *value)
     return 0;
 }
 
-static int parse_arg_entry(const char *name, char *value)
+static int find_arg_entry_indices(const char *name, int *key_index_out, int *entry_index_out)
 {
     int key_index;
     int entry_index;
@@ -76,21 +76,95 @@ static int parse_arg_entry(const char *name, char *value)
             if (!ci_eq(name, key_name))
                 continue;
 
-            if (value == NULL || *value == '\0')
-                return 1;
-
-            if (GLOBCFG.KEYARGC[key_index][entry_index] < MAX_ARGS_PER_ENTRY) {
-                GLOBCFG.KEYARGS[key_index][entry_index][GLOBCFG.KEYARGC[key_index][entry_index]] = value;
-                GLOBCFG.KEYARGC[key_index][entry_index]++;
-            } else {
-                DPRINTF("# Too many args for [%s], max=%d\n", name, MAX_ARGS_PER_ENTRY);
-            }
-
+            if (key_index_out != NULL)
+                *key_index_out = key_index;
+            if (entry_index_out != NULL)
+                *entry_index_out = entry_index;
             return 1;
         }
     }
 
     return 0;
+}
+
+static void prepare_arg_storage_from_counts(const int arg_counts[KEY_COUNT][CONFIG_KEY_INDEXES])
+{
+    int key_index;
+    int entry_index;
+
+    for (key_index = 0; key_index < KEY_COUNT; key_index++) {
+        for (entry_index = 0; entry_index < CONFIG_KEY_INDEXES; entry_index++) {
+            int count = arg_counts[key_index][entry_index];
+
+            if (GLOBCFG.KEYARGS[key_index][entry_index] != NULL) {
+                free(GLOBCFG.KEYARGS[key_index][entry_index]);
+                GLOBCFG.KEYARGS[key_index][entry_index] = NULL;
+            }
+
+            GLOBCFG.KEYARGC[key_index][entry_index] = 0;
+            GLOBCFG.KEYARGCAP[key_index][entry_index] = 0;
+
+            if (count > 0) {
+                GLOBCFG.KEYARGS[key_index][entry_index] = malloc(sizeof(char *) * (size_t)count);
+                if (GLOBCFG.KEYARGS[key_index][entry_index] == NULL) {
+                    DPRINTF("# Failed to allocate %d ARG entries for [%s][E%d]\n",
+                            count,
+                            KEYS_ID[key_index],
+                            entry_index + 1);
+                    continue;
+                }
+
+                GLOBCFG.KEYARGCAP[key_index][entry_index] = count;
+            }
+        }
+    }
+}
+
+static int append_arg_entry(int key_index, int entry_index, char *value)
+{
+    int argc;
+    int argcap;
+    int new_cap;
+    char **new_args;
+
+    if (value == NULL || *value == '\0')
+        return 1;
+
+    argc = GLOBCFG.KEYARGC[key_index][entry_index];
+    argcap = GLOBCFG.KEYARGCAP[key_index][entry_index];
+
+    if (argc >= argcap) {
+        // Two-pass parsing should pre-size this exactly. If counts drift for any
+        // reason, grow by one to keep behavior deterministic.
+        new_cap = argc + 1;
+        new_args = realloc(GLOBCFG.KEYARGS[key_index][entry_index], sizeof(char *) * (size_t)new_cap);
+        if (new_args == NULL) {
+            DPRINTF("# Failed to grow args list for [%s][E%d] to %d entries\n",
+                    KEYS_ID[key_index],
+                    entry_index + 1,
+                    new_cap);
+            return 1;
+        }
+
+        GLOBCFG.KEYARGS[key_index][entry_index] = new_args;
+        GLOBCFG.KEYARGCAP[key_index][entry_index] = new_cap;
+    }
+
+    GLOBCFG.KEYARGS[key_index][entry_index][argc] = value;
+    GLOBCFG.KEYARGC[key_index][entry_index] = argc + 1;
+
+    return 1;
+}
+
+static int parse_arg_entry(const char *name, char *value)
+{
+    int key_index;
+    int entry_index;
+
+    if (!find_arg_entry_indices(name, &key_index, &entry_index))
+        return 0;
+
+    return append_arg_entry(key_index, entry_index, value);
 }
 
 static int parse_launch_key_entry(const char *name, char *value)
@@ -182,9 +256,12 @@ int LoaderParseConfigFile(FILE *fp,
                           LoaderEmergencyPollFn poll_fn)
 {
     LoaderConfigParseResult default_result;
+    char *cnf_scan_buf;
     char *cnf_buf;
     char *name;
     char *value;
+    char *scan_copy;
+    int arg_counts[KEY_COUNT][CONFIG_KEY_INDEXES];
     long cnf_size;
     size_t bytes_read;
 
@@ -236,6 +313,40 @@ int LoaderParseConfigFile(FILE *fp,
     result->read_success = 1;
     cnf_buf = (char *)config_buf;
     cnf_buf[cnf_size] = '\0';
+    memset(arg_counts, 0, sizeof(arg_counts));
+
+    scan_copy = malloc((size_t)cnf_size + 1u);
+    if (scan_copy != NULL) {
+        memcpy(scan_copy, config_buf, (size_t)cnf_size + 1u);
+        cnf_scan_buf = scan_copy;
+
+        while (get_CNF_string(&cnf_scan_buf, &name, &value)) {
+            int key_index;
+            int entry_index;
+
+            if (poll_fn != NULL)
+                poll_fn(rescue_combo_deadline);
+
+            name = trim_ws_inplace(name);
+            value = trim_ws_inplace(value);
+
+            if (name == NULL || *name == '\0')
+                continue;
+            if (!ci_starts_with(name, "ARG_"))
+                continue;
+            if (value == NULL || *value == '\0')
+                continue;
+            if (!find_arg_entry_indices(name, &key_index, &entry_index))
+                continue;
+
+            arg_counts[key_index][entry_index]++;
+        }
+
+        prepare_arg_storage_from_counts(arg_counts);
+        free(scan_copy);
+    } else {
+        DPRINTF("# Failed to allocate temporary scan buffer for exact ARG preallocation\n");
+    }
 
     while (get_CNF_string(&cnf_buf, &name, &value)) {
         if (poll_fn != NULL)

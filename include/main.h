@@ -64,8 +64,9 @@ int logo_to_hotkey_display(int logo_disp);
 typedef struct
 {
     char *KEYPATHS[KEY_COUNT][CONFIG_KEY_INDEXES];
-    char *KEYARGS[KEY_COUNT][CONFIG_KEY_INDEXES][MAX_ARGS_PER_ENTRY];
+    char **KEYARGS[KEY_COUNT][CONFIG_KEY_INDEXES];
     int KEYARGC[KEY_COUNT][CONFIG_KEY_INDEXES];
+    int KEYARGCAP[KEY_COUNT][CONFIG_KEY_INDEXES];
     const char *KEYNAMES[KEY_COUNT];
     int HOTKEY_DISPLAY; // Derived from LOGO_DISP (0=off, 1=name, 2=filename, 3=path).
     int DELAY;
