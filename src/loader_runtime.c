@@ -84,10 +84,10 @@ void CleanUp(void)
 static void DrawCreditsSplashFrame(void)
 {
     const char *lines[] = {
-        "PLAYSTATION2 BASIC BOOTLOADER",
-        "BY MATIAS ISRAELSON (EL_ISRA)",
+        "PLAYSTATION2 BASIC BOOTLOADER EXTENDED",
+        "BY MATIAS ISRAELSON (EL_ISRA). EXTENDED BY R3Z3N and AI",
         "BASED ON SP193 OSD INIT SAMPLES",
-        "THANKS: FJTRUJY, UYJULIAN, ASMBLUR, AKUHAK",
+        "THANKS: FJTRUJY, UYJULIAN, ASMBLUR, AKUHAK, PCM720, BERION, RIPTO",
         "PRESS START TO RETURN TO LAUNCH KEYS",
     };
     const u32 colors[] = {
@@ -143,8 +143,8 @@ int credits(void)
     scr_clear();
     scr_printf("\n\n");
     if (!use_splash) {
-        scr_printf("\tPlayStation2 Basic BootLoader\n");
-        scr_printf("\tBy Matias Israelson (AKA: El_isra)\n");
+        scr_printf("\tPlayStation2 Basic BootLoader Extended\n");
+        scr_printf("\tBy Matias Israelson (AKA: El_isra). Extended by R3Z3N and AI\n");
         scr_printf("\thttps://ps2homebrewstore.com - Modified - 9 Paths\n");
         scr_printf("\tv" VERSION "-" SUBVERSION "-" PATCHLEVEL " - " STATUS
 #ifdef DEBUG
@@ -155,7 +155,7 @@ int credits(void)
                    "\n"
                    "\tBased on SP193 OSD Init samples.\n"
                    "\t\tall credits go to him\n"
-                   "\tThanks to: fjtrujy, uyjulian, asmblur and AKuHAK\n"
+                   "\tThanks to: fjtrujy, uyjulian, asmblur, AKuHAK, PCM720, BERION, RIPTO\n"
                    "\tbuild hash [" COMMIT_HASH "]\n"
                    "\t\tcompiled on "__DATE__
                    " "__TIME__
