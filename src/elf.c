@@ -566,40 +566,39 @@ static void ParseTitleOverrideValue(LaunchIntent *intent, const char *value)
     intent->title_override[tlen] = '\0';
 }
 
-// Parse loader-control arguments and remove them from app argv.
+// Parse trailing loader-control arguments from app argv.
+// Matches OSDMenu launcher behavior: scan right-to-left and stop at first non-control arg.
 static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
 {
-    int out_argc = 0;
     int i;
 
-    if (intent == NULL || argc <= 0 || argv == NULL)
+    if (intent == NULL || argc <= 1 || argv == NULL)
         return argc;
 
-    for (i = 0; i < argc; i++) {
+    for (i = argc - 1; i > 0; i--) {
         const char *val = NULL;
 
-        if (argv[i] == NULL) {
-            argv[out_argc++] = argv[i];
-            continue;
-        }
+        if (argv[i] == NULL)
+            break;
 
-        if (argv[i][0] != '-' && argv[i][0] != '+') {
-            argv[out_argc++] = argv[i];
-            continue;
-        }
+        if (argv[i][0] != '-' && argv[i][0] != '+')
+            break;
 
         if (arg_eq_ci(argv[i], "-appid")) {
             intent->force_appid = 1;
+            argc--;
             continue;
         }
         if (arg_eq_ci(argv[i], "-patinfo")) {
             intent->use_patinfo_path = 1;
+            argc--;
             continue;
         }
         if (arg_prefix_ci(argv[i], "-titleid=", &val)) {
             while (*val == ' ' || *val == '\t')
                 val++;
             ParseTitleOverrideValue(intent, val);
+            argc--;
             continue;
         }
         if (arg_prefix_ci(argv[i], "-gsm=", &val)) {
@@ -615,6 +614,7 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
                 DPRINTF("Parsed -gsm value '%s' as flags 0x%08x\n", val, (unsigned int)intent->gsm_flags);
                 intent->gsm_arg = val;
             }
+            argc--;
             continue;
         }
         if (arg_prefix_ci(argv[i], "-dev9=", &val)) {
@@ -627,18 +627,20 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
             } else {
                 DPRINTF("Ignoring unknown -dev9 value: '%s'\n", val);
             }
+            argc--;
             continue;
         }
         if (arg_prefix_ci(argv[i], "-la=", &val)) {
             (void)val;
             DPRINTF("Ignoring reserved internal loader flag override '%s'\n", argv[i]);
+            argc--;
             continue;
         }
 
-        argv[out_argc++] = argv[i];
+        break;
     }
 
-    return out_argc;
+    return argc;
 }
 
 // Apply -patinfo target override from the first remaining app arg when path includes :PATINFO.
@@ -821,9 +823,6 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
     use_gsm = (gsm_arg != NULL && *gsm_arg != '\0');
     use_ioprp = (ioprp_arg != NULL && *ioprp_arg != '\0');
     use_elf = (elf_mem_arg != NULL && *elf_mem_arg != '\0');
-
-    if (!use_gsm && !use_ioprp && !use_elf && !skip_argv0 && dev9_mode == DEV9_DEFAULT)
-        return -1;
 
     if (party != NULL && *party != '\0') {
         if (path_is_pfs_prefix(launch_filename)) {
@@ -1124,6 +1123,30 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 free(title_id);
         }
     }
+
+#if EGSM_BUILD
+    if (!force_stage2_without_gsm &&
+        intent.gsm_flags == 0 &&
+        !path_is_rom_binary(intent.launch_filename)) {
+        if (RunLoaderElfViaStage2(intent.launch_filename,
+                                  party,
+                                  launch_argc,
+                                  launch_argv,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  intent.dev9_mode,
+                                  intent.skip_argv0) == 0) {
+            free(launch_argv_owned);
+            LaunchIntentRelease(&intent);
+#ifdef HDD
+            PatinfoOptionsRelease(&patinfo_opts);
+#endif
+            return;
+        }
+        DPRINTF("Unable to hand off plain launch to embedded stage2; falling back to direct launch\n");
+    }
+#endif
 
     if (intent.gsm_flags != 0) {
         if (path_is_rom_binary(intent.launch_filename)) {

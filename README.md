@@ -77,10 +77,11 @@ These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
 - `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator. This makes PS1 discs run in their repsective regions video mode. Useful for MechaPwn users where MechaPwn forces disc NTSC video. Modchip users may need to disable.
 
 ### App arguments
-Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
+Use `ARG_<BUTTON>_E? =` lines to pass args to an ELF (see INI examples).
+- Insert launched elf args first then append with desired internal PS2BBL args next (see below) [NHDDL](https://github.com/pcm720/nhddl) is a great candidate to use args, as it speeds up NHDDL boot.
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
-- `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths). See eGSM below for how to use.
+- `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths). This must be the last arg if used.
 - `-dev9=<mode>` sets DEV9/HDD policy before launching the target ELF. Supported modes:
   - `NICHDD` keeps both DEV9 (network adapter) and HDD powered/on.
   - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
@@ -96,8 +97,8 @@ Use `ARG_<BUTTON>_E? =` lines to pass up to 8 args to an ELF (see INI examples).
     ```
     NAME_R1 = My App via PATINFO
     LK_R1_E1 = hdd0:+OSDMENU:PATINFO
-    ARG_R1_E1 = -patinfo
     ARG_R1_E1 = pfs:/APPS/MYAPP.ELF
+    ARG_R1_E1 = -patinfo               # Tells PS2BBL to use first arg as patinfo boot path.
     ```
 
 Example to launch NHDDL with video mode 480p and look for isos on mmce and exfat hdd without needing nhddl.yaml. The benefit is no wasted time loading drivers, finding and loading nhddl.yaml. This is the quickest way to boot NHDDL and show ISO list.
@@ -110,11 +111,11 @@ ARG_R1_E1 = -mode=ata
 ```
 
 #### Argument precedence and order
-1. PS2BBL first parses and consumes loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-gsm=`.
-2. For repeated control args, the last valid value wins (`-dev9`, `-gsm`). Invalid `-gsm` values are ignored and do not clear a prior valid one.
-3. For `:PATINFO` launch paths, PS2BBL parses partition-attribute `SYSTEM.CNF` and appends CNF `arg*` entries after user app arguments.
-4. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining user app argument becomes the target ELF path (overrides CNF boot path) and is removed from app argv. If no remaining argument exists, launch is aborted (OSDMenu parity), and CNF `BOOT2/BOOT/path` is not used.
-5. Remaining arguments preserve order and are passed to the launched app.
+1. PS2BBL parses and consumes only trailing loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-gsm=`.
+2. Parsing is bottom to top and stops at the first non-control arg (OSDMenu-style trailing behavior).
+4. For `:PATINFO` launch paths, PS2BBL parses partition-attribute `SYSTEM.CNF` and appends CNF `arg*` entries after user app arguments.
+5. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining user app argument becomes the target ELF path (overrides CNF boot path) and is removed from app argv. If no remaining argument exists, launch is aborted (OSDMenu parity), and CNF `BOOT2/BOOT/path` is not used.
+6. Remaining arguments preserve order and are passed to the launched app.
 
 
 ### eGSM (external Graphics Synthesize Mode)
