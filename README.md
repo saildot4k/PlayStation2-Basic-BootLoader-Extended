@@ -57,7 +57,6 @@ Convert a PNG to the expected raw file:
 - `$CDVD` Runs disc with logo.  PS2BBL gets the target video mode from the disc's SYSTEM.CNF and patches PS2LOGO to always use the disc region instead of the console region, removing logo checksum check.
 - `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
   - DECKARD IE 75K and later: Logo Patches are applied via PS2SDK XPARAM.IRX
-- ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBLE because the above 2 options cover with and wthout logo.
 
 ### Video Mode
 - `VIDEO_MODE = AUTO, NTSC, PAL, 480P` Will use PS2 default or force either of the other 3 modes.
@@ -147,6 +146,10 @@ Usage example:
 LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
 ARG_TRIANGLE = -gsm=1080ix2
 ```
+
+## Deprecated/Removed
+- ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBLE because the above 2 options cover with and wthout logo.
+- ~~`RUNKELF`~~ PS2BBLE now handles launching elf/kelf internally without user needint to define kelf launch action.
 
 
 ## Known bugs/issues
