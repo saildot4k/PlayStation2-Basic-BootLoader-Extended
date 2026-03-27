@@ -10,6 +10,7 @@ typedef struct
     int read_success;
     int has_launch_key_entries;
     int video_mode_applied;
+    u32 parsed_name_mask; // Bit i is set when NAME_<KEYS_ID[i]> appears in config.
 } LoaderConfigParseResult;
 
 typedef void (*LoaderEmergencyPollFn)(u64 *window_deadline_ms);
