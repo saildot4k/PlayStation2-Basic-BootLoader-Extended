@@ -45,10 +45,13 @@ static int parse_scalar_int_key(const char *name, const char *value)
     return 0;
 }
 
-static int parse_name_entry(const char *name, char *value)
+static int parse_name_entry(const char *name, char *value, int *key_index_out)
 {
     int key_index;
     char key_name[32];
+
+    if (key_index_out != NULL)
+        *key_index_out = -1;
 
     for (key_index = 0; key_index < KEY_COUNT; key_index++) {
         snprintf(key_name, sizeof(key_name), "NAME_%s", KEYS_ID[key_index]);
@@ -57,6 +60,8 @@ static int parse_name_entry(const char *name, char *value)
                 GLOBCFG.KEYNAMES[key_index] = NULL;
             else
                 GLOBCFG.KEYNAMES[key_index] = value;
+            if (key_index_out != NULL)
+                *key_index_out = key_index;
             return 1;
         }
     }
@@ -402,7 +407,12 @@ int LoaderParseConfigFile(FILE *fp,
         }
 
         if (ci_starts_with(name, "NAME_")) {
-            parse_name_entry(name, value);
+            int key_index = -1;
+
+            if (parse_name_entry(name, value, &key_index) &&
+                key_index >= 0 && key_index < (int)(sizeof(result->parsed_name_mask) * 8u)) {
+                result->parsed_name_mask |= ((u32)1u << key_index);
+            }
             continue;
         }
 
@@ -499,6 +509,20 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
         GLOBCFG.LOGO_DISP = normalize_logo_display(GLOBCFG.LOGO_DISP);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
+        // For LOGO_DISPLAY=3 (name mode), show only NAME_* entries that were
+        // explicitly present in the loaded config. Missing/commented NAME_*
+        // keys should render as blank instead of falling back to built-ins.
+        if (config_read_success && GLOBCFG.HOTKEY_DISPLAY == 1) {
+            for (x = 0; x < KEY_COUNT; x++) {
+                int has_explicit_name = 0;
+
+                if (x < (int)(sizeof(parse_result.parsed_name_mask) * 8u))
+                    has_explicit_name = ((parse_result.parsed_name_mask & ((u32)1u << x)) != 0);
+
+                if (!has_explicit_name || GLOBCFG.KEYNAMES[x] == NULL)
+                    GLOBCFG.KEYNAMES[x] = "";
+            }
+        }
         // If config parsing did not produce a valid VIDEO_MODE, fall back to
         // the default AUTO/native mode now.
         if (!video_mode_applied && apply_video_mode_fn != NULL)
