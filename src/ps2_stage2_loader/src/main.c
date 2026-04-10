@@ -446,7 +446,10 @@ int mountPFS(char *path) {
 
 // Puts HDD in idle mode and powers off the dev9 device
 void shutdownDEV9(ShutdownType s) {
-  // Unmount the partition (if mounted)
+  if (s == ShutdownType_None)
+    return;
+
+  // Unmount the partition (if mounted) before applying HDD power policy.
   fileXioUmount("pfs0:");
   switch (s) {
   case ShutdownType_HDD:

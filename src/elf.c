@@ -877,9 +877,16 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         loader_args[i++] = 'I';
     if (use_elf)
         loader_args[i++] = 'E';
+    // Keep stage2 DEV9 handling aligned with direct launch behavior.
+    // Non-HDD builds should never request stage2 DEV9/fileXio policy.
+#if defined(HDD) && defined(FILEXIO)
     if (dev9_mode == DEV9_NIC) {
         loader_args[i++] = 'N';
-    } else if (dev9_mode == DEV9_NICHDD) {
+    } else
+#endif
+    {
+        // Keep stage2 behavior aligned with direct launch:
+        // default launch policy should not shut down DEV9/HDD.
         loader_args[i++] = 'D';
     }
     if (skip_argv0)
