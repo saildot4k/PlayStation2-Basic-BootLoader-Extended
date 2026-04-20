@@ -256,7 +256,7 @@ void LoaderBuildDeviceAvailableCache(int dev_ok[LOADER_DEVICE_COUNT])
             s_mmce_modules_loaded &&
             s_dev_state[DEV_MMCE0] >= 0 &&
             s_dev_state[DEV_MMCE1] < 0)
-            DelayThread(MMCE_PROBE_GAP_US);
+            usleep(MMCE_PROBE_GAP_US);
 #endif
         dev_ok[dev] = device_available_for_dev(dev) ? 1 : 0;
     }
