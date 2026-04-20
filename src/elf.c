@@ -40,6 +40,10 @@ enum {
 
 static int arg_eq_ci(const char *a, const char *b);
 
+#ifdef MX4SIO
+int LookForBDMDevice(void);
+#endif
+
 typedef struct
 {
     const char *launch_filename;
@@ -1109,7 +1113,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     char *stage2_elf_arg = NULL;
     int force_stage2 = 0;
     int force_stage2_without_gsm = 0;
-#if EGSM_BUILD
+#if EGSM_BUILD && defined(HDD)
     char patinfo_mem_elf[MAX_PATH];
     char patinfo_mem_ioprp[MAX_PATH];
 #endif
@@ -1125,7 +1129,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     LaunchIntentInit(&intent, filename);
     patinfo_path[0] = '\0';
     legacy_launch_path[0] = '\0';
-#if EGSM_BUILD
+#if EGSM_BUILD && defined(HDD)
     patinfo_mem_elf[0] = '\0';
     patinfo_mem_ioprp[0] = '\0';
 #endif
