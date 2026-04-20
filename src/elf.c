@@ -537,6 +537,114 @@ static int path_is_rom_binary(const char *path)
             (path[4] == ':'));
 }
 
+static int path_prefix_with_optional_unit(const char *path,
+                                          const char *prefix,
+                                          size_t prefix_len,
+                                          int *unit_out,
+                                          const char **suffix_out)
+{
+    int unit = -1;
+    const char *suffix;
+
+    if (path == NULL || prefix == NULL)
+        return 0;
+    if (strncmp(path, prefix, prefix_len) != 0)
+        return 0;
+
+    if (path[prefix_len] == ':') {
+        suffix = path + prefix_len;
+    } else if (path[prefix_len] >= '0' &&
+               path[prefix_len] <= '9' &&
+               path[prefix_len + 1] == ':') {
+        unit = path[prefix_len] - '0';
+        suffix = path + prefix_len + 1;
+    } else {
+        return 0;
+    }
+
+    if (unit_out != NULL)
+        *unit_out = unit;
+    if (suffix_out != NULL)
+        *suffix_out = suffix;
+    return 1;
+}
+
+static int build_mass_path(char *out, size_t out_size, const char *suffix, int unit)
+{
+    if (out == NULL || out_size == 0 || suffix == NULL || suffix[0] != ':')
+        return 0;
+
+    if (unit >= 0 && unit <= 9)
+        snprintf(out, out_size, "mass%d%s", unit, suffix);
+    else
+        snprintf(out, out_size, "mass%s", suffix);
+
+    return 1;
+}
+
+// For best compatibility with older homebrew launchers/apps, prefer passing
+// BDM app argv[0] as legacy mass* paths whenever we can map to an existing file.
+static int normalize_bdm_launch_to_legacy_mass(const char *path, char *out, size_t out_size)
+{
+    const char *suffix;
+    int unit;
+    int i;
+    char candidate[MAX_PATH];
+
+    if (path == NULL || *path == '\0' || out == NULL || out_size == 0)
+        return 0;
+
+#ifdef MX4SIO
+    if (path_prefix_with_optional_unit(path, "mx4sio", 6, &unit, &suffix)) {
+        int slot = LookForBDMDevice();
+
+        if (slot >= 0 && slot <= 9 &&
+            build_mass_path(candidate, sizeof(candidate), suffix, slot) &&
+            exist(candidate)) {
+            snprintf(out, out_size, "%s", candidate);
+            return 1;
+        }
+
+        for (i = 0; i < 10; i++) {
+            if (build_mass_path(candidate, sizeof(candidate), suffix, i) &&
+                exist(candidate)) {
+                snprintf(out, out_size, "%s", candidate);
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+#endif
+
+    if (!path_prefix_with_optional_unit(path, "usb", 3, &unit, &suffix))
+        return 0;
+
+    if (unit >= 0 &&
+        build_mass_path(candidate, sizeof(candidate), suffix, unit) &&
+        exist(candidate)) {
+        snprintf(out, out_size, "%s", candidate);
+        return 1;
+    }
+
+    if (unit < 0 &&
+        build_mass_path(candidate, sizeof(candidate), suffix, -1) &&
+        exist(candidate)) {
+        snprintf(out, out_size, "%s", candidate);
+        return 1;
+    }
+
+    for (i = 0; i < 10; i++) {
+        if (build_mass_path(candidate, sizeof(candidate), suffix, i) &&
+            exist(candidate)) {
+            snprintf(out, out_size, "%s", candidate);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void LaunchIntentInit(LaunchIntent *intent, const char *default_launch)
 {
     if (intent == NULL)
@@ -990,6 +1098,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 {
     DPRINTF("%s\n", __FUNCTION__);
     char patinfo_path[MAX_PATH];
+    char legacy_launch_path[MAX_PATH];
     LaunchIntent intent;
     int launch_argc;
     char **launch_argv;
@@ -1012,6 +1121,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 
     LaunchIntentInit(&intent, filename);
     patinfo_path[0] = '\0';
+    legacy_launch_path[0] = '\0';
     patinfo_mem_elf[0] = '\0';
     patinfo_mem_ioprp[0] = '\0';
 #if !EGSM_BUILD
@@ -1154,6 +1264,15 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         }
     }
 #endif
+
+    if (normalize_bdm_launch_to_legacy_mass(intent.launch_filename,
+                                            legacy_launch_path,
+                                            sizeof(legacy_launch_path))) {
+        DPRINTF("Using legacy BDM argv[0] path '%s' (from '%s')\n",
+                legacy_launch_path,
+                intent.launch_filename);
+        intent.launch_filename = legacy_launch_path;
+    }
 
     show_app_id = GameIDAppEnabled();
     if (intent.force_appid || intent.title_override != NULL)
