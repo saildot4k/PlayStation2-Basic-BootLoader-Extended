@@ -10,6 +10,7 @@
 #include <kernel.h>
 #include <elf-loader.h>
 #include <ctype.h>
+#include "util.h"
 #include "debugprintf.h"
 #include "game_id.h"
 #include "egsm_parse.h"
@@ -1108,8 +1109,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     char *stage2_elf_arg = NULL;
     int force_stage2 = 0;
     int force_stage2_without_gsm = 0;
+#if EGSM_BUILD
     char patinfo_mem_elf[MAX_PATH];
     char patinfo_mem_ioprp[MAX_PATH];
+#endif
     int i;
     int show_app_id;
     int patinfo_no_history = 0;
@@ -1122,11 +1125,9 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     LaunchIntentInit(&intent, filename);
     patinfo_path[0] = '\0';
     legacy_launch_path[0] = '\0';
+#if EGSM_BUILD
     patinfo_mem_elf[0] = '\0';
     patinfo_mem_ioprp[0] = '\0';
-#if !EGSM_BUILD
-    (void)patinfo_mem_elf;
-    (void)patinfo_mem_ioprp;
 #endif
 #ifdef HDD
     PatinfoOptionsInit(&patinfo_opts);
@@ -1212,6 +1213,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     // ignore BOOT/path and IOPRP from SYSTEM.CNF and launch the explicit target.
     if (patinfo_cnf_ok && !patinfo_override_used && patinfo_opts.boot_path != NULL) {
         if (arg_eq_ci(patinfo_opts.boot_path, "PATINFO")) {
+#if EGSM_BUILD
             uint32_t elf_size = 0;
 
             if (read_patinfo_payload(filename, 0, (void *)PATINFO_ELF_MEM_ADDR, &elf_size) == 0) {
@@ -1228,12 +1230,18 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 DPRINTF("PATINFO: failed to load embedded ELF payload, keeping CNF path as-is\n");
                 intent.launch_filename = patinfo_opts.boot_path;
             }
+#else
+            DPRINTF("PATINFO: embedded ELF payload requires EGSM_BUILD; stage2 handoff unavailable\n");
+            force_stage2 = 1;
+            force_stage2_without_gsm = 1;
+#endif
         } else {
             intent.launch_filename = patinfo_opts.boot_path;
         }
 
         if (patinfo_opts.ioprp_path != NULL && patinfo_opts.ioprp_path[0] != '\0') {
             if (arg_eq_ci(patinfo_opts.ioprp_path, "PATINFO")) {
+#if EGSM_BUILD
                 uint32_t ioprp_size = 0;
 
                 if (read_patinfo_payload(filename, 1, (void *)PATINFO_IOPRP_MEM_ADDR, &ioprp_size) == 0) {
@@ -1248,6 +1256,11 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 } else {
                     DPRINTF("PATINFO: failed to load embedded IOPRP payload\n");
                 }
+#else
+                DPRINTF("PATINFO: embedded IOPRP payload requires EGSM_BUILD; stage2 handoff unavailable\n");
+                force_stage2 = 1;
+                force_stage2_without_gsm = 1;
+#endif
             } else {
                 stage2_ioprp_arg = patinfo_opts.ioprp_path;
                 force_stage2 = 1;
