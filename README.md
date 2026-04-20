@@ -26,10 +26,12 @@ Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths
 ### Device path prefixes
 PS2BBL supports these launch/config path prefixes:
 - `mc0:/`, `mc1:/`, `mc?:/`
+- `usb:/` (preferred), and `mass:/` (legacy)
+
+#### Build Specific:  
 - `mmce0:/`, `mmce1:/`, `mmce?:/` __MMCE builds__
 - `mx4sio:/` (preferred), and `massX:/` (legacy)  __MX4SIO builds__
-- `usb:/` (preferred), and `mass:/` (legacy)
-- `hdd0:` paths __HDD builds__
+- `hdd0:partition:pfs:/<path to elf>` __HDD builds__
 - `xfrom:/` paths __PSX DESR builds__
 - `ata:/`, `ilink:/` (BDM mass-storage roots) __not yet implemented__
 
