@@ -93,6 +93,9 @@ int mountPFS(char *path);
 // Puts HDD in idle mode and powers off the dev9 device
 void shutdownDEV9(ShutdownType s);
 
+// Ensures fileXio RPC is initialized before using fileXio* APIs.
+int ensureFileXioReady();
+
 // Attempts to reboot IOP with IOPRP image
 int loadIOPRP(char *ioprpPath);
 
@@ -105,6 +108,21 @@ int loadELFFromFile(int argc, char *argv[]);
 
 // Parses the loader eGSM argument into eGSM flags
 uint32_t parseGSMFlags(char *gsmArg);
+
+int ensureFileXioReady() {
+  static int fileXioReady = 0;
+  int res;
+
+  if (fileXioReady)
+    return 0;
+
+  res = fileXioInit();
+  if (res < 0)
+    return res;
+
+  fileXioReady = 1;
+  return 0;
+}
 
 // Loads an ELF file from the path specified in argv[0].
 // The loader's behavior can be altered by an optional last command-line argument (argv[argc-1]).
@@ -385,6 +403,9 @@ int loadIOPRP(char *ioprpPath) {
   }
 
   // Try to load from path instead
+  if ((res = ensureFileXioReady()) < 0)
+    return res;
+
   int fd = fileXioOpen(ioprpPath, FIO_O_RDONLY);
   if (fd < 0)
     return fd;
@@ -425,6 +446,9 @@ int loadIOPRP(char *ioprpPath) {
 
 // Mounts the partition specified in path
 int mountPFS(char *path) {
+  if (ensureFileXioReady() < 0)
+    return -ENODEV;
+
   // Extract partition path
   char *filePath = strstr(path, ":pfs:");
   char pathSeparator = '\0';
