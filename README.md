@@ -21,7 +21,19 @@ It is hosted on [github pages](https://israpps.github.io/PlayStation2-Basic-Boot
 
 ## Config and arguments
 
-Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths are alredy pre-set to align with downloads from [PS2 Homebrw Store](https://ps2homebrewstore.com) This means you should only need to edit your Auto choice and best to set args for NHDDL as needed for the device you are loading ISOS from.
+Edit config file as as needed. Recommended to [R3Configurator](https://github.com/saildot4k/R3CONFIGURATOR) to edit your config file. Paths are alredy pre-set to align with downloads from [PS2 Homebrw Store](https://ps2homebrewstore.com) This means you should only need to edit your Auto choice and best to set args for NHDDL as needed for the device you are loading ISOS from.
+
+### Config Path search order
+
+1. `CONFIG.INI` (CWD: Current Working Directory)
+2. `mc?:/SYS-CONF/PSXBBL.INI` (PSX DESR only; skipped on PS2 hardware)
+3. __MMCE BUILDS__ `mmce?:/PS2BBL/CONFIG.INI`
+4. `xfrom:/PS2BBL/CONFIG.INI` (PSX DESR only; skipped on PS2 hardware)
+5. __MX4SIO BUILDS__ `mx4sio:/PS2BBL/CONFIG.INI` 
+6. __HDD BUILDS__ `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
+7. `usb:/PS2BBL/CONFIG.INI`
+8. `mc1:/SYS-CONF/PS2BBL.INI`
+9. `mc0:/SYS-CONF/PS2BBL.INI`
 
 ### Device path prefixes
 PS2BBL supports these launch/config path prefixes:
