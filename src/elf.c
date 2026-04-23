@@ -10,6 +10,7 @@
 #include <kernel.h>
 #include <elf-loader.h>
 #include <ctype.h>
+#include "util.h"
 #include "debugprintf.h"
 #include "game_id.h"
 #include "egsm_parse.h"
@@ -38,6 +39,10 @@ enum {
 };
 
 static int arg_eq_ci(const char *a, const char *b);
+
+#ifdef MX4SIO
+int LookForBDMDevice(void);
+#endif
 
 typedef struct
 {
@@ -537,6 +542,114 @@ static int path_is_rom_binary(const char *path)
             (path[4] == ':'));
 }
 
+static int path_prefix_with_optional_unit(const char *path,
+                                          const char *prefix,
+                                          size_t prefix_len,
+                                          int *unit_out,
+                                          const char **suffix_out)
+{
+    int unit = -1;
+    const char *suffix;
+
+    if (path == NULL || prefix == NULL)
+        return 0;
+    if (strncmp(path, prefix, prefix_len) != 0)
+        return 0;
+
+    if (path[prefix_len] == ':') {
+        suffix = path + prefix_len;
+    } else if (path[prefix_len] >= '0' &&
+               path[prefix_len] <= '9' &&
+               path[prefix_len + 1] == ':') {
+        unit = path[prefix_len] - '0';
+        suffix = path + prefix_len + 1;
+    } else {
+        return 0;
+    }
+
+    if (unit_out != NULL)
+        *unit_out = unit;
+    if (suffix_out != NULL)
+        *suffix_out = suffix;
+    return 1;
+}
+
+static int build_mass_path(char *out, size_t out_size, const char *suffix, int unit)
+{
+    if (out == NULL || out_size == 0 || suffix == NULL || suffix[0] != ':')
+        return 0;
+
+    if (unit >= 0 && unit <= 9)
+        snprintf(out, out_size, "mass%d%s", unit, suffix);
+    else
+        snprintf(out, out_size, "mass%s", suffix);
+
+    return 1;
+}
+
+// For best compatibility with older homebrew launchers/apps, prefer passing
+// BDM app argv[0] as legacy mass* paths whenever we can map to an existing file.
+static int normalize_bdm_launch_to_legacy_mass(const char *path, char *out, size_t out_size)
+{
+    const char *suffix;
+    int unit;
+    int i;
+    char candidate[MAX_PATH];
+
+    if (path == NULL || *path == '\0' || out == NULL || out_size == 0)
+        return 0;
+
+#ifdef MX4SIO
+    if (path_prefix_with_optional_unit(path, "mx4sio", 6, &unit, &suffix)) {
+        int slot = LookForBDMDevice();
+
+        if (slot >= 0 && slot <= 9 &&
+            build_mass_path(candidate, sizeof(candidate), suffix, slot) &&
+            exist(candidate)) {
+            snprintf(out, out_size, "%s", candidate);
+            return 1;
+        }
+
+        for (i = 0; i < 10; i++) {
+            if (build_mass_path(candidate, sizeof(candidate), suffix, i) &&
+                exist(candidate)) {
+                snprintf(out, out_size, "%s", candidate);
+                return 1;
+            }
+        }
+
+        return 0;
+    }
+#endif
+
+    if (!path_prefix_with_optional_unit(path, "usb", 3, &unit, &suffix))
+        return 0;
+
+    if (unit >= 0 &&
+        build_mass_path(candidate, sizeof(candidate), suffix, unit) &&
+        exist(candidate)) {
+        snprintf(out, out_size, "%s", candidate);
+        return 1;
+    }
+
+    if (unit < 0 &&
+        build_mass_path(candidate, sizeof(candidate), suffix, -1) &&
+        exist(candidate)) {
+        snprintf(out, out_size, "%s", candidate);
+        return 1;
+    }
+
+    for (i = 0; i < 10; i++) {
+        if (build_mass_path(candidate, sizeof(candidate), suffix, i) &&
+            exist(candidate)) {
+            snprintf(out, out_size, "%s", candidate);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static void LaunchIntentInit(LaunchIntent *intent, const char *default_launch)
 {
     if (intent == NULL)
@@ -990,17 +1103,21 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 {
     DPRINTF("%s\n", __FUNCTION__);
     char patinfo_path[MAX_PATH];
+    char legacy_launch_path[MAX_PATH];
     LaunchIntent intent;
     int launch_argc;
     char **launch_argv;
     char **launch_argv_owned = NULL;
     int launch_argv_capacity;
+    const char *effective_party = NULL;
     char *stage2_ioprp_arg = NULL;
     char *stage2_elf_arg = NULL;
     int force_stage2 = 0;
     int force_stage2_without_gsm = 0;
+#if EGSM_BUILD && defined(HDD)
     char patinfo_mem_elf[MAX_PATH];
     char patinfo_mem_ioprp[MAX_PATH];
+#endif
     int i;
     int show_app_id;
     int patinfo_no_history = 0;
@@ -1012,11 +1129,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 
     LaunchIntentInit(&intent, filename);
     patinfo_path[0] = '\0';
+    legacy_launch_path[0] = '\0';
+#if EGSM_BUILD && defined(HDD)
     patinfo_mem_elf[0] = '\0';
     patinfo_mem_ioprp[0] = '\0';
-#if !EGSM_BUILD
-    (void)patinfo_mem_elf;
-    (void)patinfo_mem_ioprp;
 #endif
 #ifdef HDD
     PatinfoOptionsInit(&patinfo_opts);
@@ -1102,6 +1218,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     // ignore BOOT/path and IOPRP from SYSTEM.CNF and launch the explicit target.
     if (patinfo_cnf_ok && !patinfo_override_used && patinfo_opts.boot_path != NULL) {
         if (arg_eq_ci(patinfo_opts.boot_path, "PATINFO")) {
+#if EGSM_BUILD
             uint32_t elf_size = 0;
 
             if (read_patinfo_payload(filename, 0, (void *)PATINFO_ELF_MEM_ADDR, &elf_size) == 0) {
@@ -1118,12 +1235,18 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 DPRINTF("PATINFO: failed to load embedded ELF payload, keeping CNF path as-is\n");
                 intent.launch_filename = patinfo_opts.boot_path;
             }
+#else
+            DPRINTF("PATINFO: embedded ELF payload requires EGSM_BUILD; stage2 handoff unavailable\n");
+            force_stage2 = 1;
+            force_stage2_without_gsm = 1;
+#endif
         } else {
             intent.launch_filename = patinfo_opts.boot_path;
         }
 
         if (patinfo_opts.ioprp_path != NULL && patinfo_opts.ioprp_path[0] != '\0') {
             if (arg_eq_ci(patinfo_opts.ioprp_path, "PATINFO")) {
+#if EGSM_BUILD
                 uint32_t ioprp_size = 0;
 
                 if (read_patinfo_payload(filename, 1, (void *)PATINFO_IOPRP_MEM_ADDR, &ioprp_size) == 0) {
@@ -1138,6 +1261,11 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 } else {
                     DPRINTF("PATINFO: failed to load embedded IOPRP payload\n");
                 }
+#else
+                DPRINTF("PATINFO: embedded IOPRP payload requires EGSM_BUILD; stage2 handoff unavailable\n");
+                force_stage2 = 1;
+                force_stage2_without_gsm = 1;
+#endif
             } else {
                 stage2_ioprp_arg = patinfo_opts.ioprp_path;
                 force_stage2 = 1;
@@ -1154,6 +1282,36 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         }
     }
 #endif
+
+    if (normalize_bdm_launch_to_legacy_mass(intent.launch_filename,
+                                            legacy_launch_path,
+                                            sizeof(legacy_launch_path))) {
+        DPRINTF("Using legacy BDM argv[0] path '%s' (from '%s')\n",
+                legacy_launch_path,
+                intent.launch_filename);
+        intent.launch_filename = legacy_launch_path;
+    }
+
+    // Only pass partition context for paths that actually live on mounted PFS:
+    // - "pfs:/..." absolute paths
+    // - relative paths without a device prefix
+    // Never pass it for explicit device paths (mc:/, mass:/, hdd0:/, etc.),
+    // otherwise argv[0] can become "hdd0:...:mc1:/..." for non-HDD launches.
+    if (party != NULL && *party != '\0') {
+        int has_device_prefix = 0;
+        int is_pfs_path = 0;
+
+        if (strchr(intent.launch_filename, ':') != NULL)
+            has_device_prefix = 1;
+        if ((intent.launch_filename[0] == 'p' || intent.launch_filename[0] == 'P') &&
+            (intent.launch_filename[1] == 'f' || intent.launch_filename[1] == 'F') &&
+            (intent.launch_filename[2] == 's' || intent.launch_filename[2] == 'S') &&
+            intent.launch_filename[3] == ':')
+            is_pfs_path = 1;
+
+        if (is_pfs_path || !has_device_prefix)
+            effective_party = party;
+    }
 
     show_app_id = GameIDAppEnabled();
     if (intent.force_appid || intent.title_override != NULL)
@@ -1172,11 +1330,15 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     }
 
 #if EGSM_BUILD
+    // For plain launches (no -gsm), prefer stage2 for standard non-ROM paths and
+    // for mounted HDD pfs: paths when a partition context is available.
+    // If stage2 fails, we still fall back to direct launcher behavior below.
     if (!force_stage2_without_gsm &&
         intent.gsm_flags == 0 &&
+        (effective_party == NULL || path_is_pfs_prefix(intent.launch_filename)) &&
         !path_is_rom_binary(intent.launch_filename)) {
         if (RunLoaderElfViaStage2(intent.launch_filename,
-                                  party,
+                                  effective_party,
                                   launch_argc,
                                   launch_argv,
                                   NULL,
@@ -1201,7 +1363,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         } else {
 #if EGSM_BUILD
             if (RunLoaderElfViaStage2(intent.launch_filename,
-                                      party,
+                                      effective_party,
                                       launch_argc,
                                       launch_argv,
                                       intent.gsm_arg,
@@ -1226,7 +1388,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     if (force_stage2_without_gsm) {
 #if EGSM_BUILD
         if (RunLoaderElfViaStage2(intent.launch_filename,
-                                  party,
+                                  effective_party,
                                   launch_argc,
                                   launch_argv,
                                   NULL,
@@ -1259,14 +1421,14 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         launch_argv = &launch_argv[1];
     }
 
-    if (party == NULL) {
+    if (effective_party == NULL) {
         DPRINTF("LoadELFFromFile(%s, %d, %p)\n", intent.launch_filename, launch_argc, launch_argv);
         DBGWAIT(2);
         LoadELFFromFile(intent.launch_filename, launch_argc, launch_argv);
     } else {
-        DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", intent.launch_filename, party, launch_argc, launch_argv);
+        DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", intent.launch_filename, effective_party, launch_argc, launch_argv);
         DBGWAIT(2);
-        LoadELFFromFileWithPartition(intent.launch_filename, party, launch_argc, launch_argv);
+        LoadELFFromFileWithPartition(intent.launch_filename, effective_party, launch_argc, launch_argv);
     }
 
     free(launch_argv_owned);

@@ -167,9 +167,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
 
                         is_command = (entry_path[0] == '$');
                         if (pre_scanned && !is_command) {
-                            ShowLaunchStatus(entry_path);
+                            execpaths[j] = CheckPath(entry_path);
+                            if (execpaths[j] == NULL || *execpaths[j] == '\0')
+                                continue;
+                            ShowLaunchStatus(execpaths[j]);
                             CleanUp();
-                            RunLoaderElf(entry_path, MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
+                            RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                             break;
                         }
 
@@ -268,9 +271,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             if (is_command)
                 continue; // Don't execute commands without a key press.
             if (pre_scanned) {
-                ShowLaunchStatus(entry_path);
+                execpaths[j] = CheckPath(entry_path);
+                if (execpaths[j] == NULL || *execpaths[j] == '\0')
+                    continue;
+                ShowLaunchStatus(execpaths[j]);
                 CleanUp();
-                RunLoaderElf(entry_path, MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
+                RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
                 break;
             }
 

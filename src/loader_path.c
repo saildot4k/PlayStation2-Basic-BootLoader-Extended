@@ -5,6 +5,7 @@
 #include "loader_path.h"
 
 #define CHECKPATH_BUF_SIZE 256
+#define MMCE_PROBE_GAP_US 50000
 
 enum {
     DEV_UNKNOWN = -1,
@@ -117,7 +118,15 @@ static int device_modules_ready(int dev)
 }
 
 #ifdef MX4SIO
-static int get_mx4sio_slot(void)
+static int mx4sio_typed_root_available(void)
+{
+    struct stat st;
+
+    // Newer ps2sdk BDM drivers expose MX4SIO under its own typed root.
+    return (stat("mx4sio:/", &st) == 0 || stat("mx4sio0:/", &st) == 0);
+}
+
+static int get_legacy_mx4sio_slot(void)
 {
     if (s_mx4sio_slot == -2)
         s_mx4sio_slot = LookForBDMDevice();
@@ -129,6 +138,14 @@ static int get_mx4sio_slot(void)
 }
 #endif
 
+static int path_prefix_matches(const char *path, const char *prefix, size_t prefix_len)
+{
+    return (!strncmp(path, prefix, prefix_len) &&
+            (path[prefix_len] == ':' ||
+             path[prefix_len] == '?' ||
+             (path[prefix_len] >= '0' && path[prefix_len] <= '9')));
+}
+
 static int device_id_from_path(const char *path)
 {
     if (path == NULL || *path == '\0')
@@ -137,9 +154,17 @@ static int device_id_from_path(const char *path)
         return DEV_MC0;
     if (!strncmp(path, "mc1:", 4))
         return DEV_MC1;
+    if (path_prefix_matches(path, "mx4sio", 7))
+        return DEV_MX4SIO;
     if (!strncmp(path, "massX:", 6))
         return DEV_MX4SIO;
-    if (!strncmp(path, "mass", 4))
+    if (path_prefix_matches(path, "usb", 3))
+        return DEV_MASS;
+    if (path_prefix_matches(path, "ata", 3))
+        return DEV_MASS;
+    if (path_prefix_matches(path, "ilink", 5))
+        return DEV_MASS;
+    if (path_prefix_matches(path, "mass", 4))
         return DEV_MASS;
     if (!strncmp(path, "mmce0:", 6))
         return DEV_MMCE0;
@@ -162,10 +187,14 @@ static int device_root_available(int dev)
         case DEV_MC1:
             return (stat("mc1:/", &st) == 0);
         case DEV_MASS:
-            return (stat("mass:/", &st) == 0);
+            return (stat("mass:/", &st) == 0 ||
+                    stat("usb:/", &st) == 0 ||
+                    stat("ata:/", &st) == 0 ||
+                    stat("ilink:/", &st) == 0);
 #ifdef MX4SIO
         case DEV_MX4SIO:
-            return (get_mx4sio_slot() >= 0);
+            return (mx4sio_typed_root_available() ||
+                    get_legacy_mx4sio_slot() >= 0);
 #endif
 #ifdef MMCE
         case DEV_MMCE0:
@@ -221,8 +250,16 @@ void LoaderBuildDeviceAvailableCache(int dev_ok[LOADER_DEVICE_COUNT])
     if (dev_ok == NULL)
         return;
 
-    for (dev = 0; dev < DEV_COUNT; dev++)
+    for (dev = 0; dev < DEV_COUNT; dev++) {
+#ifdef MMCE
+        if (dev == DEV_MMCE1 &&
+            s_mmce_modules_loaded &&
+            s_dev_state[DEV_MMCE0] >= 0 &&
+            s_dev_state[DEV_MMCE1] < 0)
+            usleep(MMCE_PROBE_GAP_US);
+#endif
         dev_ok[dev] = device_available_for_dev(dev) ? 1 : 0;
+    }
 }
 
 int LoaderDeviceAvailableForPathCached(const char *path, const int dev_ok[LOADER_DEVICE_COUNT])
@@ -306,14 +343,38 @@ static const char *resolve_path_tokens(const char *path,
 
 #ifdef MMCE
     if (!strncmp(path, "mmce?", 5)) {
-        if (!resolve_pair_path_copy(path,
-                                    4,
-                                    (char)preferred_mmce_slot_char(),
-                                    out,
-                                    out_size,
-                                    require_existing_pairs))
-            return NULL;
-        return out;
+        int preferred_dev;
+        int alternate_dev;
+        int preferred_state;
+        int alternate_state;
+        char preferred_slot;
+        char alternate_slot;
+
+        preferred_slot = (char)preferred_mmce_slot_char();
+        alternate_slot = (preferred_slot == '0') ? '1' : '0';
+        preferred_dev = (preferred_slot == '0') ? DEV_MMCE0 : DEV_MMCE1;
+        alternate_dev = (alternate_slot == '0') ? DEV_MMCE0 : DEV_MMCE1;
+        preferred_state = s_dev_state[preferred_dev];
+        alternate_state = s_dev_state[alternate_dev];
+
+        if (!require_existing_pairs) {
+            out[4] = (preferred_state == 0 && alternate_state > 0) ? alternate_slot : preferred_slot;
+            return out;
+        }
+
+        if (preferred_state != 0) {
+            out[4] = preferred_slot;
+            if (exist(out))
+                return out;
+        }
+
+        if (alternate_state != 0) {
+            out[4] = alternate_slot;
+            if (exist(out))
+                return out;
+        }
+
+        return NULL;
     }
 #endif
 
@@ -333,9 +394,25 @@ static const char *resolve_path_tokens(const char *path,
 #endif
 
 #ifdef MX4SIO
-    if (!strncmp(path, "massX:", 6)) {
-        int slot = get_mx4sio_slot();
+    if (!strncmp(path, "mx4sio:", 7)) {
+        int slot = get_legacy_mx4sio_slot();
 
+        if (mx4sio_typed_root_available())
+            return out;
+        if (slot >= 0) {
+            snprintf(out, out_size, "mass%d:%s", slot, path + 7);
+            return out;
+        }
+        return out;
+    }
+
+    if (!strncmp(path, "massX:", 6)) {
+        int slot = get_legacy_mx4sio_slot();
+
+        if (mx4sio_typed_root_available()) {
+            snprintf(out, out_size, "mx4sio:%s", path + 6);
+            return out;
+        }
         if (slot >= 0)
             out[4] = '0' + slot;
         return out;
@@ -568,7 +645,12 @@ void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                         copy_string_safe(s_resolved_keypaths[i][j],
                                          sizeof(s_resolved_keypaths[i][j]),
                                          resolved_path);
-                        GLOBCFG.KEYPATHS[i][j] = s_resolved_keypaths[i][j];
+                        // Keep raw HDD launch paths so CheckPath() can remount and
+                        // refresh PART at launch time (pre-scanned LOGO modes).
+                        if (path_prefix_matches(path, "hdd", 3))
+                            GLOBCFG.KEYPATHS[i][j] = path;
+                        else
+                            GLOBCFG.KEYPATHS[i][j] = s_resolved_keypaths[i][j];
                         if (first_valid[i] == NULL)
                             first_valid[i] = GLOBCFG.KEYPATHS[i][j];
                         found = 1;

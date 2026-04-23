@@ -121,8 +121,8 @@ static const char *find_ps1vn_path(void)
     static const char *candidates[] = {
         "mc?:/BOOT/PS1VN.ELF",
         "mc?:/PS2BBL/PS1VN.ELF",
-        "mass:/PS2BBL/PS1VN.ELF",
-        "massX:/PS2BBL/PS1VN.ELF",
+        "usb:/PS2BBL/PS1VN.ELF",
+        "mx4sio:/PS2BBL/PS1VN.ELF",
         "mmce?:/PS2BBL/PS1VN.ELF",
         "hdd0:__sysconf:pfs:/BOOT/PS1VN.ELF",
         NULL

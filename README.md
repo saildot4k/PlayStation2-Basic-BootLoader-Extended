@@ -23,6 +23,18 @@ It is hosted on [github pages](https://israpps.github.io/PlayStation2-Basic-Boot
 
 Edit `SYS-CONF/PS2BBL.INI` (PS2) or `SYS-CONF/PSXBBL.INI` (PSX) as needed. Paths are alredy pre-set to align with downloads from [PS2 Homebrw Store](https://ps2homebrewstore.com) This means you should only need to edit your Auto choice and best to set args for NHDDL as needed for the device you are loading ISOS from.
 
+### Device path prefixes
+PS2BBL supports these launch/config path prefixes:
+- `mc0:/`, `mc1:/`, `mc?:/`
+- `usb:/` (preferred), and `mass:/` (legacy)
+
+#### Build Specific:  
+- `mmce0:/`, `mmce1:/`, `mmce?:/` __MMCE builds__
+- `mx4sio:/` (preferred), and `massX:/` (legacy)  __MX4SIO builds__
+- `hdd0:partition:pfs:/<path to elf>` __HDD builds__
+- `xfrom:/` paths __PSX DESR builds__
+- `ata:/`, `ilink:/` (BDM mass-storage roots) __not yet implemented__
+
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
   - `0` No Logo/Console info
