@@ -1109,6 +1109,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     char **launch_argv;
     char **launch_argv_owned = NULL;
     int launch_argv_capacity;
+    const char *effective_party = NULL;
     char *stage2_ioprp_arg = NULL;
     char *stage2_elf_arg = NULL;
     int force_stage2 = 0;
@@ -1291,6 +1292,27 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         intent.launch_filename = legacy_launch_path;
     }
 
+    // Only pass partition context for paths that actually live on mounted PFS:
+    // - "pfs:/..." absolute paths
+    // - relative paths without a device prefix
+    // Never pass it for explicit device paths (mc:/, mass:/, hdd0:/, etc.),
+    // otherwise argv[0] can become "hdd0:...:mc1:/..." for non-HDD launches.
+    if (party != NULL && *party != '\0') {
+        int has_device_prefix = 0;
+        int is_pfs_path = 0;
+
+        if (strchr(intent.launch_filename, ':') != NULL)
+            has_device_prefix = 1;
+        if ((intent.launch_filename[0] == 'p' || intent.launch_filename[0] == 'P') &&
+            (intent.launch_filename[1] == 'f' || intent.launch_filename[1] == 'F') &&
+            (intent.launch_filename[2] == 's' || intent.launch_filename[2] == 'S') &&
+            intent.launch_filename[3] == ':')
+            is_pfs_path = 1;
+
+        if (is_pfs_path || !has_device_prefix)
+            effective_party = party;
+    }
+
     show_app_id = GameIDAppEnabled();
     if (intent.force_appid || intent.title_override != NULL)
         show_app_id = 1;
@@ -1313,11 +1335,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     // If stage2 fails, we still fall back to direct launcher behavior below.
     if (!force_stage2_without_gsm &&
         intent.gsm_flags == 0 &&
-        (party == NULL ||
-         ((party[0] != '\0') && path_is_pfs_prefix(intent.launch_filename))) &&
+        (effective_party == NULL || path_is_pfs_prefix(intent.launch_filename)) &&
         !path_is_rom_binary(intent.launch_filename)) {
         if (RunLoaderElfViaStage2(intent.launch_filename,
-                                  party,
+                                  effective_party,
                                   launch_argc,
                                   launch_argv,
                                   NULL,
@@ -1342,7 +1363,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         } else {
 #if EGSM_BUILD
             if (RunLoaderElfViaStage2(intent.launch_filename,
-                                      party,
+                                      effective_party,
                                       launch_argc,
                                       launch_argv,
                                       intent.gsm_arg,
@@ -1367,7 +1388,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     if (force_stage2_without_gsm) {
 #if EGSM_BUILD
         if (RunLoaderElfViaStage2(intent.launch_filename,
-                                  party,
+                                  effective_party,
                                   launch_argc,
                                   launch_argv,
                                   NULL,
@@ -1400,14 +1421,14 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         launch_argv = &launch_argv[1];
     }
 
-    if (party == NULL) {
+    if (effective_party == NULL) {
         DPRINTF("LoadELFFromFile(%s, %d, %p)\n", intent.launch_filename, launch_argc, launch_argv);
         DBGWAIT(2);
         LoadELFFromFile(intent.launch_filename, launch_argc, launch_argv);
     } else {
-        DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", intent.launch_filename, party, launch_argc, launch_argv);
+        DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", intent.launch_filename, effective_party, launch_argc, launch_argv);
         DBGWAIT(2);
-        LoadELFFromFileWithPartition(intent.launch_filename, party, launch_argc, launch_argv);
+        LoadELFFromFileWithPartition(intent.launch_filename, effective_party, launch_argc, launch_argv);
     }
 
     free(launch_argv_owned);
