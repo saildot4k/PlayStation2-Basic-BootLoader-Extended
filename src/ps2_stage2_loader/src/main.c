@@ -460,6 +460,11 @@ int mountPFS(char *path) {
 
   // Mount the partition
   int res = fileXioMount("pfs0:", path, FIO_MT_RDONLY);
+  if (res) {
+    // If already mounted (or mounted by previous app), unmount and retry.
+    fileXioUmount("pfs0:");
+    res = fileXioMount("pfs0:", path, FIO_MT_RDONLY);
+  }
   if (pathSeparator != '\0')
     filePath[0] = pathSeparator; // Restore the path
   if (res)

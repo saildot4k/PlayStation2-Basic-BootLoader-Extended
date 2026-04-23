@@ -1310,6 +1310,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #if EGSM_BUILD
     if (!force_stage2_without_gsm &&
         intent.gsm_flags == 0 &&
+        party == NULL &&
         !path_is_rom_binary(intent.launch_filename)) {
         if (RunLoaderElfViaStage2(intent.launch_filename,
                                   party,
