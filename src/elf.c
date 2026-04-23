@@ -1308,9 +1308,13 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     }
 
 #if EGSM_BUILD
+    // For plain launches (no -gsm), prefer stage2 for standard non-ROM paths and
+    // for mounted HDD pfs: paths when a partition context is available.
+    // If stage2 fails, we still fall back to direct launcher behavior below.
     if (!force_stage2_without_gsm &&
         intent.gsm_flags == 0 &&
-        party == NULL &&
+        (party == NULL ||
+         ((party[0] != '\0') && path_is_pfs_prefix(intent.launch_filename))) &&
         !path_is_rom_binary(intent.launch_filename)) {
         if (RunLoaderElfViaStage2(intent.launch_filename,
                                   party,
