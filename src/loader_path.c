@@ -645,7 +645,12 @@ void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
                         copy_string_safe(s_resolved_keypaths[i][j],
                                          sizeof(s_resolved_keypaths[i][j]),
                                          resolved_path);
-                        GLOBCFG.KEYPATHS[i][j] = s_resolved_keypaths[i][j];
+                        // Keep raw HDD launch paths so CheckPath() can remount and
+                        // refresh PART at launch time (pre-scanned LOGO modes).
+                        if (path_prefix_matches(path, "hdd", 3))
+                            GLOBCFG.KEYPATHS[i][j] = path;
+                        else
+                            GLOBCFG.KEYPATHS[i][j] = s_resolved_keypaths[i][j];
                         if (first_valid[i] == NULL)
                             first_valid[i] = GLOBCFG.KEYPATHS[i][j];
                         found = 1;
