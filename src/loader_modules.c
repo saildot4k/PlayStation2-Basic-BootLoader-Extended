@@ -370,6 +370,10 @@ int LoaderEnsurePathFamilyReady(const char *path)
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
+    // MC (and xfrom->MC) is part of the always-loaded core set.
+    // Do not reboot/switch away from another active family just to touch mc paths.
+    if (target_family == LOADER_PATH_FAMILY_MC)
+        return 0;
     if (target_family == LOADER_PATH_FAMILY_XFROM)
         target_family = LOADER_PATH_FAMILY_MC;
     if (s_current_family == target_family)
