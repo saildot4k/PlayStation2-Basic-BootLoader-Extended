@@ -168,6 +168,9 @@ static int load_usb_transport_modules(void)
     if (ID < 0 || RET == 1)
         return -2;
 
+    // Give USB transport time to enumerate before first filesystem probe.
+    sleep(1);
+
     return 0;
 }
 
@@ -236,13 +239,17 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint)
     switch (family) {
         case LOADER_PATH_FAMILY_BDM:
         {
+#ifdef FILEXIO
+            if (LoadFIO() < 0)
+                return -1;
+#endif
             if (!s_bdm_core_loaded) {
                 if (load_bdm_core_modules() < 0)
-                    return -1;
+                    return -2;
                 s_bdm_core_loaded = 1;
             }
             if (load_bdm_transports_for_path(path_hint) < 0)
-                return -2;
+                return -3;
             s_usb_modules_loaded = 1;
             return 0;
         }
@@ -312,11 +319,13 @@ static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit
     if (reboot_iop) {
         PadDeinitPads();
         ResetIOP();
+        SifInitRpc(0);
         SifInitIopHeap();
         SifLoadFileInit();
         fioInit();
         sbv_patch_enable_lmb();
         sbv_patch_disable_prefix_check();
+        sbv_patch_fileio();
 #ifdef DEV9
         dev9_loaded = 0;
 #endif

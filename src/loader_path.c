@@ -282,7 +282,7 @@ static int build_mass_path(char *out, size_t out_size, const char *suffix, int u
     return 1;
 }
 
-static int mass_mount_available(int unit)
+static int mass_mount_openable(int unit)
 {
     char mountpoint[] = "mass0:";
     struct stat st;
@@ -294,49 +294,10 @@ static int mass_mount_available(int unit)
     return (stat(mountpoint, &st) == 0);
 }
 
-static int any_mass_mount_available(void)
-{
-    int i;
-
-    for (i = 0; i < 10; i++) {
-        if (mass_mount_available(i))
-            return 1;
-    }
-
-    return 0;
-}
-
 int LoaderPathCanAttemptNow(const char *path)
 {
-    int unit = -1;
-    LoaderPathFamily family;
-
     if (path == NULL || *path == '\0' || path[0] == '$')
         return 1;
-
-    family = LoaderPathFamilyFromPath(path);
-
-    if (family == LOADER_PATH_FAMILY_BDM) {
-        if (path_prefix_with_optional_unit(path, "usb", 3, &unit, NULL) ||
-            path_prefix_with_optional_unit(path, "mass", 4, &unit, NULL) ||
-            path_prefix_with_optional_unit(path, "ata", 3, &unit, NULL) ||
-            path_prefix_with_optional_unit(path, "ilink", 5, &unit, NULL)) {
-            if (unit >= 0)
-                return mass_mount_available(unit);
-        }
-
-        return any_mass_mount_available();
-    }
-
-#ifdef MX4SIO
-    if (family == LOADER_PATH_FAMILY_MX4SIO) {
-        if (mx4sio_typed_root_available())
-            return 1;
-
-        unit = get_legacy_mx4sio_slot();
-        return (unit >= 0 && mass_mount_available(unit));
-    }
-#endif
 
     return 1;
 }
@@ -396,6 +357,7 @@ static const char *resolve_path_tokens(const char *path,
     if (path_prefix_with_optional_unit(path, "usb", 3, &bdm_unit, &bdm_suffix) ||
         path_prefix_with_optional_unit(path, "mass", 4, &bdm_unit, &bdm_suffix)) {
         int i;
+        int mount_seen = 0;
         char candidate[CHECKPATH_BUF_SIZE];
 
         if (bdm_unit >= 0) {
@@ -411,14 +373,20 @@ static const char *resolve_path_tokens(const char *path,
         }
 
         for (i = 0; i < 10; i++) {
-            if (!mass_mount_available(i))
+            if (!mass_mount_openable(i))
                 continue;
+            mount_seen = 1;
             if (!build_mass_path(candidate, sizeof(candidate), bdm_suffix, i))
                 continue;
             if (exist(candidate)) {
                 copy_string_safe(out, out_size, candidate);
                 return out;
             }
+        }
+
+        if (!mount_seen) {
+            out[0] = '\0';
+            return out;
         }
 
         if (!build_mass_path(out, out_size, bdm_suffix, 0))
