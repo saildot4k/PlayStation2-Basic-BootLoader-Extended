@@ -167,6 +167,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         if (pre_scanned && !is_command) {
                             if (LoaderEnsurePathFamilyReady(entry_path) < 0)
                                 continue;
+                            if (!LoaderPathCanAttemptNow(entry_path))
+                                continue;
                             execpaths[j] = CheckPath(entry_path);
                             if (execpaths[j] == NULL || *execpaths[j] == '\0')
                                 continue;
@@ -180,6 +182,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             ShowLaunchStatus(entry_path);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         } else if (LoaderEnsurePathFamilyReady(entry_path) < 0) {
+                            continue;
+                        } else if (!LoaderPathCanAttemptNow(entry_path)) {
                             continue;
                         }
 
@@ -271,6 +275,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             if (pre_scanned) {
                 if (LoaderEnsurePathFamilyReady(entry_path) < 0)
                     continue;
+                if (!LoaderPathCanAttemptNow(entry_path))
+                    continue;
                 execpaths[j] = CheckPath(entry_path);
                 if (execpaths[j] == NULL || *execpaths[j] == '\0')
                     continue;
@@ -281,6 +287,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             }
 
             if (LoaderEnsurePathFamilyReady(entry_path) < 0)
+                continue;
+            if (!LoaderPathCanAttemptNow(entry_path))
                 continue;
 
             execpaths[j] = CheckPath(entry_path);

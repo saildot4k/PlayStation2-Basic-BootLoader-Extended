@@ -285,16 +285,59 @@ static int build_mass_path(char *out, size_t out_size, const char *suffix, int u
 static int mass_mount_available(int unit)
 {
     char mountpoint[] = "mass0:";
-    int fd;
+    struct stat st;
 
     if (unit < 0 || unit > 9)
         return 0;
 
     mountpoint[4] = '0' + unit;
-    fd = open(mountpoint, O_RDONLY | O_DIRECTORY);
-    if (fd < 0)
-        return 0;
-    close(fd);
+    return (stat(mountpoint, &st) == 0);
+}
+
+static int any_mass_mount_available(void)
+{
+    int i;
+
+    for (i = 0; i < 10; i++) {
+        if (mass_mount_available(i))
+            return 1;
+    }
+
+    return 0;
+}
+
+int LoaderPathCanAttemptNow(const char *path)
+{
+    int unit = -1;
+    LoaderPathFamily family;
+
+    if (path == NULL || *path == '\0' || path[0] == '$')
+        return 1;
+
+    family = LoaderPathFamilyFromPath(path);
+
+    if (family == LOADER_PATH_FAMILY_BDM) {
+        if (path_prefix_with_optional_unit(path, "usb", 3, &unit, NULL) ||
+            path_prefix_with_optional_unit(path, "mass", 4, &unit, NULL) ||
+            path_prefix_with_optional_unit(path, "ata", 3, &unit, NULL) ||
+            path_prefix_with_optional_unit(path, "ilink", 5, &unit, NULL)) {
+            if (unit >= 0)
+                return mass_mount_available(unit);
+        }
+
+        return any_mass_mount_available();
+    }
+
+#ifdef MX4SIO
+    if (family == LOADER_PATH_FAMILY_MX4SIO) {
+        if (mx4sio_typed_root_available())
+            return 1;
+
+        unit = get_legacy_mx4sio_slot();
+        return (unit >= 0 && mass_mount_available(unit));
+    }
+#endif
+
     return 1;
 }
 
