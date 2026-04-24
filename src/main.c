@@ -93,6 +93,7 @@ int main(int argc, char *argv[])
 
     DPRINTF("disabling MODLOAD device blacklist/whitelist\n");
     sbv_patch_disable_prefix_check(); /* disable the MODLOAD module black/white list, allowing executables to be freely loaded from any device. */
+    LoaderSetBootPathHint((argc > 0) ? argv[0] : NULL);
     LoaderLoadSystemModules(&g_usb_modules_loaded,
                             &g_mx4sio_modules_loaded,
                             &g_mmce_modules_loaded,

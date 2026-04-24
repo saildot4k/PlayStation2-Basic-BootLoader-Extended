@@ -203,7 +203,8 @@ int LoaderFindConfigFile(FILE **fp_out,
                          u64 *rescue_combo_deadline,
                          LoaderEmergencyPollFn poll_fn)
 {
-    int dev_ok[LOADER_DEVICE_COUNT];
+    const char *boot_family_config;
+    int boot_family_source_hint;
     int source;
 
     if (fp_out != NULL)
@@ -211,25 +212,35 @@ int LoaderFindConfigFile(FILE **fp_out,
     if (path_out != NULL && path_out_size > 0)
         path_out[0] = '\0';
 
-    // Devices are expected to remain stable during runtime, so capture this once.
-    LoaderBuildDeviceAvailableCache(dev_ok);
+    boot_family_config = LoaderGetBootConfigPath();
+    boot_family_source_hint = LoaderGetBootConfigSourceHint();
 
-    for (source = SOURCE_CWD; source >= SOURCE_MC0; source--) {
+    for (source = 0; source < 4; source++) {
+        const char *config_path = NULL;
+        int source_hint = SOURCE_INVALID;
         char *resolved_path;
-        FILE *fp;
-        const char *config_path = CONFIG_PATHS[source];
+        FILE *fp = NULL;
 
         if (poll_fn != NULL)
             poll_fn(rescue_combo_deadline);
 
-#if defined(PSX)
-        if (!g_is_psx_desr && source == SOURCE_XCONFIG)
-            continue;
-#endif
+        if (source == 0) {
+            config_path = "CONFIG.INI";
+            source_hint = SOURCE_CWD;
+        } else if (source == 1) {
+            config_path = boot_family_config;
+            source_hint = boot_family_source_hint;
+        } else if (source == 2) {
+            config_path = "mc?:/SYS-CONF/PS2BBL.INI";
+            source_hint = SOURCE_MC0;
+        } else {
+            config_path = "mc?:/SYS-CONF/PSXBBL.INI";
+            source_hint = SOURCE_MC0;
+        }
 
         if (config_path == NULL || *config_path == '\0')
             continue;
-        if (!LoaderDeviceAvailableForPathCached(config_path, dev_ok))
+        if (LoaderEnsurePathFamilyReady(config_path) < 0)
             continue;
 
         resolved_path = CheckPath(config_path);
@@ -247,7 +258,21 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (path_out != NULL && path_out_size > 0)
             snprintf(path_out, path_out_size, "%s", resolved_path);
 
-        return source;
+        if (source_hint == SOURCE_MC0) {
+            if (!strncmp(resolved_path, "mc1:", 4))
+                return SOURCE_MC1;
+            return SOURCE_MC0;
+        }
+#ifdef MMCE
+        if (source_hint == SOURCE_MMCE0) {
+            if (!strncmp(resolved_path, "mmce1:", 6))
+                return SOURCE_MMCE1;
+            return SOURCE_MMCE0;
+        }
+#endif
+        if (source_hint == SOURCE_INVALID)
+            return SOURCE_CWD;
+        return source_hint;
     }
 
     return SOURCE_INVALID;
@@ -372,6 +397,12 @@ int LoaderParseConfigFile(FILE *fp,
 
             if (value == NULL || *value == '\0') {
                 DPRINTF("# Skipping empty IRX path for config entry [%s]\n", name);
+                continue;
+            }
+            if (LoaderEnsurePathFamilyReady(value) < 0) {
+                DPRINTF("# Failed to initialize driver family for config IRX [%s] -> [%s]\n",
+                        name,
+                        value);
                 continue;
             }
 

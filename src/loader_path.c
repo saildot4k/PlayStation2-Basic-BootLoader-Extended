@@ -146,6 +146,30 @@ static int path_prefix_matches(const char *path, const char *prefix, size_t pref
              (path[prefix_len] >= '0' && path[prefix_len] <= '9')));
 }
 
+LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return LOADER_PATH_FAMILY_NONE;
+    if (path[0] == '$')
+        return LOADER_PATH_FAMILY_NONE;
+    if (!strncmp(path, "mc", 2))
+        return LOADER_PATH_FAMILY_MC;
+    if (path_prefix_matches(path, "mx4sio", 7) || !strncmp(path, "massX:", 6))
+        return LOADER_PATH_FAMILY_MX4SIO;
+    if (path_prefix_matches(path, "mmce", 4))
+        return LOADER_PATH_FAMILY_MMCE;
+    if (path_prefix_matches(path, "hdd", 3))
+        return LOADER_PATH_FAMILY_HDD_APA;
+    if (path_prefix_matches(path, "xfrom", 5))
+        return LOADER_PATH_FAMILY_XFROM;
+    if (path_prefix_matches(path, "usb", 3) ||
+        path_prefix_matches(path, "mass", 4) ||
+        path_prefix_matches(path, "ata", 3) ||
+        path_prefix_matches(path, "ilink", 5))
+        return LOADER_PATH_FAMILY_BDM;
+    return LOADER_PATH_FAMILY_NONE;
+}
+
 static int device_id_from_path(const char *path)
 {
     if (path == NULL || *path == '\0')

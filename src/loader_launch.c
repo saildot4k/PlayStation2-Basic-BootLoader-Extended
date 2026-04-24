@@ -24,7 +24,6 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             LoaderPollEmergencyComboWindowFn poll_emergency_combo_window)
 {
     (void)native_video_mode;
-    int dev_ok[LOADER_DEVICE_COUNT];
     int x, j, button;
     u64 deadline;
     ConsoleInfo console_info;
@@ -108,7 +107,6 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             poll_emergency_combo_window(rescue_combo_deadline);
 
         deadline = Timer() + GLOBCFG.DELAY;
-        LoaderBuildDeviceAvailableCache(dev_ok);
         while (Timer() <= deadline) {
             u64 now = Timer();
             int pad_state;
@@ -167,6 +165,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
 
                         is_command = (entry_path[0] == '$');
                         if (pre_scanned && !is_command) {
+                            if (LoaderEnsurePathFamilyReady(entry_path) < 0)
+                                continue;
                             execpaths[j] = CheckPath(entry_path);
                             if (execpaths[j] == NULL || *execpaths[j] == '\0')
                                 continue;
@@ -176,12 +176,11 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             break;
                         }
 
-                        if (!LoaderDeviceAvailableForPathCached(entry_path, dev_ok))
-                            continue;
-
                         if (is_command) {
                             ShowLaunchStatus(entry_path);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
+                        } else if (LoaderEnsurePathFamilyReady(entry_path) < 0) {
+                            continue;
                         }
 
                         execpaths[j] = CheckPath(entry_path);
@@ -257,7 +256,6 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
         if (rescue_combo_deadline != NULL)
             *rescue_combo_deadline = 0;
         TimerEnd();
-        LoaderBuildDeviceAvailableCache(dev_ok);
 
         for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             const char *entry_path = GLOBCFG.KEYPATHS[0][j];
@@ -271,6 +269,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             if (is_command)
                 continue; // Don't execute commands without a key press.
             if (pre_scanned) {
+                if (LoaderEnsurePathFamilyReady(entry_path) < 0)
+                    continue;
                 execpaths[j] = CheckPath(entry_path);
                 if (execpaths[j] == NULL || *execpaths[j] == '\0')
                     continue;
@@ -280,7 +280,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 break;
             }
 
-            if (!LoaderDeviceAvailableForPathCached(entry_path, dev_ok))
+            if (LoaderEnsurePathFamilyReady(entry_path) < 0)
                 continue;
 
             execpaths[j] = CheckPath(entry_path);

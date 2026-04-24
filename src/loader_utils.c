@@ -111,7 +111,11 @@ int ci_starts_with_n(const char *s, size_t s_len, const char *prefix)
 
 int normalize_logo_display(int value)
 {
-    return (value >= 0 && value <= 5) ? value : 2;
+    if (value < 0)
+        return 2;
+    if (value > 3)
+        return 3;
+    return value;
 }
 
 int logo_to_hotkey_display(int logo_disp)

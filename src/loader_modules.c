@@ -1,25 +1,75 @@
-// IOP module loading pipeline (pads, MC, USB, MMCE/MX4SIO, HDD, DEV9).
+// IOP module loading pipeline (core + per-device-family lazy loading).
 #include "main.h"
+#include "loader_path.h"
 
-void LoaderLoadSystemModules(int *usb_modules_loaded,
-                             int *mx4sio_modules_loaded,
-                             int *mmce_modules_loaded,
-                             int *hdd_modules_loaded)
+static int s_usb_modules_loaded = 0;
+static int s_mx4sio_modules_loaded = 0;
+static int s_mmce_modules_loaded = 0;
+static int s_hdd_modules_loaded = 0;
+
+static LoaderPathFamily s_boot_family = LOADER_PATH_FAMILY_MC;
+static LoaderPathFamily s_current_family = LOADER_PATH_FAMILY_NONE;
+static char s_boot_config_path[64] = "";
+static int s_boot_config_source_hint = SOURCE_INVALID;
+
+#ifdef DEV9
+static int dev9_loaded = 0;
+#endif
+
+static int starts_with(const char *s, const char *prefix)
+{
+    if (s == NULL || prefix == NULL)
+        return 0;
+    return (strncmp(s, prefix, strlen(prefix)) == 0);
+}
+
+static int source_hint_for_family(LoaderPathFamily family)
+{
+    switch (family) {
+        case LOADER_PATH_FAMILY_BDM:
+            return SOURCE_MASS;
+#ifdef MX4SIO
+        case LOADER_PATH_FAMILY_MX4SIO:
+            return SOURCE_MX4SIO;
+#endif
+#ifdef MMCE
+        case LOADER_PATH_FAMILY_MMCE:
+            return SOURCE_MMCE0;
+#endif
+#ifdef HDD
+        case LOADER_PATH_FAMILY_HDD_APA:
+            return SOURCE_HDD;
+#endif
+#ifdef XFROM
+        case LOADER_PATH_FAMILY_XFROM:
+            return SOURCE_XFROM;
+#endif
+        default:
+            break;
+    }
+
+    return SOURCE_INVALID;
+}
+
+static void reset_module_flags(void)
+{
+    s_usb_modules_loaded = 0;
+    s_mx4sio_modules_loaded = 0;
+    s_mmce_modules_loaded = 0;
+    s_hdd_modules_loaded = 0;
+}
+
+static void publish_module_states(void)
+{
+    LoaderPathSetModuleStates(s_usb_modules_loaded,
+                              s_mx4sio_modules_loaded,
+                              s_mmce_modules_loaded,
+                              s_hdd_modules_loaded);
+}
+
+static int load_core_modules(void)
 {
     int j, x;
-
-    if (usb_modules_loaded != NULL)
-        *usb_modules_loaded = 0;
-    if (mx4sio_modules_loaded != NULL)
-        *mx4sio_modules_loaded = 0;
-    if (mmce_modules_loaded != NULL)
-        *mmce_modules_loaded = 0;
-    if (hdd_modules_loaded != NULL)
-        *hdd_modules_loaded = 0;
-
-#ifdef HDD
-    int filexio_ok = 1;
-#endif
 
 #ifdef PPCTTY
     // no error handling bc nothing to do in this case
@@ -58,66 +108,16 @@ void LoaderLoadSystemModules(int *usb_modules_loaded,
     DPRINTF(" [PADMAN]: ID=%d, ret=%d\n", j, x);
 #endif
 
-    j = LoadUSBIRX();
-    if (usb_modules_loaded != NULL)
-        *usb_modules_loaded = (j == 0);
-    if (j != 0) {
-        scr_setfontcolor(0x0000ff);
-        scr_printf("ERROR: could not load USB modules (%d)\n", j);
-        scr_setfontcolor(0xffffff);
-#ifdef HAS_EMBEDDED_IRX // we have embedded IRX... something bad is going on if this condition executes. add a wait time for user to know something is wrong
-        sleep(1);
-#endif
-    }
-
-#ifdef FILEXIO
-    if (LoadFIO() < 0) {
-        scr_setbgcolor(0xff0000);
-        scr_clear();
-        sleep(4);
-#ifdef HDD
-        filexio_ok = 0;
-#endif
-    }
-#endif
-
-#ifdef MMCE
-    j = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &x);
-    DPRINTF(" [MMCEMAN]: ID=%d, ret=%d\n", j, x);
-    if (mmce_modules_loaded != NULL)
-        *mmce_modules_loaded = (j >= 0);
-#endif
-
-#ifdef MX4SIO
-    j = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &x);
-    DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", j, x);
-    if (mx4sio_modules_loaded != NULL)
-        *mx4sio_modules_loaded = (j >= 0);
-#endif
-
-#ifdef HDD
-    if (filexio_ok) {
-        int hdd_ret = LoadHDDIRX(); // only load HDD crap if filexio and iomanx are up and running
-
-        if (hdd_ret < 0) {
-            scr_setbgcolor(0x0000ff);
-            scr_clear();
-            sleep(4);
-        } else if (hdd_modules_loaded != NULL) {
-            *hdd_modules_loaded = 1;
-        }
-    }
-#endif
-
     j = SifLoadModule("rom0:ADDDRV", 0, NULL); // Load ADDDRV. The OSD has it listed in rom0:OSDCNF/IOPBTCONF, but it is otherwise not loaded automatically.
     DPRINTF(" [ADDDRV]: %d\n", j);
+
+    return 0;
 }
 
-int LoadUSBIRX(void)
+static int load_bdm_core_modules(void)
 {
     int ID, RET;
 
-// ------------------------------------------------------------------------------------ //
 #ifdef HAS_EMBEDDED_IRX
     ID = SifExecModuleBuffer(bdm_irx, size_bdm_irx, 0, NULL, &RET);
 #else
@@ -126,7 +126,7 @@ int LoadUSBIRX(void)
     DPRINTF(" [BDM]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
         return -1;
-// ------------------------------------------------------------------------------------ //
+
 #ifdef HAS_EMBEDDED_IRX
     ID = SifExecModuleBuffer(bdmfs_fatfs_irx, size_bdmfs_fatfs_irx, 0, NULL, &RET);
 #else
@@ -135,7 +135,17 @@ int LoadUSBIRX(void)
     DPRINTF(" [BDMFS_FATFS]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
         return -2;
-// ------------------------------------------------------------------------------------ //
+
+    return 0;
+}
+
+static int load_usb_transport_modules(void)
+{
+    int ID, RET;
+    struct stat buffer;
+    int ret = -1;
+    int retries = 50;
+
 #ifdef HAS_EMBEDDED_IRX
     ID = SifExecModuleBuffer(usbd_irx, size_usbd_irx, 0, NULL, &RET);
 #else
@@ -144,8 +154,8 @@ int LoadUSBIRX(void)
     delay(3);
     DPRINTF(" [USBD]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
-        return -3;
-// ------------------------------------------------------------------------------------ //
+        return -1;
+
 #ifdef HAS_EMBEDDED_IRX
     ID = SifExecModuleBuffer(usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &RET);
 #else
@@ -153,19 +163,248 @@ int LoadUSBIRX(void)
 #endif
     DPRINTF(" [USBMASS_BD]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
-        return -4;
-    // ------------------------------------------------------------------------------------ //
-    struct stat buffer;
-    int ret = -1;
-    int retries = 50;
+        return -2;
 
     while (ret != 0 && retries > 0) {
         ret = stat("mass:/", &buffer);
         /* Wait until the device is ready */
         nopdelay();
-
         retries--;
     }
+
+    return 0;
+}
+
+static int load_ata_transport_modules(void)
+{
+#ifdef BDM_ATA
+    int ID, RET;
+
+#ifdef DEV9
+    if (!loadDEV9())
+        return -1;
+#endif
+
+    ID = SifExecModuleBuffer(ata_bd_irx, size_ata_bd_irx, 0, NULL, &RET);
+    DPRINTF(" [ATA_BD]: ret=%d, ID=%d\n", RET, ID);
+    if (ID < 0 || RET == 1)
+        return -2;
+#endif
+
+    return 0;
+}
+
+static int load_family_modules(LoaderPathFamily family)
+{
+    int j, x;
+
+    if (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_MC || family == LOADER_PATH_FAMILY_XFROM)
+        return 0;
+
+    switch (family) {
+        case LOADER_PATH_FAMILY_BDM:
+        {
+            int usb_ok = 0;
+            int ata_ok = 0;
+
+            if (load_bdm_core_modules() < 0)
+                return -1;
+            usb_ok = (load_usb_transport_modules() == 0);
+            ata_ok = (load_ata_transport_modules() == 0);
+            if (!usb_ok && !ata_ok)
+                return -2;
+            s_usb_modules_loaded = 1;
+            return 0;
+        }
+
+        case LOADER_PATH_FAMILY_MX4SIO:
+#ifdef MX4SIO
+            if (load_bdm_core_modules() < 0)
+                return -1;
+#ifdef FILEXIO
+            if (LoadFIO() < 0)
+                return -2;
+#endif
+            j = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &x);
+            DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", j, x);
+            if (j < 0 || x == 1)
+                return -3;
+            s_mx4sio_modules_loaded = 1;
+            return 0;
+#else
+            return -1;
+#endif
+
+        case LOADER_PATH_FAMILY_MMCE:
+#ifdef MMCE
+#ifdef FILEXIO
+            if (LoadFIO() < 0)
+                return -1;
+#endif
+            j = SifExecModuleBuffer(mmceman_irx, size_mmceman_irx, 0, NULL, &x);
+            DPRINTF(" [MMCEMAN]: ID=%d, ret=%d\n", j, x);
+            if (j < 0 || x == 1)
+                return -2;
+            s_mmce_modules_loaded = 1;
+            return 0;
+#else
+            return -1;
+#endif
+
+        case LOADER_PATH_FAMILY_HDD_APA:
+#ifdef HDD
+#ifdef FILEXIO
+            if (LoadFIO() < 0)
+                return -1;
+#endif
+            if (LoadHDDIRX() < 0)
+                return -2;
+            s_hdd_modules_loaded = 1;
+            return 0;
+#else
+            return -1;
+#endif
+
+        default:
+            return -1;
+    }
+}
+
+static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit_pad)
+{
+    int family_load_result;
+
+    if (family == LOADER_PATH_FAMILY_NONE)
+        family = LOADER_PATH_FAMILY_MC;
+    if (family == LOADER_PATH_FAMILY_XFROM)
+        family = LOADER_PATH_FAMILY_MC;
+
+    if (reboot_iop) {
+        PadDeinitPads();
+        ResetIOP();
+        SifInitIopHeap();
+        SifLoadFileInit();
+        fioInit();
+        sbv_patch_enable_lmb();
+        sbv_patch_disable_prefix_check();
+#ifdef DEV9
+        dev9_loaded = 0;
+#endif
+    }
+
+    reset_module_flags();
+    publish_module_states();
+
+    load_core_modules();
+    s_current_family = LOADER_PATH_FAMILY_MC;
+    family_load_result = load_family_modules(family);
+
+    if (family_load_result == 0)
+        s_current_family = family;
+
+    publish_module_states();
+
+    if (reboot_iop) {
+        sceCdInit(SCECdINoD);
+        cdInitAdd();
+        if (reinit_pad)
+            PadInitPads();
+    }
+
+    return family_load_result;
+}
+
+void LoaderSetBootPathHint(const char *boot_path)
+{
+    LoaderPathFamily family = LoaderPathFamilyFromPath(boot_path);
+
+    s_boot_family = (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_XFROM)
+                        ? LOADER_PATH_FAMILY_MC
+                        : family;
+    s_boot_config_path[0] = '\0';
+    s_boot_config_source_hint = SOURCE_INVALID;
+
+    switch (family) {
+        case LOADER_PATH_FAMILY_MMCE:
+            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mmce?:/PS2BBL/CONFIG.INI");
+            break;
+        case LOADER_PATH_FAMILY_MX4SIO:
+            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mx4sio:/PS2BBL/CONFIG.INI");
+            break;
+        case LOADER_PATH_FAMILY_HDD_APA:
+            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI");
+            break;
+        case LOADER_PATH_FAMILY_BDM:
+            if (starts_with(boot_path, "ata"))
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ata:/PS2BBL/CONFIG.INI");
+            else if (starts_with(boot_path, "ilink"))
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ilink:/PS2BBL/CONFIG.INI");
+            else if (starts_with(boot_path, "mass"))
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mass:/PS2BBL/CONFIG.INI");
+            else
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "usb:/PS2BBL/CONFIG.INI");
+            break;
+        case LOADER_PATH_FAMILY_XFROM:
+            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "xfrom:/PS2BBL/CONFIG.INI");
+            break;
+        default:
+            break;
+    }
+
+    s_boot_config_source_hint = source_hint_for_family(family);
+}
+
+const char *LoaderGetBootConfigPath(void)
+{
+    return s_boot_config_path;
+}
+
+int LoaderGetBootConfigSourceHint(void)
+{
+    return s_boot_config_source_hint;
+}
+
+int LoaderEnsurePathFamilyReady(const char *path)
+{
+    LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
+
+    if (target_family == LOADER_PATH_FAMILY_NONE)
+        return 0;
+    if (target_family == LOADER_PATH_FAMILY_XFROM)
+        target_family = LOADER_PATH_FAMILY_MC;
+    if (s_current_family == target_family)
+        return 0;
+
+    DPRINTF("Switching IOP driver family from %d to %d for path '%s'\n",
+            (int)s_current_family,
+            (int)target_family,
+            (path != NULL) ? path : "");
+    return reload_for_family(target_family, 1, 1);
+}
+
+void LoaderLoadSystemModules(int *usb_modules_loaded,
+                             int *mx4sio_modules_loaded,
+                             int *mmce_modules_loaded,
+                             int *hdd_modules_loaded)
+{
+    reload_for_family(s_boot_family, 0, 0);
+
+    if (usb_modules_loaded != NULL)
+        *usb_modules_loaded = s_usb_modules_loaded;
+    if (mx4sio_modules_loaded != NULL)
+        *mx4sio_modules_loaded = s_mx4sio_modules_loaded;
+    if (mmce_modules_loaded != NULL)
+        *mmce_modules_loaded = s_mmce_modules_loaded;
+    if (hdd_modules_loaded != NULL)
+        *hdd_modules_loaded = s_hdd_modules_loaded;
+}
+
+int LoadUSBIRX(void)
+{
+    if (load_bdm_core_modules() < 0)
+        return -1;
+    if (load_usb_transport_modules() < 0)
+        return -2;
     return 0;
 }
 
@@ -214,8 +453,6 @@ int LoadFIO(void)
 #endif
 
 #ifdef DEV9
-static int dev9_loaded = 0;
-
 int loadDEV9(void)
 {
     if (!dev9_loaded) {

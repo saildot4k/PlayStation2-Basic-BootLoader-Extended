@@ -6,7 +6,7 @@
 #define CONFIG_KEY_INDEXES 10       // number of paths to scan per hotkey, however the list below will need to match this value
 #define MAX_LEN     64              // max length for hotkey display names (after formatting)
 #define CNF_LEN_MAX 20480           // 20kb should be enough for massive CNF's
-#define LOGO_DISPLAY_DEFAULT 5      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=banner+NAME, 4=banner+filename, 5=banner+path
+#define LOGO_DISPLAY_DEFAULT 3      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=banner+NAME
 #define DEFDELAY 30000              // default ammount of time this program will wait for a key press in ms/
 #define CDROM_DISABLE_GAMEID_DEFAULT 0
 #define PS1DRV_ENABLE_FAST_DEFAULT 0

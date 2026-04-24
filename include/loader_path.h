@@ -5,9 +5,21 @@
 
 #define LOADER_DEVICE_COUNT 8
 
+typedef enum
+{
+    LOADER_PATH_FAMILY_NONE = 0,
+    LOADER_PATH_FAMILY_MC,
+    LOADER_PATH_FAMILY_BDM,
+    LOADER_PATH_FAMILY_MX4SIO,
+    LOADER_PATH_FAMILY_MMCE,
+    LOADER_PATH_FAMILY_HDD_APA,
+    LOADER_PATH_FAMILY_XFROM,
+} LoaderPathFamily;
+
 void LoaderPathSetModuleStates(int usb_ready, int mx4sio_ready, int mmce_ready, int hdd_ready);
 void LoaderPathSetPendingCommandArgs(int argc, char *argv[]);
 int LoaderPathConsumeCdvdCancelled(void);
+LoaderPathFamily LoaderPathFamilyFromPath(const char *path);
 
 void LoaderBuildDeviceAvailableCache(int dev_ok[LOADER_DEVICE_COUNT]);
 int LoaderDeviceAvailableForPathCached(const char *path, const int dev_ok[LOADER_DEVICE_COUNT]);

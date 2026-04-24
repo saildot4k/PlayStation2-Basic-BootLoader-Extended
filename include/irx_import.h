@@ -62,6 +62,9 @@ IMPORT_BIN2C(usb_mass_irx);
 IMPORT_BIN2C(bdm_irx);
 IMPORT_BIN2C(bdmfs_fatfs_irx);
 IMPORT_BIN2C(usbmass_bd_irx);
+#ifdef BDM_ATA
+IMPORT_BIN2C(ata_bd_irx);
+#endif
 #endif // NO_BDM
 #endif // HAS_EMBEDDED_IRX
 

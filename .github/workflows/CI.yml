@@ -72,21 +72,9 @@ jobs:
             echo "PRINTF_ARGS=PRINTF=$PRINTF_INPUT" >> $GITHUB_ENV
           fi
 
-      - name: Compile PSX build
+      - name: Compile PSX-ALL-DRIVERS-LAZY-LOADING build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX/ PSX=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
-
-      - name: Compile PSX HDD build
-        run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_HDD/ PSX=1 HDD=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
-
-      - name: Compile PSX MMCE build
-        run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MMCE/ PSX=1 MMCE=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
-
-      - name: Compile PSX MX4SIO build
-        run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX_MX4SIO/ PSX=1 MX4SIO=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX-ALL-DRIVERS-LAZY-LOADING/ PSX_ALL_DRIVERS_LAZY_LOADING=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: list
         run: |
@@ -99,10 +87,7 @@ jobs:
           cp LICENSE "${{ env.REL_DIR }}/LICENSE.TXT"
           cp README.md "${{ env.REL_DIR }}/README.md"
           cp tools/png_to_logo_rbga.py "${{ env.REL_DIR }}/png_to_logo_rbga.py"
-          mv "${{ env.OUT_ROOT }}PSX/" "${{ env.REL_DIR }}/PSX/"
-          mv "${{ env.OUT_ROOT }}PSX_HDD/" "${{ env.REL_DIR }}/PSX_HDD/"
-          mv "${{ env.OUT_ROOT }}PSX_MMCE/" "${{ env.REL_DIR }}/PSX_MMCE/"
-          mv "${{ env.OUT_ROOT }}PSX_MX4SIO/" "${{ env.REL_DIR }}/PSX_MX4SIO/"
+          mv "${{ env.OUT_ROOT }}PSX-ALL-DRIVERS-LAZY-LOADING/" "${{ env.REL_DIR }}/PSX-ALL-DRIVERS-LAZY-LOADING/"
 
       - name: pack release
         if: env.USE_RELEASE == '1'
@@ -117,7 +102,7 @@ jobs:
         if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
-          name: PS2BBL
+          name: PSX-ALL-DRIVERS-LAZY-LOADING
           path: |
             ${{ env.ARTIFACT_DIR }}/**
 

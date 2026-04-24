@@ -68,11 +68,11 @@ typedef struct
     int KEYARGC[KEY_COUNT][CONFIG_KEY_INDEXES];
     int KEYARGCAP[KEY_COUNT][CONFIG_KEY_INDEXES];
     const char *KEYNAMES[KEY_COUNT];
-    int HOTKEY_DISPLAY; // Derived from LOGO_DISP (0=off, 1=name, 2=filename, 3=path).
+    int HOTKEY_DISPLAY; // Derived from LOGO_DISP (0=off, 1=name).
     int DELAY;
     int OSDHISTORY_READ;
     int TRAYEJECT;
-    int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names, 4=banner+filename, 5=banner+full path.
+    int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names.
     int CDROM_DISABLE_GAMEID;
     int APP_GAMEID;
     int PS1DRV_ENABLE_FAST;
@@ -148,6 +148,10 @@ void CDVDBootCertify(u8 romver[16]);
 int credits(void);
 void CleanUp(void);
 int LoadUSBIRX(void);
+void LoaderSetBootPathHint(const char *boot_path);
+const char *LoaderGetBootConfigPath(void);
+int LoaderGetBootConfigSourceHint(void);
+int LoaderEnsurePathFamilyReady(const char *path);
 void LoaderLoadSystemModules(int *usb_modules_loaded,
                              int *mx4sio_modules_loaded,
                              int *mmce_modules_loaded,

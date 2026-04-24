@@ -25,15 +25,18 @@ Edit config file as as needed. Recommended to [R3Configurator](https://github.co
 
 ### Config Path search order
 
+Config search is now boot-family aware to avoid loading unnecessary drivers at startup:
+
 1. `CONFIG.INI` (CWD: Current Working Directory)
-2. `mc?:/SYS-CONF/PSXBBL.INI` (PSX DESR only; skipped on PS2 hardware)
-3. __MMCE BUILDS__ `mmce?:/PS2BBL/CONFIG.INI`
-4. `xfrom:/PS2BBL/CONFIG.INI` (PSX DESR only; skipped on PS2 hardware)
-5. __MX4SIO BUILDS__ `mx4sio:/PS2BBL/CONFIG.INI` 
-6. __HDD BUILDS__ `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
-7. `usb:/PS2BBL/CONFIG.INI`
-8. `mc1:/SYS-CONF/PS2BBL.INI`
-9. `mc0:/SYS-CONF/PS2BBL.INI`
+2. Boot-family config path (if applicable):
+   - MMCE boot: `mmce?:/PS2BBL/CONFIG.INI`
+   - MX4SIO boot: `mx4sio:/PS2BBL/CONFIG.INI`
+   - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
+   - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI` / `ilink:/PS2BBL/CONFIG.INI` (based on boot root)
+   - PSX DESR xfrom boot: `xfrom:/PS2BBL/CONFIG.INI`
+3. Memory card fallback:
+   - `mc?:/SYS-CONF/PS2BBL.INI`
+   - `mc?:/SYS-CONF/PSXBBL.INI`
 
 ### Device path prefixes
 PS2BBL supports these launch/config path prefixes:
@@ -48,7 +51,7 @@ PS2BBL supports these launch/config path prefixes:
 - `ata:/`, `ilink:/` (BDM mass-storage roots) __not yet implemented__
 
 ### LOGO_DISPLAY
-Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be defined by NAME_<BUTTON> or file/path
+Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.
   - `0` No Logo/Console info
   - `1` Console Info
   - `2` PS2BBLE/PSXBBLE Logo and Console Info
@@ -57,8 +60,8 @@ Use `LOGO_DISPLAY = <value>` 3 or greater for hotkey names. Names will be define
       ```
       NAME_SQUARE = POPSLOADER
       ```
-  - `4` Hotkey Graphic Display with first found file as defined in config (slower)
-  - `5` Hotkey Graphic Display with first found file path as defined in config (slower)
+
+`LOGO_DISPLAY` values `4` and `5` are no longer used in lazy-driver mode.
 
 #### Custom splash logo from CWD
 If a custom logo file (LOGO.BIN) is found in CWD (current working directory), it replaces the embedded PS2BBLE/PSXBBLE logo.
@@ -87,11 +90,11 @@ Convert a PNG to the expected raw file:
 
 #### Emergency video mode selector
 - Enter with `TRIANGLE + CROSS` during boot
-- Selector forces `LOGO_DISPLAY = 5` while active so you can see logo/hotkey UI context.
+- Selector forces `LOGO_DISPLAY = 3` while active so you can see logo/hotkey UI context.
 - Controls:
   - `LEFT/RIGHT` cycle modes: `AUTO`, `NTSC`, `PAL`, `480P`
   - `SELECT` save the currently selected mode to the active config file
-  - `START` exit selector and continue to hotkey display with first found full path
+  - `START` exit selector and continue to hotkey display
 
 ### PS1DRV options (PS1 discs only)
 These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.

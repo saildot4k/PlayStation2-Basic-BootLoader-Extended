@@ -74,7 +74,7 @@ void LoaderRunEmergencyVideoModeSelector(int *pre_scanned,
     applied_effective_mode = LoaderResolveEffectiveVideoMode(selected_mode);
     *hotkey_launches_enabled = 0;
 
-    GLOBCFG.LOGO_DISP = 5;
+    GLOBCFG.LOGO_DISP = 3;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
     *pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
     ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, *pre_scanned);

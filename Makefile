@@ -24,6 +24,8 @@ PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
 EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
 EGSM_BUILD ?= 1 # build the embedded stage2 eGSM runtime (0=disabled, 1=enabled)
+PSX_ALL_DRIVERS_LAZY_LOADING ?= 0
+BDM_ATA ?= 0
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -95,6 +97,19 @@ ifneq ($(VERBOSE), 1)
    .SILENT:
 endif
 
+ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
+  $(info --- profile: PSX-ALL-DRIVERS-LAZY-LOADING)
+  PSX = 1
+  HDD = 1
+  MMCE = 1
+  MX4SIO = 1
+  HAS_EMBED_IRX = 1
+  BDM_ATA = 1
+  HOMEBREW_IRX = 1
+  FILEXIO_NEED = 1
+  DEV9_NEED = 1
+endif
+
 ifeq ($(MX4SIO), 1)
   HOMEBREW_IRX = 1
   FILEXIO_NEED = 1
@@ -114,7 +129,9 @@ ifeq ($(MMCE), 1)
     $(error MMCE needs Homebrew SIO2MAN to work)
   endif
   ifeq ($(MX4SIO), 1)
-    $(error MX4SIO cant coexist with MMCE)
+    ifneq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
+      $(error MX4SIO cant coexist with MMCE)
+    endif
   endif
 endif
 
@@ -132,7 +149,11 @@ endif
 
 ifeq ($(PSX), 1)
    $(info --- building with PSX-DESR support)
-  BASENAME = PSXBBL
+  ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
+    BASENAME = PSX-ALL-DRIVERS-LAZY-LOADING
+  else
+    BASENAME = PSXBBL
+  endif
   EE_CFLAGS += -DPSX=1
   EE_OBJS += scmd_add.o ioprp.o
   EE_LIBS += -lxcdvd -liopreboot
@@ -184,6 +205,13 @@ ifeq ($(HAS_EMBED_IRX), 1)
   EE_CFLAGS += -DHAS_EMBEDDED_IRX
 else
   $(info --- USB drivers will be external)
+endif
+
+ifeq ($(BDM_ATA), 1)
+  $(info --- ATA BDM driver will be embedded)
+  EE_CFLAGS += -DBDM_ATA
+  EE_OBJS += ata_bd_irx.o
+  DEV9_NEED = 1
 endif
 
 ifeq ($(HDD), 1)
