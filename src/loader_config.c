@@ -172,7 +172,7 @@ static int parse_arg_entry(const char *name, char *value)
     return append_arg_entry(key_index, entry_index, value);
 }
 
-static int parse_launch_key_entry(const char *name, char *value)
+static int parse_launch_key_entry(const char *name, char *value, u32 *parsed_launch_key_mask)
 {
     int key_index;
     int entry_index;
@@ -183,6 +183,19 @@ static int parse_launch_key_entry(const char *name, char *value)
             snprintf(key_name, sizeof(key_name), "LK_%s_E%d", KEYS_ID[key_index], entry_index + 1);
             if (!ci_eq(name, key_name))
                 continue;
+
+            // First explicit LK_<KEY>_E* seen for this key:
+            // clear all entries so unspecified E2..E10 do not inherit defaults.
+            if (parsed_launch_key_mask != NULL &&
+                key_index < (int)(sizeof(*parsed_launch_key_mask) * 8u) &&
+                ((*parsed_launch_key_mask & ((u32)1u << key_index)) == 0)) {
+                int clear_index;
+
+                for (clear_index = 0; clear_index < CONFIG_KEY_INDEXES; clear_index++)
+                    GLOBCFG.KEYPATHS[key_index][clear_index] = NULL;
+
+                *parsed_launch_key_mask |= ((u32)1u << key_index);
+            }
 
             if (value == NULL || *value == '\0') {
                 GLOBCFG.KEYPATHS[key_index][entry_index] = NULL;
@@ -292,6 +305,7 @@ int LoaderParseConfigFile(FILE *fp,
     char *value;
     char *scan_copy;
     int arg_counts[KEY_COUNT][CONFIG_KEY_INDEXES];
+    u32 parsed_launch_key_mask = 0;
     long cnf_size;
     size_t bytes_read;
 
@@ -453,7 +467,7 @@ int LoaderParseConfigFile(FILE *fp,
         }
 
         if (ci_starts_with(name, "LK_")) {
-            int parse_result = parse_launch_key_entry(name, value);
+            int parse_result = parse_launch_key_entry(name, value, &parsed_launch_key_mask);
 
             if (parse_result == 2)
                 result->has_launch_key_entries = 1;
