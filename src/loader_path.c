@@ -237,6 +237,67 @@ static int copy_string_safe(char *dst, size_t dst_size, const char *src)
     return 1;
 }
 
+static int path_prefix_with_optional_unit(const char *path,
+                                          const char *prefix,
+                                          size_t prefix_len,
+                                          int *unit_out,
+                                          const char **suffix_out)
+{
+    int unit = -1;
+    const char *suffix;
+
+    if (path == NULL || prefix == NULL)
+        return 0;
+    if (strncmp(path, prefix, prefix_len))
+        return 0;
+
+    if (path[prefix_len] == ':') {
+        suffix = path + prefix_len;
+    } else if (path[prefix_len] >= '0' &&
+               path[prefix_len] <= '9' &&
+               path[prefix_len + 1] == ':') {
+        unit = path[prefix_len] - '0';
+        suffix = path + prefix_len + 1;
+    } else {
+        return 0;
+    }
+
+    if (unit_out != NULL)
+        *unit_out = unit;
+    if (suffix_out != NULL)
+        *suffix_out = suffix;
+    return 1;
+}
+
+static int build_mass_path(char *out, size_t out_size, const char *suffix, int unit)
+{
+    if (out == NULL || out_size == 0 || suffix == NULL || suffix[0] != ':')
+        return 0;
+
+    if (unit >= 0 && unit <= 9)
+        snprintf(out, out_size, "mass%d%s", unit, suffix);
+    else
+        snprintf(out, out_size, "mass0%s", suffix);
+
+    return 1;
+}
+
+static int mass_mount_available(int unit)
+{
+    char mountpoint[] = "mass0:";
+    int fd;
+
+    if (unit < 0 || unit > 9)
+        return 0;
+
+    mountpoint[4] = '0' + unit;
+    fd = open(mountpoint, O_RDONLY | O_DIRECTORY);
+    if (fd < 0)
+        return 0;
+    close(fd);
+    return 1;
+}
+
 static int resolve_pair_path_copy(const char *path,
                                   int slot_index,
                                   char preferred,
@@ -270,6 +331,9 @@ static const char *resolve_path_tokens(const char *path,
                                        size_t out_size,
                                        int require_existing_pairs)
 {
+    int bdm_unit = -1;
+    const char *bdm_suffix = NULL;
+
     if (!copy_string_safe(out, out_size, path))
         return NULL;
 
@@ -280,6 +344,41 @@ static const char *resolve_path_tokens(const char *path,
                                     out,
                                     out_size,
                                     require_existing_pairs))
+            return NULL;
+        return out;
+    }
+
+    // Match OSDMenu behavior for USB-family paths:
+    // probe legacy massN slots instead of relying on usb:/ alias resolution.
+    if (path_prefix_with_optional_unit(path, "usb", 3, &bdm_unit, &bdm_suffix) ||
+        path_prefix_with_optional_unit(path, "mass", 4, &bdm_unit, &bdm_suffix)) {
+        int i;
+        char candidate[CHECKPATH_BUF_SIZE];
+
+        if (bdm_unit >= 0) {
+            if (!build_mass_path(out, out_size, bdm_suffix, bdm_unit))
+                return NULL;
+            return out;
+        }
+
+        if (!require_existing_pairs) {
+            if (!build_mass_path(out, out_size, bdm_suffix, 0))
+                return NULL;
+            return out;
+        }
+
+        for (i = 0; i < 10; i++) {
+            if (!mass_mount_available(i))
+                continue;
+            if (!build_mass_path(candidate, sizeof(candidate), bdm_suffix, i))
+                continue;
+            if (exist(candidate)) {
+                copy_string_safe(out, out_size, candidate);
+                return out;
+            }
+        }
+
+        if (!build_mass_path(out, out_size, bdm_suffix, 0))
             return NULL;
         return out;
     }
