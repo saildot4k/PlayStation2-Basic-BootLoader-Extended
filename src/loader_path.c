@@ -5,7 +5,6 @@
 #include "loader_path.h"
 
 #define CHECKPATH_BUF_SIZE 256
-#define MMCE_PROBE_GAP_US 50000
 
 enum {
     DEV_UNKNOWN = -1,
@@ -25,10 +24,6 @@ static int s_mx4sio_modules_loaded = 0;
 static int s_mmce_modules_loaded = 0;
 static int s_hdd_modules_loaded = 0;
 
-static int s_dev_state[DEV_COUNT] = {
-    -1, -1, -1, -1, -1, -1, -1, -1
-};
-
 static int s_pending_command_argc = 0;
 static char **s_pending_command_argv = NULL;
 static int s_cdvd_cancelled = 0;
@@ -39,25 +34,17 @@ static char s_resolved_keypaths[KEY_COUNT][CONFIG_KEY_INDEXES][CHECKPATH_BUF_SIZ
 static int s_mx4sio_slot = -2;
 #endif
 
-static void reset_device_cache(void)
-{
-    int dev;
-
-    for (dev = 0; dev < DEV_COUNT; dev++)
-        s_dev_state[dev] = -1;
-
-#ifdef MX4SIO
-    s_mx4sio_slot = -2;
-#endif
-}
-
 void LoaderPathSetModuleStates(int usb_ready, int mx4sio_ready, int mmce_ready, int hdd_ready)
 {
     s_usb_modules_loaded = usb_ready;
     s_mx4sio_modules_loaded = mx4sio_ready;
     s_mmce_modules_loaded = mmce_ready;
     s_hdd_modules_loaded = hdd_ready;
-    reset_device_cache();
+
+#ifdef MX4SIO
+    // Clear discovered legacy MX4SIO slot when modules/family are reloaded.
+    s_mx4sio_slot = -2;
+#endif
 }
 
 void LoaderPathSetPendingCommandArgs(int argc, char *argv[])
@@ -130,10 +117,6 @@ static int get_legacy_mx4sio_slot(void)
 {
     if (s_mx4sio_slot == -2)
         s_mx4sio_slot = LookForBDMDevice();
-    if (s_mx4sio_slot >= 0) {
-        s_dev_state[DEV_MC0] = 1;
-        s_dev_state[DEV_MC1] = 0;
-    }
     return s_mx4sio_slot;
 }
 #endif
@@ -201,70 +184,14 @@ static int device_id_from_path(const char *path)
     return DEV_UNKNOWN;
 }
 
-static int device_root_available(int dev)
-{
-    struct stat st;
-
-    switch (dev) {
-        case DEV_MC0:
-            return (stat("mc0:/", &st) == 0);
-        case DEV_MC1:
-            return (stat("mc1:/", &st) == 0);
-        case DEV_MASS:
-            return (stat("mass:/", &st) == 0 ||
-                    stat("usb:/", &st) == 0 ||
-                    stat("ata:/", &st) == 0 ||
-                    stat("ilink:/", &st) == 0);
-#ifdef MX4SIO
-        case DEV_MX4SIO:
-            return (mx4sio_typed_root_available() ||
-                    get_legacy_mx4sio_slot() >= 0);
-#endif
-#ifdef MMCE
-        case DEV_MMCE0:
-            return (stat("mmce0:/", &st) == 0);
-        case DEV_MMCE1:
-            return (stat("mmce1:/", &st) == 0);
-#endif
-#ifdef HDD
-        case DEV_HDD:
-            return (CheckHDD() >= 0);
-#endif
-        case DEV_XFROM:
-            return 1;
-        default:
-            return 1;
-    }
-}
-
 static int device_available_for_dev(int dev)
 {
     if (dev == DEV_UNKNOWN)
         return 1;
 
-    if (!device_modules_ready(dev)) {
-        s_dev_state[dev] = 0;
+    if (!device_modules_ready(dev))
         return 0;
-    }
-
-#ifdef MMCE
-    if (dev == DEV_MMCE0 || dev == DEV_MMCE1) {
-        int mc_dev = (dev == DEV_MMCE0) ? DEV_MC0 : DEV_MC1;
-
-        if (s_dev_state[dev] >= 0)
-            return s_dev_state[dev];
-        s_dev_state[dev] = device_root_available(dev) ? 1 : 0;
-        if (s_dev_state[dev] > 0)
-            s_dev_state[mc_dev] = 1;
-        return s_dev_state[dev];
-    }
-#endif
-
-    if (s_dev_state[dev] >= 0)
-        return s_dev_state[dev];
-
-    s_dev_state[dev] = device_root_available(dev) ? 1 : 0;
-    return s_dev_state[dev];
+    return 1;
 }
 
 void LoaderBuildDeviceAvailableCache(int dev_ok[LOADER_DEVICE_COUNT])
@@ -274,16 +201,8 @@ void LoaderBuildDeviceAvailableCache(int dev_ok[LOADER_DEVICE_COUNT])
     if (dev_ok == NULL)
         return;
 
-    for (dev = 0; dev < DEV_COUNT; dev++) {
-#ifdef MMCE
-        if (dev == DEV_MMCE1 &&
-            s_mmce_modules_loaded &&
-            s_dev_state[DEV_MMCE0] >= 0 &&
-            s_dev_state[DEV_MMCE1] < 0)
-            usleep(MMCE_PROBE_GAP_US);
-#endif
+    for (dev = 0; dev < DEV_COUNT; dev++)
         dev_ok[dev] = device_available_for_dev(dev) ? 1 : 0;
-    }
 }
 
 int LoaderDeviceAvailableForPathCached(const char *path, const int dev_ok[LOADER_DEVICE_COUNT])
@@ -367,38 +286,21 @@ static const char *resolve_path_tokens(const char *path,
 
 #ifdef MMCE
     if (!strncmp(path, "mmce?", 5)) {
-        int preferred_dev;
-        int alternate_dev;
-        int preferred_state;
-        int alternate_state;
         char preferred_slot;
-        char alternate_slot;
 
         preferred_slot = (char)preferred_mmce_slot_char();
-        alternate_slot = (preferred_slot == '0') ? '1' : '0';
-        preferred_dev = (preferred_slot == '0') ? DEV_MMCE0 : DEV_MMCE1;
-        alternate_dev = (alternate_slot == '0') ? DEV_MMCE0 : DEV_MMCE1;
-        preferred_state = s_dev_state[preferred_dev];
-        alternate_state = s_dev_state[alternate_dev];
-
         if (!require_existing_pairs) {
-            out[4] = (preferred_state == 0 && alternate_state > 0) ? alternate_slot : preferred_slot;
+            out[4] = preferred_slot;
             return out;
         }
-
-        if (preferred_state != 0) {
-            out[4] = preferred_slot;
-            if (exist(out))
-                return out;
-        }
-
-        if (alternate_state != 0) {
-            out[4] = alternate_slot;
-            if (exist(out))
-                return out;
-        }
-
-        return NULL;
+        if (!resolve_pair_path_copy(path,
+                                    4,
+                                    preferred_slot,
+                                    out,
+                                    out_size,
+                                    1))
+            return NULL;
+        return out;
     }
 #endif
 

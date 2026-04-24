@@ -6,6 +6,9 @@ static int s_usb_modules_loaded = 0;
 static int s_mx4sio_modules_loaded = 0;
 static int s_mmce_modules_loaded = 0;
 static int s_hdd_modules_loaded = 0;
+static int s_bdm_core_loaded = 0;
+static int s_bdm_usb_transport_loaded = 0;
+static int s_bdm_ata_transport_loaded = 0;
 
 static LoaderPathFamily s_boot_family = LOADER_PATH_FAMILY_MC;
 static LoaderPathFamily s_current_family = LOADER_PATH_FAMILY_NONE;
@@ -57,6 +60,9 @@ static void reset_module_flags(void)
     s_mx4sio_modules_loaded = 0;
     s_mmce_modules_loaded = 0;
     s_hdd_modules_loaded = 0;
+    s_bdm_core_loaded = 0;
+    s_bdm_usb_transport_loaded = 0;
+    s_bdm_ata_transport_loaded = 0;
 }
 
 static void publish_module_states(void)
@@ -142,9 +148,6 @@ static int load_bdm_core_modules(void)
 static int load_usb_transport_modules(void)
 {
     int ID, RET;
-    struct stat buffer;
-    int ret = -1;
-    int retries = 50;
 
 #ifdef HAS_EMBEDDED_IRX
     ID = SifExecModuleBuffer(usbd_irx, size_usbd_irx, 0, NULL, &RET);
@@ -164,13 +167,6 @@ static int load_usb_transport_modules(void)
     DPRINTF(" [USBMASS_BD]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
         return -2;
-
-    while (ret != 0 && retries > 0) {
-        ret = stat("mass:/", &buffer);
-        /* Wait until the device is ready */
-        nopdelay();
-        retries--;
-    }
 
     return 0;
 }
@@ -194,7 +190,43 @@ static int load_ata_transport_modules(void)
     return 0;
 }
 
-static int load_family_modules(LoaderPathFamily family)
+static int load_bdm_transports_for_path(const char *path_hint)
+{
+    int want_usb = 0;
+    int want_ata = 0;
+
+    if (path_hint != NULL && *path_hint != '\0') {
+        if (starts_with(path_hint, "ata")) {
+            want_ata = 1;
+        } else if (starts_with(path_hint, "usb") ||
+                   starts_with(path_hint, "mass") ||
+                   starts_with(path_hint, "ilink")) {
+            want_usb = 1;
+        }
+    }
+
+    // Fallback for unknown/empty hints: keep both transports available.
+    if (!want_usb && !want_ata) {
+        want_usb = 1;
+        want_ata = 1;
+    }
+
+    if (want_usb && !s_bdm_usb_transport_loaded) {
+        if (load_usb_transport_modules() < 0)
+            return -1;
+        s_bdm_usb_transport_loaded = 1;
+    }
+
+    if (want_ata && !s_bdm_ata_transport_loaded) {
+        if (load_ata_transport_modules() < 0)
+            return -2;
+        s_bdm_ata_transport_loaded = 1;
+    }
+
+    return 0;
+}
+
+static int load_family_modules(LoaderPathFamily family, const char *path_hint)
 {
     int j, x;
 
@@ -204,14 +236,12 @@ static int load_family_modules(LoaderPathFamily family)
     switch (family) {
         case LOADER_PATH_FAMILY_BDM:
         {
-            int usb_ok = 0;
-            int ata_ok = 0;
-
-            if (load_bdm_core_modules() < 0)
-                return -1;
-            usb_ok = (load_usb_transport_modules() == 0);
-            ata_ok = (load_ata_transport_modules() == 0);
-            if (!usb_ok && !ata_ok)
+            if (!s_bdm_core_loaded) {
+                if (load_bdm_core_modules() < 0)
+                    return -1;
+                s_bdm_core_loaded = 1;
+            }
+            if (load_bdm_transports_for_path(path_hint) < 0)
                 return -2;
             s_usb_modules_loaded = 1;
             return 0;
@@ -270,7 +300,7 @@ static int load_family_modules(LoaderPathFamily family)
     }
 }
 
-static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit_pad)
+static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit_pad, const char *path_hint)
 {
     int family_load_result;
 
@@ -297,7 +327,7 @@ static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit
 
     load_core_modules();
     s_current_family = LOADER_PATH_FAMILY_MC;
-    family_load_result = load_family_modules(family);
+    family_load_result = load_family_modules(family, path_hint);
 
     if (family_load_result == 0)
         s_current_family = family;
@@ -388,14 +418,17 @@ int LoaderEnsurePathFamilyReady(const char *path)
         return 0;
     if (target_family == LOADER_PATH_FAMILY_XFROM)
         target_family = LOADER_PATH_FAMILY_MC;
-    if (s_current_family == target_family)
+    if (s_current_family == target_family) {
+        if (target_family == LOADER_PATH_FAMILY_BDM)
+            return load_bdm_transports_for_path(path);
         return 0;
+    }
 
     DPRINTF("Switching IOP driver family from %d to %d for path '%s'\n",
             (int)s_current_family,
             (int)target_family,
             (path != NULL) ? path : "");
-    return reload_for_family(target_family, 1, 1);
+    return reload_for_family(target_family, 1, 1, path);
 }
 
 void LoaderLoadSystemModules(int *usb_modules_loaded,
@@ -403,7 +436,11 @@ void LoaderLoadSystemModules(int *usb_modules_loaded,
                              int *mmce_modules_loaded,
                              int *hdd_modules_loaded)
 {
-    reload_for_family(s_boot_family, 0, 0);
+    const char *boot_hint = s_boot_config_path;
+
+    if (boot_hint == NULL || *boot_hint == '\0')
+        boot_hint = NULL;
+    reload_for_family(s_boot_family, 0, 0, boot_hint);
 
     if (usb_modules_loaded != NULL)
         *usb_modules_loaded = s_usb_modules_loaded;
