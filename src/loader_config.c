@@ -240,7 +240,7 @@ int LoaderFindConfigFile(FILE **fp_out,
 
         if (config_path == NULL || *config_path == '\0')
             continue;
-        if (LoaderEnsurePathFamilyReady(config_path) < 0)
+        if (!LoaderPathFamilyReadyWithoutReload(config_path))
             continue;
 
         resolved_path = CheckPath(config_path);

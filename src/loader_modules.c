@@ -364,6 +364,18 @@ int LoaderGetBootConfigSourceHint(void)
     return s_boot_config_source_hint;
 }
 
+int LoaderPathFamilyReadyWithoutReload(const char *path)
+{
+    LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
+
+    if (target_family == LOADER_PATH_FAMILY_NONE ||
+        target_family == LOADER_PATH_FAMILY_MC ||
+        target_family == LOADER_PATH_FAMILY_XFROM)
+        return 1;
+
+    return (s_current_family == target_family);
+}
+
 int LoaderEnsurePathFamilyReady(const char *path)
 {
     LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
