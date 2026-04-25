@@ -233,6 +233,17 @@ static int path_is_legacy_mass(const char *path)
     return ci_starts_with(path, "mass");
 }
 
+static int extract_legacy_mass_unit(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return -1;
+    if (!ci_starts_with(path, "mass"))
+        return -1;
+    if (path[4] >= '0' && path[4] <= '9' && path[5] == ':')
+        return (int)(path[4] - '0');
+    return -1;
+}
+
 static int build_mass_generic_alias(const char *path, char *out, size_t out_size)
 {
     const char *suffix;
@@ -462,6 +473,10 @@ int LoaderFindConfigFile(FILE **fp_out,
     int boot_family_source_hint;
     LoaderPathFamily boot_cwd_family;
     int boot_from_legacy_mass = 0;
+    int boot_legacy_mass_unit = -1;
+#ifdef MX4SIO
+    int allow_mx4_on_legacy_mass = 1;
+#endif
     int source;
 
     if (fp_out != NULL)
@@ -478,6 +493,16 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
     boot_from_legacy_mass = path_is_legacy_mass(boot_path_hint);
+    boot_legacy_mass_unit = extract_legacy_mass_unit(boot_path_hint);
+#ifdef MX4SIO
+    if (boot_from_legacy_mass && boot_legacy_mass_unit >= 5) {
+        allow_mx4_on_legacy_mass = 0;
+        DPRINTF("Config probe: boot argv0 mass%d -> skipping MX4SIO config discovery path\n",
+                boot_legacy_mass_unit);
+    }
+#else
+    (void)boot_legacy_mass_unit;
+#endif
 
     {
         int mass_late_wait_used = 0;
@@ -563,11 +588,18 @@ int LoaderFindConfigFile(FILE **fp_out,
             usb_ret = LoaderLoadBdmTransportsForHint("usb:/");
             ata_ret = LoaderLoadBdmTransportsForHint("ata:/");
 #ifdef MX4SIO
-            mx4_ret = LoaderLoadBdmTransportsForHint("mx4sio:/");
-            DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d mx4=%d\n",
-                    usb_ret,
-                    ata_ret,
-                    mx4_ret);
+            if (allow_mx4_on_legacy_mass) {
+                mx4_ret = LoaderLoadBdmTransportsForHint("mx4sio:/");
+                DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d mx4=%d\n",
+                        usb_ret,
+                        ata_ret,
+                        mx4_ret);
+            } else {
+                DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d mx4=skipped(unit=%d)\n",
+                        usb_ret,
+                        ata_ret,
+                        boot_legacy_mass_unit);
+            }
 #else
             DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d\n",
                     usb_ret,
@@ -586,14 +618,16 @@ int LoaderFindConfigFile(FILE **fp_out,
             !ci_eq(ata_config_path_buf, config_path))
             config_path_ata = ata_config_path_buf;
 #ifdef MX4SIO
-        if (build_mass_mx4_alias(config_path, mx4_config_path_buf, sizeof(mx4_config_path_buf)) &&
-            !ci_eq(mx4_config_path_buf, config_path))
-            config_path_mx4 = mx4_config_path_buf;
-        if (config_path_mx4 == NULL &&
-            config_path_generic != NULL &&
-            build_mass_mx4_alias(config_path_generic, mx4_config_path_buf, sizeof(mx4_config_path_buf)) &&
-            !ci_eq(mx4_config_path_buf, config_path_generic))
-            config_path_mx4 = mx4_config_path_buf;
+        if (allow_mx4_on_legacy_mass) {
+            if (build_mass_mx4_alias(config_path, mx4_config_path_buf, sizeof(mx4_config_path_buf)) &&
+                !ci_eq(mx4_config_path_buf, config_path))
+                config_path_mx4 = mx4_config_path_buf;
+            if (config_path_mx4 == NULL &&
+                config_path_generic != NULL &&
+                build_mass_mx4_alias(config_path_generic, mx4_config_path_buf, sizeof(mx4_config_path_buf)) &&
+                !ci_eq(mx4_config_path_buf, config_path_generic))
+                config_path_mx4 = mx4_config_path_buf;
+        }
 #endif
 
         if ((source == 1 || source == 2) &&
@@ -635,7 +669,8 @@ int LoaderFindConfigFile(FILE **fp_out,
                 !ci_eq(ata_secondary_path_buf, boot_family_config))
                 secondary_ata = ata_secondary_path_buf;
 #ifdef MX4SIO
-            if (build_mass_mx4_alias(boot_family_config, mx4_secondary_path_buf, sizeof(mx4_secondary_path_buf)) &&
+            if (allow_mx4_on_legacy_mass &&
+                build_mass_mx4_alias(boot_family_config, mx4_secondary_path_buf, sizeof(mx4_secondary_path_buf)) &&
                 !ci_eq(mx4_secondary_path_buf, boot_family_config))
                 secondary_mx4 = mx4_secondary_path_buf;
 #endif
@@ -769,6 +804,7 @@ int LoaderFindConfigFile(FILE **fp_out,
             if (fp == NULL &&
                 mass_wait_timed_out &&
                 !mass_mx4_probe_used &&
+                allow_mx4_on_legacy_mass &&
                 should_try_mx4_probe_for_mass(config_path,
                                               (secondary_count > 0) ? secondary_candidates[0] : NULL,
                                               boot_driver_tag)) {
@@ -840,6 +876,15 @@ int LoaderFindConfigFile(FILE **fp_out,
                         max_attempts);
             }
             continue;
+        }
+
+        if (source == 1 &&
+            matched_wait_path != NULL &&
+            candidate_list_contains(secondary_candidates, secondary_count, matched_wait_path) &&
+            !candidate_list_contains(primary_candidates, primary_count, matched_wait_path) &&
+            boot_family_config != NULL &&
+            *boot_family_config != '\0') {
+            report_requested_path = boot_family_config;
         }
 
         resolved_path = CheckPath(config_path);

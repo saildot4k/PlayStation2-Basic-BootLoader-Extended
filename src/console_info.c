@@ -26,6 +26,96 @@ static int parse_mmce_slot_from_path(const char *path)
     return -1;
 }
 
+static int format_mass_device_name(char *out,
+                                   size_t out_size,
+                                   const char *resolved_path,
+                                   const char *boot_hint)
+{
+    int mass_unit = parse_mass_unit_from_path(resolved_path);
+
+    if (out == NULL || out_size == 0)
+        return 0;
+
+    if (mass_unit < 0)
+        mass_unit = parse_mass_unit_from_path(boot_hint);
+
+    if (mass_unit >= 0) {
+        snprintf(out, out_size, "MASS%d", mass_unit);
+        return 1;
+    }
+
+    if (resolved_path != NULL && *resolved_path != '\0') {
+        if (ci_starts_with(resolved_path, "ata")) {
+            snprintf(out, out_size, "ATA");
+            return 1;
+        }
+        if (ci_starts_with(resolved_path, "ilink")) {
+            snprintf(out, out_size, "ILINK");
+            return 1;
+        }
+        if (ci_starts_with(resolved_path, "mx4sio")) {
+            snprintf(out, out_size, "MX4SIO");
+            return 1;
+        }
+        if (ci_starts_with(resolved_path, "usb")) {
+            snprintf(out, out_size, "USB");
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static void format_device_source_name(char *out,
+                                      size_t out_size,
+                                      int config_source,
+                                      const char *resolved_path,
+                                      const char *boot_hint)
+{
+    int mmce_slot;
+
+    if (out == NULL || out_size == 0)
+        return;
+    out[0] = '\0';
+
+    if (format_mass_device_name(out, out_size, resolved_path, boot_hint))
+        return;
+
+    mmce_slot = parse_mmce_slot_from_path(resolved_path);
+    if (mmce_slot >= 0) {
+        snprintf(out, out_size, "MMCE%d", mmce_slot);
+        return;
+    }
+
+    if (resolved_path != NULL && *resolved_path != '\0') {
+        if (ci_starts_with(resolved_path, "mc0")) {
+            snprintf(out, out_size, "MC0");
+            return;
+        }
+        if (ci_starts_with(resolved_path, "mc1")) {
+            snprintf(out, out_size, "MC1");
+            return;
+        }
+        if (ci_starts_with(resolved_path, "hdd0")) {
+            snprintf(out, out_size, "HDD0");
+            return;
+        }
+        if (ci_starts_with(resolved_path, "xfrom")) {
+            snprintf(out, out_size, "XFROM");
+            return;
+        }
+        if (ci_starts_with(resolved_path, "host")) {
+            snprintf(out, out_size, "HOST");
+            return;
+        }
+    }
+
+    if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL)
+        snprintf(out, out_size, "%s", SOURCES[config_source]);
+    else
+        snprintf(out, out_size, "UNKNOWN");
+}
+
 static void format_cwd_source_name(char *out, size_t out_size)
 {
     const char *boot_hint = LoaderGetBootPathHint();
@@ -194,6 +284,8 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
     const char *source_name = "";
     char source_buf[32];
     const char *requested_config_path = LoaderGetRequestedConfigPath();
+    const char *resolved_config_path = LoaderGetResolvedConfigPath();
+    const char *boot_hint = LoaderGetBootPathHint();
     const char *boot_cwd_config_path = LoaderGetBootCwdConfigPath();
     int config_is_boot_cwd = 0;
 
@@ -216,9 +308,31 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
         ci_eq(requested_config_path, boot_cwd_config_path)) {
         config_is_boot_cwd = 1;
     }
+    if (!config_is_boot_cwd &&
+        resolved_config_path != NULL &&
+        boot_cwd_config_path != NULL &&
+        *resolved_config_path != '\0' &&
+        *boot_cwd_config_path != '\0' &&
+        ci_eq(resolved_config_path, boot_cwd_config_path)) {
+        config_is_boot_cwd = 1;
+    }
 
-    if (config_source == SOURCE_CWD || config_is_boot_cwd) {
+    if (config_is_boot_cwd) {
         format_cwd_source_name(source_buf, sizeof(source_buf));
+        source_name = source_buf;
+    } else if (config_source == SOURCE_CWD) {
+        format_device_source_name(source_buf,
+                                  sizeof(source_buf),
+                                  config_source,
+                                  resolved_config_path,
+                                  boot_hint);
+        source_name = source_buf;
+    } else if (config_source == SOURCE_MASS) {
+        format_device_source_name(source_buf,
+                                  sizeof(source_buf),
+                                  config_source,
+                                  resolved_config_path,
+                                  boot_hint);
         source_name = source_buf;
     } else if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL) {
         source_name = SOURCES[config_source];
