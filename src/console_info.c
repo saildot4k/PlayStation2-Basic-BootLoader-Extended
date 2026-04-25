@@ -193,6 +193,9 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
 {
     const char *source_name = "";
     char source_buf[32];
+    const char *requested_config_path = LoaderGetRequestedConfigPath();
+    const char *boot_cwd_config_path = LoaderGetBootCwdConfigPath();
+    int config_is_boot_cwd = 0;
 
     if (info == NULL)
         return;
@@ -206,7 +209,15 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
     strip_crlf_copy(PS1DRVGetVersion(), info->ps1ver, sizeof(info->ps1ver));
     strip_crlf_copy(DVDPlayerGetVersion(), info->dvdver, sizeof(info->dvdver));
 
-    if (config_source == SOURCE_CWD) {
+    if (requested_config_path != NULL &&
+        boot_cwd_config_path != NULL &&
+        *requested_config_path != '\0' &&
+        *boot_cwd_config_path != '\0' &&
+        ci_eq(requested_config_path, boot_cwd_config_path)) {
+        config_is_boot_cwd = 1;
+    }
+
+    if (config_source == SOURCE_CWD || config_is_boot_cwd) {
         format_cwd_source_name(source_buf, sizeof(source_buf));
         source_name = source_buf;
     } else if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL) {

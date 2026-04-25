@@ -143,6 +143,7 @@ void TimerEnd(void);
 char *CheckPath(const char *path);
 int LoaderGetConfigSource(void);
 const char *LoaderGetResolvedConfigPath(void);
+const char *LoaderGetRequestedConfigPath(void);
 int dischandler(int skip_ps2logo, int argc, char *argv[]);
 // There is no need to call this on a PSX DESR since OSDSYS performs it at boot.
 void CDVDBootCertify(u8 romver[16]);

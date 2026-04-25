@@ -745,6 +745,8 @@ void LoaderSetBootPathHint(const char *boot_path)
 {
     LoaderPathFamily family = LoaderPathFamilyFromPath(boot_path);
     int legacy_mass_unit = extract_legacy_mass_unit(boot_path);
+    const char *boot_path_for_ops = boot_path;
+    char normalized_mass_path[256];
 
     s_boot_family = (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_XFROM)
                         ? LOADER_PATH_FAMILY_MC
@@ -753,9 +755,23 @@ void LoaderSetBootPathHint(const char *boot_path)
     s_boot_path_hint[0] = '\0';
     s_boot_driver_tag[0] = '\0';
     s_boot_config_source_hint = SOURCE_INVALID;
-    if (boot_path != NULL && *boot_path != '\0')
+    if (boot_path != NULL && *boot_path != '\0') {
         snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", boot_path);
-    set_boot_cwd_config_path(boot_path);
+        if (starts_with(s_boot_path_hint, "mass") &&
+            normalize_mass_path_to_unit_or_generic(s_boot_path_hint,
+                                                   legacy_mass_unit,
+                                                   normalized_mass_path,
+                                                   sizeof(normalized_mass_path))) {
+            if (!ci_eq(s_boot_path_hint, normalized_mass_path)) {
+                DPRINTF("Boot hint normalize: '%s' -> '%s'\n",
+                        s_boot_path_hint,
+                        normalized_mass_path);
+            }
+            snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", normalized_mass_path);
+        }
+        boot_path_for_ops = s_boot_path_hint;
+    }
+    set_boot_cwd_config_path(boot_path_for_ops);
 
     switch (family) {
         case LOADER_PATH_FAMILY_MMCE:
@@ -768,16 +784,16 @@ void LoaderSetBootPathHint(const char *boot_path)
             snprintf(s_boot_config_path, sizeof(s_boot_config_path), "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_BDM:
-            if (starts_with(boot_path, "ata"))
+            if (starts_with(boot_path_for_ops, "ata"))
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ata:/PS2BBL/CONFIG.INI");
-            else if (starts_with(boot_path, "ilink"))
+            else if (starts_with(boot_path_for_ops, "ilink"))
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ilink:/PS2BBL/CONFIG.INI");
             else if (legacy_mass_unit >= 0)
                 snprintf(s_boot_config_path,
                          sizeof(s_boot_config_path),
                          "mass%d:/PS2BBL/CONFIG.INI",
                          legacy_mass_unit);
-            else if (starts_with(boot_path, "mass"))
+            else if (starts_with(boot_path_for_ops, "mass"))
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mass:/PS2BBL/CONFIG.INI");
             else
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "usb:/PS2BBL/CONFIG.INI");
@@ -791,7 +807,7 @@ void LoaderSetBootPathHint(const char *boot_path)
 
     s_boot_config_source_hint = source_hint_for_family(family);
     DPRINTF("Boot hint: argv0='%s' raw_family=%s boot_family=%s cwd_cfg='%s'\n",
-            (boot_path != NULL && *boot_path != '\0') ? boot_path : "<null>",
+            (boot_path_for_ops != NULL && *boot_path_for_ops != '\0') ? boot_path_for_ops : "<null>",
             boot_family_name(family),
             boot_family_name(s_boot_family),
             (s_boot_cwd_config_path[0] != '\0') ? s_boot_cwd_config_path : "<none>");
@@ -856,13 +872,16 @@ int LoaderEnsurePathFamilyReady(const char *path)
             (int)s_current_family,
             (int)target_family,
             (path != NULL) ? path : "");
-    return reload_for_family(target_family, 1, 1, path);
+    // Path traversal does not require active pad input. Keep pads closed during
+    // family-switch reboots and reopen only when we return to interactive UI.
+    return reload_for_family(target_family, 1, 0, path);
 }
 
 int LoaderPrepareFinalLaunch(const char *path)
 {
     LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
     int need_reboot = 0;
+    int reinit_pad_after_reboot = 0;
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
@@ -907,7 +926,7 @@ int LoaderPrepareFinalLaunch(const char *path)
             (int)s_current_family,
             (int)target_family);
 
-    if (reload_for_family(target_family, 1, 1, path) < 0)
+    if (reload_for_family(target_family, 1, reinit_pad_after_reboot, path) < 0)
         return -1;
 
     return 1;

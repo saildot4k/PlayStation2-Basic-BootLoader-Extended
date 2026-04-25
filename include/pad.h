@@ -4,6 +4,9 @@ void PadInitPads(void);
 // Deinit PADMAN RPC service
 void PadDeinitPads(void);
 
+// Returns non-zero when pads are currently initialized/open.
+int PadIsInitialized(void);
+
 
 /// Read pad data without additional checks
 int ReadPadStatus_raw(int port, int slot);

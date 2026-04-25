@@ -38,6 +38,11 @@ void PadDeinitPads(void)
     }
 }
 
+int PadIsInitialized(void)
+{
+    return pad_inited;
+}
+
 int ReadPadStatus_raw(int port, int slot)
 {
     struct padButtonStatus buttons;

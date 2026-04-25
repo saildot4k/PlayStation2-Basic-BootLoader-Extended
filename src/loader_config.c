@@ -14,6 +14,7 @@
 extern unsigned char *config_buf;
 extern int g_is_psx_desr;
 static char s_resolved_config_path[256] = "";
+static char s_requested_config_path[256] = "";
 
 typedef struct
 {
@@ -310,6 +311,11 @@ const char *LoaderGetResolvedConfigPath(void)
     return s_resolved_config_path;
 }
 
+const char *LoaderGetRequestedConfigPath(void)
+{
+    return s_requested_config_path;
+}
+
 int LoaderFindConfigFile(FILE **fp_out,
                          char *path_out,
                          size_t path_out_size,
@@ -328,6 +334,7 @@ int LoaderFindConfigFile(FILE **fp_out,
     if (path_out != NULL && path_out_size > 0)
         path_out[0] = '\0';
     s_resolved_config_path[0] = '\0';
+    s_requested_config_path[0] = '\0';
 
     boot_cwd_config = LoaderGetBootCwdConfigPath();
     boot_family_config = LoaderGetBootConfigPath();
@@ -555,6 +562,7 @@ int LoaderFindConfigFile(FILE **fp_out,
 
         if (path_out != NULL && path_out_size > 0)
             snprintf(path_out, path_out_size, "%s", resolved_path);
+        snprintf(s_requested_config_path, sizeof(s_requested_config_path), "%s", config_path);
         snprintf(s_resolved_config_path, sizeof(s_resolved_config_path), "%s", resolved_path);
 
         DPRINTF("Config found: requested='%s' resolved='%s' source_hint=%d\n",
