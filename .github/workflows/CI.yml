@@ -42,7 +42,7 @@ jobs:
         run: |
           apk add build-base git p7zip python3
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --prune --unshallow
@@ -109,7 +109,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ success() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: PSX-ALL-DRIVERS-LAZY-LOADING
           path: |

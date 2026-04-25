@@ -7,6 +7,7 @@ void sio_printf(const char *fmt, ...);
     #define DPRINTF_INIT() ee_sio_start(38400, 0, 0, 0, 0, 1);
     #define DPRINTF(x...) sio_printf( x)
 #elif COMMON_PRINTF
+    #include <stdio.h>
     #define DPRINTF(x...) printf(x)
 #elif SCR_PRINT
     #include <debug.h>

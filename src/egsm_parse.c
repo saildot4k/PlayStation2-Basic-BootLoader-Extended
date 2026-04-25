@@ -81,6 +81,6 @@ uint32_t parse_egsm_flags_common(const char *gsm_arg)
             flags |= EGSM_FLAG_NO_576P;
     }
 
-    DPRINTF("%s: parsed flags=0x%08x from '%s'\n", __func__, flags, gsm_arg);
+    DPRINTF("%s: parsed flags=0x%08x from '%s'\n", __func__, (unsigned int)flags, gsm_arg);
     return flags;
 }

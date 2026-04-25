@@ -436,7 +436,7 @@ static uint32_t PS2ParseOSDGSMFlags(const char *gsm_arg)
     DPRINTF("%s: parsing OSDGSM value '%s'\n", __func__, gsm_arg);
     uint32_t flags = parse_egsm_flags_common(gsm_arg);
 
-    DPRINTF("%s: parsed flags=0x%08x\n", __func__, flags);
+    DPRINTF("%s: parsed flags=0x%08x\n", __func__, (unsigned int)flags);
     return flags;
 }
 
@@ -547,7 +547,7 @@ static char *PS2GetOSDGSMArgument(const char *title_id, uint32_t *flags_out)
             return NULL;
         }
 
-        DPRINTF("%s: OSDGSM value '%s' parsed as flags 0x%08x\n", __func__, selected_arg, flags);
+        DPRINTF("%s: OSDGSM value '%s' parsed as flags 0x%08x\n", __func__, selected_arg, (unsigned int)flags);
         if (flags_out != NULL)
             *flags_out = flags;
     }
@@ -904,7 +904,7 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
         DPRINTF("%s: using explicit -gsm override '%s' flags=0x%08x\n",
                 __func__,
                 (egsm_override_arg != NULL) ? egsm_override_arg : "<unknown>",
-                osdgsm_flags);
+                (unsigned int)osdgsm_flags);
     } else {
         osdgsm_arg = PS2GetOSDGSMArgument(ps2disc_boot, &osdgsm_flags);
         if (osdgsm_arg != NULL)
