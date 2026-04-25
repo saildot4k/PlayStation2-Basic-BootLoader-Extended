@@ -60,6 +60,23 @@ static int build_mass_unit_path(const char *path, int unit, char *out, size_t ou
     return 1;
 }
 
+static int normalize_mass_path_to_unit_or_default0(const char *path, int unit, char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0)
+        return 0;
+
+    if (path == NULL || !ci_starts_with(path, "mass"))
+        return 0;
+
+    if (build_mass_unit_path(path, unit, out, out_size))
+        return 1;
+    // OSDMenu launcher quickboot normalizes generic BDM paths to mass0.
+    if (build_mass_unit_path(path, 0, out, out_size))
+        return 1;
+
+    return 0;
+}
+
 #ifdef FILEXIO
 static int mass_mount_openable(int unit)
 {
@@ -153,6 +170,11 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
         snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
         if (exist(candidate))
             return i;
+        if (suffix[1] != '\0' && suffix[1] != '/') {
+            snprintf(candidate, sizeof(candidate), "mass%d:/%s", i, suffix + 1);
+            if (exist(candidate))
+                return i;
+        }
 #ifdef FILEXIO
         if (mass_mount_openable(i)) {
             if (first_mount < 0)
@@ -192,14 +214,19 @@ static void refine_boot_hint_from_legacy_mass(void)
 
     mass_unit = resolve_legacy_mass_boot_unit(s_boot_path_hint);
     if (mass_unit < 0) {
-        DPRINTF("Boot mass refine: argv0='%s' unit=<unknown>\n", s_boot_path_hint);
+        if (normalize_mass_path_to_unit_or_default0(s_boot_cwd_config_path, -1, resolved, sizeof(resolved)))
+            snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", resolved);
+
+        DPRINTF("Boot mass refine: argv0='%s' unit=<unknown> cwd_cfg='%s'\n",
+                s_boot_path_hint,
+                (s_boot_cwd_config_path[0] != '\0') ? s_boot_cwd_config_path : "<none>");
         s_boot_driver_tag[0] = '\0';
         return;
     }
 
     if (build_mass_unit_path(s_boot_path_hint, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", resolved);
-    if (build_mass_unit_path(s_boot_cwd_config_path, mass_unit, resolved, sizeof(resolved)))
+    if (normalize_mass_path_to_unit_or_default0(s_boot_cwd_config_path, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", resolved);
     if (build_mass_unit_path(s_boot_config_path, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_config_path, sizeof(s_boot_config_path), "%s", resolved);
@@ -231,7 +258,7 @@ static void set_boot_cwd_config_path(const char *boot_path)
     if (boot_path == NULL || *boot_path == '\0' || boot_path[0] == '$')
         return;
 
-    max_prefix_len = sizeof(s_boot_cwd_config_path) - sizeof("CONFIG.INI");
+    max_prefix_len = sizeof(s_boot_cwd_config_path) - sizeof("/CONFIG.INI");
 
     slash = strrchr(boot_path, '/');
     if (slash != NULL) {
@@ -249,7 +276,7 @@ static void set_boot_cwd_config_path(const char *boot_path)
         if (prefix_len > max_prefix_len)
             prefix_len = max_prefix_len;
         memcpy(s_boot_cwd_config_path, boot_path, prefix_len);
-        memcpy(s_boot_cwd_config_path + prefix_len, "CONFIG.INI", sizeof("CONFIG.INI"));
+        memcpy(s_boot_cwd_config_path + prefix_len, "/CONFIG.INI", sizeof("/CONFIG.INI"));
     }
 }
 
@@ -478,13 +505,10 @@ static int load_bdm_transports_for_path(const char *path_hint)
 #endif
         } else if (starts_with(path_hint, "mass")) {
             // Legacy mass[:|N:] prefixes can represent USB or ATA-BDM paths.
-            // They are also used by MX4SIO on older launch chains.
-            // Keep all compatible transports available for legacy mass hints.
+            // Do not auto-load MX4SIO here: some MX4SIO builds can loop card
+            // init forever when no MX4SIO media is present.
             want_usb = 1;
             want_ata = 1;
-#ifdef MX4SIO
-            want_mx4sio = 1;
-#endif
         } else if (starts_with(path_hint, "usb") || starts_with(path_hint, "ilink")) {
             want_usb = 1;
             strict_usb = 1;
