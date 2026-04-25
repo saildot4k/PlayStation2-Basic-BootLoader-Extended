@@ -219,6 +219,7 @@ int LoaderFindConfigFile(FILE **fp_out,
     const char *boot_cwd_config;
     const char *boot_family_config;
     int boot_family_source_hint;
+    LoaderPathFamily boot_cwd_family;
     int source;
 
     if (fp_out != NULL)
@@ -229,6 +230,7 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_cwd_config = LoaderGetBootCwdConfigPath();
     boot_family_config = LoaderGetBootConfigPath();
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
+    boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
 
     for (source = 0; source < 5; source++) {
         const char *config_path = NULL;
@@ -266,18 +268,20 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (!LoaderPathFamilyReadyWithoutReload(config_path))
             continue;
 
-        // Boot-family devices (especially USB/BDM) can appear shortly after
-        // modules load. Retry briefly before falling through to next location.
-        if (source == 1 || source == 2) {
+        // Boot-family devices can appear shortly after modules load.
+        // Keep probing CWD/boot-family locations for a while before falling
+        // through to memory-card fallback.
+        if (source == 0 || source == 1 || source == 2) {
             LoaderPathFamily family = LoaderPathFamilyFromPath(config_path);
 
-            if (family == LOADER_PATH_FAMILY_BDM) {
-                max_attempts = 30;
-                retry_delay_us = 100000;
-            } else if (family == LOADER_PATH_FAMILY_MMCE ||
-                       family == LOADER_PATH_FAMILY_MX4SIO) {
-                max_attempts = 15;
-                retry_delay_us = 100000;
+            if (family == LOADER_PATH_FAMILY_NONE && source == 0)
+                family = boot_cwd_family;
+
+            if (family == LOADER_PATH_FAMILY_BDM ||
+                family == LOADER_PATH_FAMILY_MMCE ||
+                family == LOADER_PATH_FAMILY_MX4SIO) {
+                max_attempts = 2;
+                retry_delay_us = 50000;
             }
         }
 
@@ -296,7 +300,14 @@ int LoaderFindConfigFile(FILE **fp_out,
         }
 
         if (fp == NULL)
+        {
+            if (source <= 2 && max_attempts > 1) {
+                DPRINTF("Config miss: requested='%s' attempts=%d\n",
+                        config_path,
+                        max_attempts);
+            }
             continue;
+        }
 
         if (fp_out != NULL)
             *fp_out = fp;
