@@ -1,5 +1,6 @@
 // Config discovery, parsing, and bootstrap flow (defaults + splash preparation).
 #include <stdint.h>
+#include <sys/stat.h>
 
 #include "main.h"
 #include "loader_config.h"
@@ -210,6 +211,67 @@ static int parse_launch_key_entry(const char *name, char *value, u32 *parsed_lau
     return 0;
 }
 
+static int path_is_legacy_mass_or_usb(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return 0;
+
+    return ci_starts_with(path, "mass") || ci_starts_with(path, "usb");
+}
+
+static int any_mass_slot_openable(void)
+{
+    int slot;
+
+    for (slot = 0; slot < 10; slot++) {
+        char mountpoint[] = "mass0:";
+
+        mountpoint[4] = '0' + slot;
+
+#ifdef FILEXIO
+        {
+            int dd = fileXioDopen(mountpoint);
+            if (dd >= 0) {
+                fileXioDclose(dd);
+                return 1;
+            }
+        }
+#else
+        {
+            struct stat st;
+            if (stat(mountpoint, &st) == 0)
+                return 1;
+        }
+#endif
+    }
+
+    return 0;
+}
+
+static int wait_for_mass_mount(unsigned int timeout_ms,
+                               u64 *rescue_combo_deadline,
+                               LoaderEmergencyPollFn poll_fn)
+{
+    unsigned int waited_ms = 0;
+    const unsigned int step_ms = 50;
+
+    if (any_mass_slot_openable())
+        return 1;
+
+    while (waited_ms < timeout_ms) {
+        if (poll_fn != NULL)
+            poll_fn(rescue_combo_deadline);
+
+        usleep(step_ms * 1000);
+        waited_ms += step_ms;
+
+        if (any_mass_slot_openable())
+            return 1;
+    }
+
+    return 0;
+}
+
 int LoaderFindConfigFile(FILE **fp_out,
                          char *path_out,
                          size_t path_out_size,
@@ -238,6 +300,7 @@ int LoaderFindConfigFile(FILE **fp_out,
         int attempt = 0;
         int max_attempts = 1;
         unsigned int retry_delay_us = 0;
+        int allow_mass_late_wait = 0;
         char *resolved_path;
         FILE *fp = NULL;
 
@@ -268,6 +331,12 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (!LoaderPathFamilyReadyWithoutReload(config_path))
             continue;
 
+        if ((source == 1 || source == 2) &&
+            LoaderPathFamilyFromPath(config_path) == LOADER_PATH_FAMILY_BDM &&
+            path_is_legacy_mass_or_usb(config_path)) {
+            allow_mass_late_wait = 1;
+        }
+
         // Boot-family devices can appear shortly after modules load.
         // Keep probing CWD/boot-family locations for a while before falling
         // through to memory-card fallback.
@@ -297,6 +366,21 @@ int LoaderFindConfigFile(FILE **fp_out,
 
             if (attempt + 1 < max_attempts && retry_delay_us > 0)
                 usleep(retry_delay_us);
+        }
+
+        // Legacy mass:/ and usb:/ roots can appear shortly after transport load.
+        // Keep startup snappy (2x50ms fast path), then do one short mount wait
+        // before falling back to memory-card config.
+        if (fp == NULL && allow_mass_late_wait) {
+            DPRINTF("Config wait: requested='%s' waiting for mass mount\n", config_path);
+
+            if (wait_for_mass_mount(2000, rescue_combo_deadline, poll_fn)) {
+                resolved_path = CheckPath(config_path);
+                if (resolved_path != NULL && *resolved_path != '\0')
+                    fp = fopen(resolved_path, "r");
+            } else {
+                DPRINTF("Config wait timeout: requested='%s'\n", config_path);
+            }
         }
 
         if (fp == NULL)
