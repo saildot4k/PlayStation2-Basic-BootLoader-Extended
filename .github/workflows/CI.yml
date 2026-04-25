@@ -34,6 +34,8 @@ jobs:
     container: ps2dev/ps2dev:latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      DEBUG: 'DEBUG=1'
+      PRINTF_ARGS: 'PRINTF=PRINTF'
     steps:
 
       - name: Install dependencies
@@ -58,12 +60,17 @@ jobs:
             echo "USE_RELEASE=1" >> $GITHUB_ENV
           fi
 
-      - name: compilation opts
-        if: github.event.inputs.debug == true
+      - name: Resolve debug args (manual workflow)
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          echo "DEBUG=$(echo DEBUG=1)" >> $GITHUB_ENV
+          if [ "${{ github.event.inputs.debug }}" = "true" ]; then
+            echo "DEBUG=DEBUG=1" >> $GITHUB_ENV
+          else
+            echo "DEBUG=" >> $GITHUB_ENV
+          fi
 
-      - name: Resolve printf args
+      - name: Resolve printf args (manual workflow)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           PRINTF_INPUT="${{ github.event.inputs.printf }}"
           if [ -z "$PRINTF_INPUT" ] || [ "$PRINTF_INPUT" = "NONE" ]; then

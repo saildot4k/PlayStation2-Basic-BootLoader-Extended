@@ -56,7 +56,10 @@ static int build_mass_unit_path(const char *path, int unit, char *out, size_t ou
     else
         return 0;
 
-    snprintf(out, out_size, "mass%d%s", unit, suffix);
+    if (suffix[1] == '/' || suffix[1] == '\0')
+        snprintf(out, out_size, "mass%d%s", unit, suffix);
+    else
+        snprintf(out, out_size, "mass%d:/%s", unit, suffix + 1);
     return 1;
 }
 
