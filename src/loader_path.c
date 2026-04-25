@@ -458,10 +458,29 @@ static const char *resolve_path_tokens(const char *path,
     }
 
     if (ci_starts_with(path, "massX:")) {
+        const char *suffix = path + 5;
+        int i;
+        char candidate[CHECKPATH_BUF_SIZE];
         int slot = get_legacy_mx4sio_slot();
 
-        if (slot >= 0)
+        if (require_existing_pairs) {
+            for (i = 0; i < 5; i++) {
+                if (!build_mass_path(candidate, sizeof(candidate), suffix, i))
+                    continue;
+                if (exist(candidate)) {
+                    DPRINTF("CheckPath massX match: requested='%s' candidate='%s'\n",
+                            path,
+                            candidate);
+                    copy_string_safe(out, out_size, candidate);
+                    return out;
+                }
+            }
+        }
+
+        if (slot >= 0) {
             out[4] = '0' + slot;
+            DPRINTF("CheckPath massX slot: requested='%s' resolved='%s'\n", path, out);
+        }
         return out;
     }
 #endif
