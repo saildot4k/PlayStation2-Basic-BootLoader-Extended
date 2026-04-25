@@ -531,7 +531,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
     }
 
     // Fallback for unknown/empty hints: keep both transports available.
-    if (!want_usb && !want_ata) {
+    if (!want_usb && !want_ata && !want_mx4sio) {
         want_usb = 1;
         want_ata = 1;
     }
@@ -770,6 +770,11 @@ const char *LoaderGetBootConfigPath(void)
     return s_boot_config_path;
 }
 
+const char *LoaderGetBootDriverTag(void)
+{
+    return s_boot_driver_tag;
+}
+
 int LoaderGetBootConfigSourceHint(void)
 {
     return s_boot_config_source_hint;
@@ -810,6 +815,25 @@ int LoaderEnsurePathFamilyReady(const char *path)
             (int)target_family,
             (path != NULL) ? path : "");
     return reload_for_family(target_family, 1, 1, path);
+}
+
+int LoaderLoadBdmTransportsForHint(const char *path_hint)
+{
+    int ret;
+
+    if (s_current_family != LOADER_PATH_FAMILY_BDM)
+        return -1;
+    if (!s_bdm_core_loaded)
+        return -2;
+
+    ret = load_bdm_transports_for_path(path_hint);
+    if (ret < 0)
+        return ret;
+
+    if (s_bdm_usb_transport_loaded || s_bdm_ata_transport_loaded || s_mx4sio_modules_loaded)
+        s_usb_modules_loaded = 1;
+    publish_module_states();
+    return 0;
 }
 
 void LoaderLoadSystemModules(int *usb_modules_loaded,

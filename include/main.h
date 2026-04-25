@@ -151,9 +151,11 @@ int LoadUSBIRX(void);
 void LoaderSetBootPathHint(const char *boot_path);
 const char *LoaderGetBootCwdConfigPath(void);
 const char *LoaderGetBootConfigPath(void);
+const char *LoaderGetBootDriverTag(void);
 int LoaderGetBootConfigSourceHint(void);
 int LoaderPathFamilyReadyWithoutReload(const char *path);
 int LoaderEnsurePathFamilyReady(const char *path);
+int LoaderLoadBdmTransportsForHint(const char *path_hint);
 void LoaderLoadSystemModules(int *usb_modules_loaded,
                              int *mx4sio_modules_loaded,
                              int *mmce_modules_loaded,

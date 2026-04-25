@@ -1,12 +1,14 @@
 // Config discovery, parsing, and bootstrap flow (defaults + splash preparation).
 #include <stdint.h>
-#include <sys/stat.h>
 
 #include "main.h"
 #include "loader_config.h"
 #include "loader_path.h"
 #include "splash_render.h"
 #include "splash_screen.h"
+
+#define MASS_CONFIG_LATE_WAIT_MS 10000u
+#define MASS_CONFIG_STAGE_WAIT_MS 2000u
 
 extern unsigned char *config_buf;
 extern int g_is_psx_desr;
@@ -219,57 +221,86 @@ static int path_is_legacy_mass_or_usb(const char *path)
     return ci_starts_with(path, "mass") || ci_starts_with(path, "usb");
 }
 
-static int any_mass_slot_openable(void)
+#ifdef MX4SIO
+static int path_is_legacy_mass_mx4_candidate(const char *path)
 {
-    int slot;
-
-    for (slot = 0; slot < 10; slot++) {
-        char mountpoint[] = "mass0:";
-
-        mountpoint[4] = '0' + slot;
-
-#ifdef FILEXIO
-        {
-            int dd = fileXioDopen(mountpoint);
-            if (dd >= 0) {
-                fileXioDclose(dd);
-                return 1;
-            }
-        }
-#else
-        {
-            struct stat st;
-            if (stat(mountpoint, &st) == 0)
-                return 1;
-        }
-#endif
-    }
-
+    if (path == NULL || *path == '\0')
+        return 0;
+    if (!ci_starts_with(path, "mass"))
+        return 0;
+    if (path[4] == ':')
+        return 1;
+    if (path[4] >= '0' && path[4] <= '4' && path[5] == ':')
+        return 1;
     return 0;
 }
 
-static int wait_for_mass_mount(unsigned int timeout_ms,
-                               u64 *rescue_combo_deadline,
-                               LoaderEmergencyPollFn poll_fn)
+static int should_try_mx4_probe_for_mass(const char *primary_path,
+                                         const char *secondary_path,
+                                         const char *driver_tag)
+{
+    if (driver_tag != NULL && driver_tag[0] != '\0') {
+        if (ci_starts_with(driver_tag, "sdc"))
+            return 1;
+        return 0;
+    }
+
+    return path_is_legacy_mass_mx4_candidate(primary_path) ||
+           path_is_legacy_mass_mx4_candidate(secondary_path);
+}
+#endif
+
+static FILE *wait_for_mass_config_open(const char *primary_path,
+                                       const char *secondary_path,
+                                       const char **matched_path_out,
+                                       unsigned int timeout_ms,
+                                       u64 *rescue_combo_deadline,
+                                       LoaderEmergencyPollFn poll_fn)
 {
     unsigned int waited_ms = 0;
     const unsigned int step_ms = 50;
 
-    if (any_mass_slot_openable())
-        return 1;
+    if (matched_path_out != NULL)
+        *matched_path_out = NULL;
 
     while (waited_ms < timeout_ms) {
+        int idx;
+        const char *paths[2];
+
         if (poll_fn != NULL)
             poll_fn(rescue_combo_deadline);
 
+        paths[0] = primary_path;
+        paths[1] = secondary_path;
+
+        for (idx = 0; idx < 2; idx++) {
+            const char *candidate_path = paths[idx];
+            char *resolved_path;
+            FILE *fp = NULL;
+
+            if (candidate_path == NULL || *candidate_path == '\0')
+                continue;
+            if (idx == 1 && primary_path != NULL && ci_eq(candidate_path, primary_path))
+                continue;
+
+            resolved_path = CheckPath(candidate_path);
+            if (resolved_path == NULL || *resolved_path == '\0')
+                continue;
+
+            fp = fopen(resolved_path, "r");
+            if (fp == NULL)
+                continue;
+
+            if (matched_path_out != NULL)
+                *matched_path_out = candidate_path;
+            return fp;
+        }
+
         usleep(step_ms * 1000);
         waited_ms += step_ms;
-
-        if (any_mass_slot_openable())
-            return 1;
     }
 
-    return 0;
+    return NULL;
 }
 
 int LoaderFindConfigFile(FILE **fp_out,
@@ -280,6 +311,7 @@ int LoaderFindConfigFile(FILE **fp_out,
 {
     const char *boot_cwd_config;
     const char *boot_family_config;
+    const char *boot_driver_tag;
     int boot_family_source_hint;
     LoaderPathFamily boot_cwd_family;
     int source;
@@ -291,10 +323,19 @@ int LoaderFindConfigFile(FILE **fp_out,
 
     boot_cwd_config = LoaderGetBootCwdConfigPath();
     boot_family_config = LoaderGetBootConfigPath();
+    boot_driver_tag = LoaderGetBootDriverTag();
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
 
-    for (source = 0; source < 5; source++) {
+    {
+        int mass_late_wait_used = 0;
+#ifdef MX4SIO
+        int mass_mx4_probe_used = 0;
+#else
+        (void)boot_driver_tag;
+#endif
+
+        for (source = 0; source < 5; source++) {
         const char *config_path = NULL;
         int source_hint = SOURCE_INVALID;
         int attempt = 0;
@@ -371,16 +412,83 @@ int LoaderFindConfigFile(FILE **fp_out,
         // Legacy mass:/ and usb:/ roots can appear shortly after transport load.
         // Keep startup snappy (2x50ms fast path), then do one short mount wait
         // before falling back to memory-card config.
-        if (fp == NULL && allow_mass_late_wait) {
+        if (fp == NULL && allow_mass_late_wait && !mass_late_wait_used) {
+            const char *secondary_wait_path = NULL;
+            const char *matched_wait_path = NULL;
+            const char *wait_requested_path = config_path;
+#ifdef MX4SIO
+            int mass_wait_timed_out = 0;
+#endif
+
+            mass_late_wait_used = 1;
             DPRINTF("Config wait: requested='%s' waiting for mass mount\n", config_path);
 
-            if (wait_for_mass_mount(2000, rescue_combo_deadline, poll_fn)) {
+            if (source == 1 &&
+                boot_family_config != NULL &&
+                *boot_family_config != '\0' &&
+                !ci_eq(boot_family_config, config_path) &&
+                LoaderPathFamilyReadyWithoutReload(boot_family_config) &&
+                LoaderPathFamilyFromPath(boot_family_config) == LOADER_PATH_FAMILY_BDM &&
+                path_is_legacy_mass_or_usb(boot_family_config))
+                secondary_wait_path = boot_family_config;
+
+            fp = wait_for_mass_config_open(config_path,
+                                           secondary_wait_path,
+                                           &matched_wait_path,
+                                           // One-shot grace period for late USB
+                                           // partition enumeration on legacy mass.
+                                           MASS_CONFIG_LATE_WAIT_MS,
+                                           rescue_combo_deadline,
+                                           poll_fn);
+            if (fp != NULL) {
+                if (matched_wait_path != NULL)
+                    config_path = matched_wait_path;
                 resolved_path = CheckPath(config_path);
-                if (resolved_path != NULL && *resolved_path != '\0')
-                    fp = fopen(resolved_path, "r");
+                if (resolved_path == NULL || *resolved_path == '\0')
+                    resolved_path = (char *)config_path;
+                DPRINTF("Config wait found: requested='%s' matched='%s' resolved='%s'\n",
+                        (wait_requested_path != NULL) ? wait_requested_path : "<null>",
+                        config_path,
+                        resolved_path);
             } else {
                 DPRINTF("Config wait timeout: requested='%s'\n", config_path);
+#ifdef MX4SIO
+                mass_wait_timed_out = 1;
+#endif
             }
+
+#ifdef MX4SIO
+            if (fp == NULL &&
+                mass_wait_timed_out &&
+                !mass_mx4_probe_used &&
+                should_try_mx4_probe_for_mass(config_path, secondary_wait_path, boot_driver_tag)) {
+                mass_mx4_probe_used = 1;
+                DPRINTF("Config probe: enabling MX4SIO transport for legacy mass fallback\n");
+
+                if (LoaderLoadBdmTransportsForHint("mx4sio:/") >= 0) {
+                    fp = wait_for_mass_config_open(config_path,
+                                                   secondary_wait_path,
+                                                   &matched_wait_path,
+                                                   MASS_CONFIG_STAGE_WAIT_MS,
+                                                   rescue_combo_deadline,
+                                                   poll_fn);
+                    if (fp != NULL) {
+                        if (matched_wait_path != NULL)
+                            config_path = matched_wait_path;
+                        resolved_path = CheckPath(config_path);
+                        if (resolved_path == NULL || *resolved_path == '\0')
+                            resolved_path = (char *)config_path;
+                        DPRINTF("Config probe found after MX4SIO: matched='%s' resolved='%s'\n",
+                                config_path,
+                                resolved_path);
+                    } else {
+                        DPRINTF("Config probe miss after MX4SIO\n");
+                    }
+                } else {
+                    DPRINTF("Config probe: MX4SIO transport unavailable or failed\n");
+                }
+            }
+#endif
         }
 
         if (fp == NULL)
@@ -421,6 +529,7 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (source_hint == SOURCE_INVALID)
             return SOURCE_CWD;
         return source_hint;
+    }
     }
 
     return SOURCE_INVALID;
