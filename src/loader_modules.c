@@ -564,6 +564,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
     int strict_mx4sio = 0;
     int active_transports = 0;
     int had_error = 0;
+    int newly_loaded = 0;
 
     derive_bdm_transport_needs(path_hint,
                                &want_usb,
@@ -580,6 +581,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
                 return -1;
         } else {
             s_bdm_usb_transport_loaded = 1;
+            newly_loaded++;
         }
     }
     if (want_usb && s_bdm_usb_transport_loaded)
@@ -592,6 +594,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
                 return -2;
         } else {
             s_bdm_ata_transport_loaded = 1;
+            newly_loaded++;
         }
     }
     if (want_ata && s_bdm_ata_transport_loaded)
@@ -605,6 +608,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
                 return -3;
         } else {
             s_mx4sio_modules_loaded = 1;
+            newly_loaded++;
         }
     }
     if (want_mx4sio && s_mx4sio_modules_loaded)
@@ -614,7 +618,9 @@ static int load_bdm_transports_for_path(const char *path_hint)
     if (active_transports <= 0 && had_error)
         return -1;
 
-    return 0;
+    // Return count of newly loaded transports so callers can decide whether
+    // to allow a post-load mount readiness window.
+    return newly_loaded;
 }
 
 static int load_family_modules(LoaderPathFamily family, const char *path_hint)
@@ -853,6 +859,7 @@ int LoaderPathFamilyReadyWithoutReload(const char *path)
 int LoaderEnsurePathFamilyReady(const char *path)
 {
     LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
+    int ret;
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
@@ -874,7 +881,10 @@ int LoaderEnsurePathFamilyReady(const char *path)
             (path != NULL) ? path : "");
     // Path traversal does not require active pad input. Keep pads closed during
     // family-switch reboots and reopen only when we return to interactive UI.
-    return reload_for_family(target_family, 1, 0, path);
+    ret = reload_for_family(target_family, 1, 0, path);
+    if (ret < 0)
+        return ret;
+    return 1;
 }
 
 int LoaderPrepareFinalLaunch(const char *path)

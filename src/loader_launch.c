@@ -7,11 +7,94 @@
 #include "splash_screen.h"
 
 #define PAD_MASK_ANY 0xffff
+#define LAUNCH_PATH_WAIT_STEP_MS 50u
+#define LAUNCH_PATH_WAIT_BDM_MS 5000u
+#define LAUNCH_PATH_WAIT_MX4SIO_MS 10000u
+#define LAUNCH_PATH_WAIT_MMCE_MS 2000u
+#define LAUNCH_PATH_WAIT_HDD_MS 3000u
 
 static void EnsurePadsReadyForInput(void)
 {
     if (!PadIsInitialized())
         PadInitPads();
+}
+
+static unsigned int launch_wait_timeout_for_path(const char *entry_path, int wait_for_mount)
+{
+    LoaderPathFamily family;
+
+    if (!wait_for_mount || entry_path == NULL || *entry_path == '\0')
+        return 0;
+
+    family = LoaderPathFamilyFromPath(entry_path);
+    if (family == LOADER_PATH_FAMILY_XFROM)
+        family = LOADER_PATH_FAMILY_MC;
+
+    switch (family) {
+        case LOADER_PATH_FAMILY_BDM:
+#ifdef MX4SIO
+            if (ci_starts_with(entry_path, "massX:") || ci_starts_with(entry_path, "mx4sio"))
+                return LAUNCH_PATH_WAIT_MX4SIO_MS;
+#endif
+            return LAUNCH_PATH_WAIT_BDM_MS;
+        case LOADER_PATH_FAMILY_MX4SIO:
+            return LAUNCH_PATH_WAIT_MX4SIO_MS;
+        case LOADER_PATH_FAMILY_MMCE:
+            return LAUNCH_PATH_WAIT_MMCE_MS;
+        case LOADER_PATH_FAMILY_HDD_APA:
+            return LAUNCH_PATH_WAIT_HDD_MS;
+        default:
+            return 0;
+    }
+}
+
+static int ResolveLaunchPathForEntry(const char *entry_path,
+                                     int key_index,
+                                     int entry_index,
+                                     char **resolved_path,
+                                     int wait_for_mount)
+{
+    unsigned int timeout_ms;
+    unsigned int waited_ms = 0;
+    char *candidate = NULL;
+    int logged_wait = 0;
+
+    if (entry_path == NULL || *entry_path == '\0' || resolved_path == NULL)
+        return -1;
+
+    timeout_ms = launch_wait_timeout_for_path(entry_path, wait_for_mount);
+
+    while (1) {
+        candidate = CheckPath(entry_path);
+        if (candidate != NULL && *candidate != '\0') {
+            if (LoaderAllowVirtualPatinfoEntry(key_index, entry_index, candidate) || exist(candidate)) {
+                *resolved_path = candidate;
+                return 0;
+            }
+        }
+
+        if (waited_ms >= timeout_ms)
+            break;
+
+        if (!logged_wait) {
+            DPRINTF("Launch wait: path='%s' timeout=%u ms\n", entry_path, timeout_ms);
+            logged_wait = 1;
+        }
+
+        usleep(LAUNCH_PATH_WAIT_STEP_MS * 1000u);
+        waited_ms += LAUNCH_PATH_WAIT_STEP_MS;
+    }
+
+    if (candidate != NULL && *candidate != '\0')
+        *resolved_path = candidate;
+
+    if (logged_wait) {
+        DPRINTF("Launch wait timeout: path='%s' last='%s'\n",
+                entry_path,
+                (candidate != NULL && *candidate != '\0') ? candidate : "<none>");
+    }
+
+    return -1;
 }
 
 static int PrepareLaunchPathForExec(const char *entry_path,
@@ -22,7 +105,7 @@ static int PrepareLaunchPathForExec(const char *entry_path,
 {
     int prep_result;
     LoaderPathFamily target_family;
-    char *rechecked_path;
+    char *rechecked_path = NULL;
 
     if (entry_path == NULL || *entry_path == '\0' || resolved_path == NULL)
         return -1;
@@ -48,15 +131,14 @@ static int PrepareLaunchPathForExec(const char *entry_path,
 
     // We just rebooted/reloaded for a clean launch.
     // Resolve and validate the same entry once more before execution.
-    rechecked_path = CheckPath(entry_path);
-    if (rechecked_path == NULL || *rechecked_path == '\0')
-        return -1;
-    if (!LoaderAllowVirtualPatinfoEntry(key_index, entry_index, rechecked_path) && !exist(rechecked_path)) {
+    if (ResolveLaunchPathForEntry(entry_path, key_index, entry_index, &rechecked_path, 1) < 0) {
+        const char *not_found_path = (rechecked_path != NULL && *rechecked_path != '\0') ? rechecked_path : entry_path;
+
         if (show_not_found_line) {
-            scr_printf("%s %-15s\r", rechecked_path, "not found");
+            scr_printf("%s %-15s\r", not_found_path, "not found");
         } else {
             scr_setfontcolor(0x00ffff);
-            DPRINTF("%s not found after launch sanitize\n", rechecked_path);
+            DPRINTF("%s not found after launch sanitize\n", not_found_path);
             scr_setfontcolor(0xffffff);
         }
         return -1;
@@ -216,6 +298,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                     // if button detected, copy path to corresponding index
                     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                         const char *entry_path = GLOBCFG.KEYPATHS[x + 1][j];
+                        int ensure_family_result = 0;
                         int is_command;
 
                         // Skip empty/unset entries (common when config has blank LK_* values)
@@ -224,12 +307,17 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
 
                         is_command = (entry_path[0] == '$');
                         if (pre_scanned && !is_command) {
-                            if (LoaderEnsurePathFamilyReady(entry_path) < 0)
+                            ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
+                            if (ensure_family_result < 0)
                                 continue;
                             if (!LoaderPathCanAttemptNow(entry_path))
                                 continue;
-                            execpaths[j] = CheckPath(entry_path);
-                            if (execpaths[j] == NULL || *execpaths[j] == '\0')
+                            execpaths[j] = NULL;
+                            if (ResolveLaunchPathForEntry(entry_path,
+                                                          x + 1,
+                                                          j,
+                                                          &execpaths[j],
+                                                          (ensure_family_result > 0)) < 0)
                                 continue;
                             if (PrepareLaunchPathForExec(entry_path, x + 1, j, &execpaths[j], 0) < 0)
                                 continue;
@@ -242,13 +330,18 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         if (is_command) {
                             ShowLaunchStatus(entry_path);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
-                        } else if (LoaderEnsurePathFamilyReady(entry_path) < 0) {
-                            continue;
-                        } else if (!LoaderPathCanAttemptNow(entry_path)) {
+                        } else {
+                            ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
+                            if (ensure_family_result < 0)
+                                continue;
+                        }
+
+                        if (!is_command && !LoaderPathCanAttemptNow(entry_path)) {
                             continue;
                         }
 
-                        execpaths[j] = CheckPath(entry_path);
+                        if (is_command)
+                            execpaths[j] = CheckPath(entry_path);
 
                         if (is_command) {
                             LoaderPathSetPendingCommandArgs(0, NULL);
@@ -271,9 +364,15 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             continue;
                         }
 
-                        if (!LoaderAllowVirtualPatinfoEntry(x + 1, j, execpaths[j]) && !exist(execpaths[j])) {
+                        execpaths[j] = NULL;
+                        if (ResolveLaunchPathForEntry(entry_path,
+                                                      x + 1,
+                                                      j,
+                                                      &execpaths[j],
+                                                      (ensure_family_result > 0)) < 0) {
+                            const char *not_found_path = (execpaths[j] != NULL && *execpaths[j] != '\0') ? execpaths[j] : entry_path;
                             scr_setfontcolor(0x00ffff);
-                            DPRINTF("%s not found\n", execpaths[j]);
+                            DPRINTF("%s not found\n", not_found_path);
                             scr_setfontcolor(0xffffff);
                             continue;
                         }
@@ -327,6 +426,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
 
         for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             const char *entry_path = GLOBCFG.KEYPATHS[0][j];
+            int ensure_family_result = 0;
             int is_command;
 
             // Skip empty/unset AUTO entries too
@@ -337,12 +437,17 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             if (is_command)
                 continue; // Don't execute commands without a key press.
             if (pre_scanned) {
-                if (LoaderEnsurePathFamilyReady(entry_path) < 0)
+                ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
+                if (ensure_family_result < 0)
                     continue;
                 if (!LoaderPathCanAttemptNow(entry_path))
                     continue;
-                execpaths[j] = CheckPath(entry_path);
-                if (execpaths[j] == NULL || *execpaths[j] == '\0')
+                execpaths[j] = NULL;
+                if (ResolveLaunchPathForEntry(entry_path,
+                                              0,
+                                              j,
+                                              &execpaths[j],
+                                              (ensure_family_result > 0)) < 0)
                     continue;
                 if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1) < 0)
                     continue;
@@ -352,14 +457,20 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 break;
             }
 
-            if (LoaderEnsurePathFamilyReady(entry_path) < 0)
+            ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
+            if (ensure_family_result < 0)
                 continue;
             if (!LoaderPathCanAttemptNow(entry_path))
                 continue;
 
-            execpaths[j] = CheckPath(entry_path);
-            if (!LoaderAllowVirtualPatinfoEntry(0, j, execpaths[j]) && !exist(execpaths[j])) {
-                scr_printf("%s %-15s\r", execpaths[j], "not found");
+            execpaths[j] = NULL;
+            if (ResolveLaunchPathForEntry(entry_path,
+                                          0,
+                                          j,
+                                          &execpaths[j],
+                                          (ensure_family_result > 0)) < 0) {
+                const char *not_found_path = (execpaths[j] != NULL && *execpaths[j] != '\0') ? execpaths[j] : entry_path;
+                scr_printf("%s %-15s\r", not_found_path, "not found");
                 continue;
             }
 
