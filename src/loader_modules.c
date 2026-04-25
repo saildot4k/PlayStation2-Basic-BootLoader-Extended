@@ -14,6 +14,8 @@ static LoaderPathFamily s_boot_family = LOADER_PATH_FAMILY_MC;
 static LoaderPathFamily s_current_family = LOADER_PATH_FAMILY_NONE;
 static char s_boot_config_path[64] = "";
 static char s_boot_cwd_config_path[256] = "";
+static char s_boot_path_hint[256] = "";
+static char s_boot_driver_tag[16] = "";
 static int s_boot_config_source_hint = SOURCE_INVALID;
 
 #ifdef DEV9
@@ -36,6 +38,185 @@ static int extract_legacy_mass_unit(const char *path)
         return path[4] - '0';
 
     return -1;
+}
+
+static int build_mass_unit_path(const char *path, int unit, char *out, size_t out_size)
+{
+    const char *suffix;
+
+    if (path == NULL || out == NULL || out_size == 0 || unit < 0 || unit > 9)
+        return 0;
+    if (!ci_starts_with(path, "mass"))
+        return 0;
+
+    if (path[4] == ':')
+        suffix = path + 4;
+    else if (path[4] >= '0' && path[4] <= '9' && path[5] == ':')
+        suffix = path + 5;
+    else
+        return 0;
+
+    snprintf(out, out_size, "mass%d%s", unit, suffix);
+    return 1;
+}
+
+#ifdef FILEXIO
+static int mass_mount_openable(int unit)
+{
+    char mountpoint[] = "mass0:";
+    int dd;
+
+    if (unit < 0 || unit > 9)
+        return 0;
+
+    mountpoint[4] = '0' + unit;
+    dd = fileXioDopen(mountpoint);
+    if (dd < 0)
+        return 0;
+
+    fileXioDclose(dd);
+    return 1;
+}
+
+static void normalize_driver_tag(char *tag)
+{
+    int i;
+
+    if (tag == NULL)
+        return;
+
+    for (i = 0; tag[i] != '\0'; i++) {
+        char c = tag[i];
+
+        if (c < 32 || c > 126) {
+            tag[i] = '\0';
+            break;
+        }
+        if (c >= 'A' && c <= 'Z')
+            tag[i] = c + ('a' - 'A');
+    }
+}
+
+static int read_mass_driver_tag(int unit, char *tag_out, size_t tag_out_size)
+{
+    char mountpoint[] = "mass0:";
+    char ioctl_tag[16];
+    int dd;
+    int ioctl_ret;
+
+    if (tag_out == NULL || tag_out_size == 0 || unit < 0 || unit > 9)
+        return -1;
+    tag_out[0] = '\0';
+
+    mountpoint[4] = '0' + unit;
+    dd = fileXioDopen(mountpoint);
+    if (dd < 0)
+        return -1;
+
+    memset(ioctl_tag, 0, sizeof(ioctl_tag));
+    ioctl_ret = fileXioIoctl(dd, USBMASS_IOCTL_GET_DRIVERNAME, ioctl_tag);
+    fileXioDclose(dd);
+
+    if (ioctl_tag[0] != '\0') {
+        snprintf(tag_out, tag_out_size, "%s", ioctl_tag);
+    } else if (ioctl_ret >= 0) {
+        char packed_tag[sizeof(int) + 1];
+
+        memcpy(packed_tag, &ioctl_ret, sizeof(int));
+        packed_tag[sizeof(int)] = '\0';
+        snprintf(tag_out, tag_out_size, "%s", packed_tag);
+    } else {
+        return -1;
+    }
+
+    normalize_driver_tag(tag_out);
+    return (tag_out[0] != '\0') ? 0 : -1;
+}
+#endif
+
+static int resolve_legacy_mass_boot_unit(const char *boot_path)
+{
+    int unit = extract_legacy_mass_unit(boot_path);
+    int i;
+    int first_mount = -1;
+    int mount_count = 0;
+    const char *suffix;
+    char candidate[256];
+
+    if (unit >= 0)
+        return unit;
+    if (boot_path == NULL || !ci_starts_with(boot_path, "mass") || boot_path[4] != ':')
+        return -1;
+
+    suffix = boot_path + 4;
+    for (i = 0; i < 10; i++) {
+        snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
+        if (exist(candidate))
+            return i;
+#ifdef FILEXIO
+        if (mass_mount_openable(i)) {
+            if (first_mount < 0)
+                first_mount = i;
+            mount_count++;
+        }
+#endif
+    }
+
+    if (mount_count == 1)
+        return first_mount;
+    return -1;
+}
+
+static const char *classify_mass_driver_tag(const char *driver_tag)
+{
+    if (driver_tag == NULL || driver_tag[0] == '\0')
+        return "unknown";
+    if (ci_starts_with(driver_tag, "sdc"))
+        return "mx4sio";
+    if (ci_starts_with(driver_tag, "ata"))
+        return "bdm_hdd";
+    if (ci_starts_with(driver_tag, "usb"))
+        return "usb";
+    return "other";
+}
+
+static void refine_boot_hint_from_legacy_mass(void)
+{
+    int mass_unit;
+    char resolved[256];
+
+    if (!ci_starts_with(s_boot_path_hint, "mass")) {
+        s_boot_driver_tag[0] = '\0';
+        return;
+    }
+
+    mass_unit = resolve_legacy_mass_boot_unit(s_boot_path_hint);
+    if (mass_unit < 0) {
+        DPRINTF("Boot mass refine: argv0='%s' unit=<unknown>\n", s_boot_path_hint);
+        s_boot_driver_tag[0] = '\0';
+        return;
+    }
+
+    if (build_mass_unit_path(s_boot_path_hint, mass_unit, resolved, sizeof(resolved)))
+        snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", resolved);
+    if (build_mass_unit_path(s_boot_cwd_config_path, mass_unit, resolved, sizeof(resolved)))
+        snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", resolved);
+    if (build_mass_unit_path(s_boot_config_path, mass_unit, resolved, sizeof(resolved)))
+        snprintf(s_boot_config_path, sizeof(s_boot_config_path), "%s", resolved);
+
+#ifdef FILEXIO
+    if (read_mass_driver_tag(mass_unit, s_boot_driver_tag, sizeof(s_boot_driver_tag)) < 0)
+        s_boot_driver_tag[0] = '\0';
+#else
+    s_boot_driver_tag[0] = '\0';
+#endif
+
+    DPRINTF("Boot mass refine: unit=%d tag='%s' class=%s cwd_cfg='%s' family_cfg='%s'\n",
+            mass_unit,
+            (s_boot_driver_tag[0] != '\0') ? s_boot_driver_tag : "<none>",
+            classify_mass_driver_tag(s_boot_driver_tag),
+            (s_boot_cwd_config_path[0] != '\0') ? s_boot_cwd_config_path : "<none>",
+            (s_boot_config_path[0] != '\0') ? s_boot_config_path : "<none>");
 }
 
 static void set_boot_cwd_config_path(const char *boot_path)
@@ -280,13 +461,20 @@ static int load_bdm_transports_for_path(const char *path_hint)
     int want_usb = 0;
     int want_ata = 0;
     int want_mx4sio = 0;
+    int strict_usb = 0;
+    int strict_ata = 0;
+    int strict_mx4sio = 0;
+    int active_transports = 0;
+    int had_error = 0;
 
     if (path_hint != NULL && *path_hint != '\0') {
         if (starts_with(path_hint, "ata")) {
             want_ata = 1;
+            strict_ata = 1;
         } else if (starts_with(path_hint, "mx4sio") || starts_with(path_hint, "massx")) {
 #ifdef MX4SIO
             want_mx4sio = 1;
+            strict_mx4sio = 1;
 #endif
         } else if (starts_with(path_hint, "mass")) {
             // Legacy mass[:|N:] prefixes can represent USB or ATA-BDM paths.
@@ -299,6 +487,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
 #endif
         } else if (starts_with(path_hint, "usb") || starts_with(path_hint, "ilink")) {
             want_usb = 1;
+            strict_usb = 1;
         }
     }
 
@@ -309,24 +498,45 @@ static int load_bdm_transports_for_path(const char *path_hint)
     }
 
     if (want_usb && !s_bdm_usb_transport_loaded) {
-        if (load_usb_transport_modules() < 0)
-            return -1;
-        s_bdm_usb_transport_loaded = 1;
+        if (load_usb_transport_modules() < 0) {
+            had_error = 1;
+            if (strict_usb)
+                return -1;
+        } else {
+            s_bdm_usb_transport_loaded = 1;
+        }
     }
+    if (want_usb && s_bdm_usb_transport_loaded)
+        active_transports++;
 
     if (want_ata && !s_bdm_ata_transport_loaded) {
-        if (load_ata_transport_modules() < 0)
-            return -2;
-        s_bdm_ata_transport_loaded = 1;
+        if (load_ata_transport_modules() < 0) {
+            had_error = 1;
+            if (strict_ata)
+                return -2;
+        } else {
+            s_bdm_ata_transport_loaded = 1;
+        }
     }
+    if (want_ata && s_bdm_ata_transport_loaded)
+        active_transports++;
 
 #ifdef MX4SIO
     if (want_mx4sio && !s_mx4sio_modules_loaded) {
-        if (load_mx4sio_transport_modules() < 0)
-            return -3;
-        s_mx4sio_modules_loaded = 1;
+        if (load_mx4sio_transport_modules() < 0) {
+            had_error = 1;
+            if (strict_mx4sio)
+                return -3;
+        } else {
+            s_mx4sio_modules_loaded = 1;
+        }
     }
+    if (want_mx4sio && s_mx4sio_modules_loaded)
+        active_transports++;
 #endif
+
+    if (active_transports <= 0 && had_error)
+        return -1;
 
     return 0;
 }
@@ -464,7 +674,11 @@ void LoaderSetBootPathHint(const char *boot_path)
                         ? LOADER_PATH_FAMILY_MC
                         : family;
     s_boot_config_path[0] = '\0';
+    s_boot_path_hint[0] = '\0';
+    s_boot_driver_tag[0] = '\0';
     s_boot_config_source_hint = SOURCE_INVALID;
+    if (boot_path != NULL && *boot_path != '\0')
+        snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", boot_path);
     set_boot_cwd_config_path(boot_path);
 
     switch (family) {
@@ -569,6 +783,7 @@ void LoaderLoadSystemModules(int *usb_modules_loaded,
     if (boot_hint == NULL || *boot_hint == '\0')
         boot_hint = NULL;
     reload_for_family(s_boot_family, 0, 0, boot_hint);
+    refine_boot_hint_from_legacy_mass();
 
     if (usb_modules_loaded != NULL)
         *usb_modules_loaded = s_usb_modules_loaded;
@@ -593,15 +808,15 @@ int LoadUSBIRX(void)
 int LookForBDMDevice(void)
 {
     static char mass_path[] = "massX:";
-    static char DEVID[5];
+    static char DEVID[16];
     int dd;
     int x = 0;
     for (x = 0; x < 5; x++) {
         mass_path[4] = '0' + x;
         if ((dd = fileXioDopen(mass_path)) >= 0) {
-            int *intptr_ctl = (int *)DEVID;
-            *intptr_ctl = fileXioIoctl(dd, USBMASS_IOCTL_GET_DRIVERNAME, "");
-            close(dd);
+            memset(DEVID, 0, sizeof(DEVID));
+            fileXioIoctl(dd, USBMASS_IOCTL_GET_DRIVERNAME, DEVID);
+            fileXioDclose(dd);
             if (!strncmp(DEVID, "sdc", 3)) {
                 DPRINTF("%s: Found MX4SIO device at mass%d:/\n", __func__, x);
                 return x;
