@@ -9,6 +9,7 @@
 
 #define MASS_CONFIG_LATE_WAIT_MS 10000u
 #define MASS_CONFIG_STAGE_WAIT_MS 2000u
+#define MASS_CONFIG_STAGE_WAIT_MX4_MS 15000u
 #define MASS_CONFIG_PRIMARY_GRACE_MS 300u
 
 extern unsigned char *config_buf;
@@ -225,6 +226,15 @@ static int path_is_legacy_mass_or_usb(const char *path)
 }
 
 #ifdef MX4SIO
+static int path_is_fixed_mass_slot_0_to_4(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return 0;
+    if (!ci_starts_with(path, "mass"))
+        return 0;
+    return (path[4] >= '0' && path[4] <= '4' && path[5] == ':');
+}
+
 static int path_is_legacy_mass_mx4_candidate(const char *path)
 {
     if (path == NULL || *path == '\0')
@@ -516,14 +526,24 @@ int LoaderFindConfigFile(FILE **fp_out,
                 mass_wait_timed_out &&
                 !mass_mx4_probe_used &&
                 should_try_mx4_probe_for_mass(config_path, secondary_wait_path, boot_driver_tag)) {
+                unsigned int mx4_wait_ms = MASS_CONFIG_STAGE_WAIT_MS;
+
                 mass_mx4_probe_used = 1;
                 DPRINTF("Config probe: enabling MX4SIO transport for legacy mass fallback\n");
+
+                // If paths are explicit mass0..4 slots (MX4SIO-capable legacy range),
+                // allow a longer post-probe wait. Some MX4SIO stacks take a while to
+                // finish card init and expose mounted filesystems.
+                if (path_is_fixed_mass_slot_0_to_4(config_path) ||
+                    path_is_fixed_mass_slot_0_to_4(secondary_wait_path))
+                    mx4_wait_ms = MASS_CONFIG_STAGE_WAIT_MX4_MS;
+                DPRINTF("Config probe: MX4SIO wait window=%ums\n", mx4_wait_ms);
 
                 if (LoaderLoadBdmTransportsForHint("mx4sio:/") >= 0) {
                     fp = wait_for_mass_config_open(config_path,
                                                    secondary_wait_path,
                                                    &matched_wait_path,
-                                                   MASS_CONFIG_STAGE_WAIT_MS,
+                                                   mx4_wait_ms,
                                                    rescue_combo_deadline,
                                                    poll_fn);
                     if (fp != NULL) {
