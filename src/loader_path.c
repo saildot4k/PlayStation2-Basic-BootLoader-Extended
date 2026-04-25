@@ -285,13 +285,26 @@ static int build_mass_path(char *out, size_t out_size, const char *suffix, int u
 static int mass_mount_openable(int unit)
 {
     char mountpoint[] = "mass0:";
-    struct stat st;
 
     if (unit < 0 || unit > 9)
         return 0;
 
     mountpoint[4] = '0' + unit;
-    return (stat(mountpoint, &st) == 0);
+
+#ifdef FILEXIO
+    {
+        int dd = fileXioDopen(mountpoint);
+        if (dd >= 0) {
+            fileXioDclose(dd);
+            return 1;
+        }
+    }
+#endif
+
+    {
+        struct stat st;
+        return (stat(mountpoint, &st) == 0);
+    }
 }
 
 int LoaderPathCanAttemptNow(const char *path)
@@ -373,19 +386,18 @@ static const char *resolve_path_tokens(const char *path,
         }
 
         for (i = 0; i < 10; i++) {
-            if (!mass_mount_openable(i))
-                continue;
-            mount_seen = 1;
             if (!build_mass_path(candidate, sizeof(candidate), bdm_suffix, i))
                 continue;
             if (exist(candidate)) {
                 copy_string_safe(out, out_size, candidate);
                 return out;
             }
+            if (!mount_seen && mass_mount_openable(i))
+                mount_seen = 1;
         }
 
         if (!mount_seen) {
-            out[0] = '\0';
+            copy_string_safe(out, out_size, path);
             return out;
         }
 

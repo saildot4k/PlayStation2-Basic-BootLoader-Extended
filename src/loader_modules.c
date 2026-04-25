@@ -63,8 +63,10 @@ static int build_mass_unit_path(const char *path, int unit, char *out, size_t ou
     return 1;
 }
 
-static int normalize_mass_path_to_unit_or_default0(const char *path, int unit, char *out, size_t out_size)
+static int normalize_mass_path_to_unit_or_generic(const char *path, int unit, char *out, size_t out_size)
 {
+    const char *suffix;
+
     if (out == NULL || out_size == 0)
         return 0;
 
@@ -73,11 +75,21 @@ static int normalize_mass_path_to_unit_or_default0(const char *path, int unit, c
 
     if (build_mass_unit_path(path, unit, out, out_size))
         return 1;
-    // OSDMenu launcher quickboot normalizes generic BDM paths to mass0.
-    if (build_mass_unit_path(path, 0, out, out_size))
-        return 1;
 
-    return 0;
+    // Keep generic legacy mass: paths generic when we cannot map to a concrete
+    // slot yet (for example, right after loading transport drivers).
+    if (path[4] == ':')
+        suffix = path + 4;
+    else if (path[4] >= '0' && path[4] <= '9' && path[5] == ':')
+        suffix = path + 5;
+    else
+        return 0;
+
+    if (suffix[1] == '/' || suffix[1] == '\0')
+        snprintf(out, out_size, "mass%s", suffix);
+    else
+        snprintf(out, out_size, "mass:/%s", suffix + 1);
+    return 1;
 }
 
 #ifdef FILEXIO
@@ -217,7 +229,7 @@ static void refine_boot_hint_from_legacy_mass(void)
 
     mass_unit = resolve_legacy_mass_boot_unit(s_boot_path_hint);
     if (mass_unit < 0) {
-        if (normalize_mass_path_to_unit_or_default0(s_boot_cwd_config_path, -1, resolved, sizeof(resolved)))
+        if (normalize_mass_path_to_unit_or_generic(s_boot_cwd_config_path, -1, resolved, sizeof(resolved)))
             snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", resolved);
 
         DPRINTF("Boot mass refine: argv0='%s' unit=<unknown> cwd_cfg='%s'\n",
@@ -229,7 +241,7 @@ static void refine_boot_hint_from_legacy_mass(void)
 
     if (build_mass_unit_path(s_boot_path_hint, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", resolved);
-    if (normalize_mass_path_to_unit_or_default0(s_boot_cwd_config_path, mass_unit, resolved, sizeof(resolved)))
+    if (normalize_mass_path_to_unit_or_generic(s_boot_cwd_config_path, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", resolved);
     if (build_mass_unit_path(s_boot_config_path, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_config_path, sizeof(s_boot_config_path), "%s", resolved);
