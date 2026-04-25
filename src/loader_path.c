@@ -115,9 +115,15 @@ static int mx4sio_typed_root_available(void)
 
 static int get_legacy_mx4sio_slot(void)
 {
-    if (s_mx4sio_slot == -2)
-        s_mx4sio_slot = LookForBDMDevice();
-    return s_mx4sio_slot;
+    int slot;
+
+    if (s_mx4sio_slot >= 0)
+        return s_mx4sio_slot;
+
+    slot = LookForBDMDevice();
+    if (slot >= 0)
+        s_mx4sio_slot = slot;
+    return slot;
 }
 #endif
 
@@ -461,10 +467,14 @@ static const char *resolve_path_tokens(const char *path,
         const char *suffix = path + 5;
         int i;
         char candidate[CHECKPATH_BUF_SIZE];
-        int slot = get_legacy_mx4sio_slot();
+        int slot = -1;
 
         if (require_existing_pairs) {
             for (i = 0; i < 5; i++) {
+                // Prime legacy mass mountpoints each pass (OSDMenu-style) so MX4SIO
+                // media detection can complete before file existence checks timeout.
+                (void)mass_mount_openable(i);
+
                 if (!build_mass_path(candidate, sizeof(candidate), suffix, i))
                     continue;
                 if (exist(candidate)) {
@@ -477,6 +487,7 @@ static const char *resolve_path_tokens(const char *path,
             }
         }
 
+        slot = get_legacy_mx4sio_slot();
         if (slot >= 0) {
             out[4] = '0' + slot;
             DPRINTF("CheckPath massX slot: requested='%s' resolved='%s'\n", path, out);
