@@ -9,6 +9,7 @@
 
 #define MASS_CONFIG_LATE_WAIT_MS 10000u
 #define MASS_CONFIG_STAGE_WAIT_MS 2000u
+#define MASS_CONFIG_PRIMARY_GRACE_MS 300u
 
 extern unsigned char *config_buf;
 extern int g_is_psx_desr;
@@ -448,15 +449,54 @@ int LoaderFindConfigFile(FILE **fp_out,
                                            rescue_combo_deadline,
                                            poll_fn);
             if (fp != NULL) {
-                if (matched_wait_path != NULL)
-                    config_path = matched_wait_path;
-                resolved_path = CheckPath(config_path);
-                if (resolved_path == NULL || *resolved_path == '\0')
-                    resolved_path = (char *)config_path;
-                DPRINTF("Config wait found: requested='%s' matched='%s' resolved='%s'\n",
-                        (wait_requested_path != NULL) ? wait_requested_path : "<null>",
-                        config_path,
-                        resolved_path);
+                if (source == 1 &&
+                    secondary_wait_path != NULL &&
+                    matched_wait_path != NULL &&
+                    ci_eq(matched_wait_path, secondary_wait_path) &&
+                    !ci_eq(secondary_wait_path, wait_requested_path)) {
+                    const char *primary_matched = NULL;
+                    FILE *primary_fp = NULL;
+
+                    // Preserve CWD priority: if family fallback appeared first,
+                    // give CWD a short grace window before accepting fallback.
+                    fclose(fp);
+                    fp = NULL;
+                    primary_fp = wait_for_mass_config_open(wait_requested_path,
+                                                           NULL,
+                                                           &primary_matched,
+                                                           MASS_CONFIG_PRIMARY_GRACE_MS,
+                                                           rescue_combo_deadline,
+                                                           poll_fn);
+                    if (primary_fp != NULL) {
+                        fp = primary_fp;
+                        matched_wait_path = wait_requested_path;
+                    } else {
+                        fp = wait_for_mass_config_open(secondary_wait_path,
+                                                       NULL,
+                                                       &primary_matched,
+                                                       50u,
+                                                       rescue_combo_deadline,
+                                                       poll_fn);
+                        if (fp != NULL)
+                            matched_wait_path = secondary_wait_path;
+                    }
+                }
+                if (fp != NULL) {
+                    if (matched_wait_path != NULL)
+                        config_path = matched_wait_path;
+                    resolved_path = CheckPath(config_path);
+                    if (resolved_path == NULL || *resolved_path == '\0')
+                        resolved_path = (char *)config_path;
+                    DPRINTF("Config wait found: requested='%s' matched='%s' resolved='%s'\n",
+                            (wait_requested_path != NULL) ? wait_requested_path : "<null>",
+                            config_path,
+                            resolved_path);
+                } else {
+                    DPRINTF("Config wait timeout: requested='%s'\n", config_path);
+#ifdef MX4SIO
+                    mass_wait_timed_out = 1;
+#endif
+                }
             } else {
                 DPRINTF("Config wait timeout: requested='%s'\n", config_path);
 #ifdef MX4SIO

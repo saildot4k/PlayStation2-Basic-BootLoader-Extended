@@ -8,6 +8,23 @@
 
 #define PAD_MASK_ANY 0xffff
 
+static int WaitPathExists(const char *path, int attempts, unsigned int retry_delay_us)
+{
+    int i;
+
+    if (path == NULL || *path == '\0' || attempts <= 0)
+        return 0;
+
+    for (i = 0; i < attempts; i++) {
+        if (exist(path))
+            return 1;
+        if (i + 1 < attempts && retry_delay_us > 0)
+            usleep(retry_delay_us);
+    }
+
+    return 0;
+}
+
 static int PrepareLaunchPathForExec(const char *entry_path,
                                     int key_index,
                                     int entry_index,
@@ -15,6 +32,7 @@ static int PrepareLaunchPathForExec(const char *entry_path,
                                     int show_not_found_line)
 {
     int prep_result;
+    LoaderPathFamily target_family;
     char *rechecked_path;
 
     if (entry_path == NULL || *entry_path == '\0' || resolved_path == NULL)
@@ -27,6 +45,34 @@ static int PrepareLaunchPathForExec(const char *entry_path,
         return -1;
     if (prep_result == 0)
         return 0;
+
+    target_family = LoaderPathFamilyFromPath(entry_path);
+    if (target_family == LOADER_PATH_FAMILY_XFROM)
+        target_family = LOADER_PATH_FAMILY_MC;
+
+    if (target_family == LOADER_PATH_FAMILY_MC) {
+        // After IOP reboot to core-only MC state, avoid mc? token probing first:
+        // verify the already-resolved mcN path with a short readiness window.
+        if (WaitPathExists(*resolved_path, 6, 50000))
+            return 0;
+
+        // Fallback once to token resolution if slot mapping changed.
+        rechecked_path = CheckPath(entry_path);
+        if (rechecked_path != NULL && *rechecked_path != '\0' &&
+            WaitPathExists(rechecked_path, 2, 50000)) {
+            *resolved_path = rechecked_path;
+            return 0;
+        }
+
+        if (show_not_found_line) {
+            scr_printf("%s %-15s\r", entry_path, "not found");
+        } else {
+            scr_setfontcolor(0x00ffff);
+            DPRINTF("%s not found after MC launch sanitize\n", entry_path);
+            scr_setfontcolor(0xffffff);
+        }
+        return -1;
+    }
 
     // We just rebooted/reloaded for a clean launch.
     // Resolve and validate the same entry once more before execution.

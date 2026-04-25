@@ -870,6 +870,8 @@ int LoaderPrepareFinalLaunch(const char *path)
         target_family = LOADER_PATH_FAMILY_MC;
 
     if (target_family == LOADER_PATH_FAMILY_MC) {
+        // Keep launch IOP clean: when launching from MC after probing other
+        // families, reboot once back to core-only (MC) modules.
         need_reboot = (s_current_family != LOADER_PATH_FAMILY_MC);
     } else if (s_current_family != target_family) {
         need_reboot = 1;
