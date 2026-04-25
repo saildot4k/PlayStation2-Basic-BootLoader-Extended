@@ -498,6 +498,62 @@ static int load_mx4sio_transport_modules(void)
     return 0;
 }
 
+static void derive_bdm_transport_needs(const char *path_hint,
+                                       int *want_usb,
+                                       int *want_ata,
+                                       int *want_mx4sio,
+                                       int *strict_usb,
+                                       int *strict_ata,
+                                       int *strict_mx4sio)
+{
+    int local_want_usb = 0;
+    int local_want_ata = 0;
+    int local_want_mx4sio = 0;
+    int local_strict_usb = 0;
+    int local_strict_ata = 0;
+    int local_strict_mx4sio = 0;
+
+    if (path_hint != NULL && *path_hint != '\0') {
+        if (starts_with(path_hint, "ata")) {
+            local_want_ata = 1;
+            local_strict_ata = 1;
+        } else if (starts_with(path_hint, "mx4sio") || starts_with(path_hint, "massx")) {
+#ifdef MX4SIO
+            local_want_mx4sio = 1;
+            local_strict_mx4sio = 1;
+#endif
+        } else if (starts_with(path_hint, "mass")) {
+            // Legacy mass[:|N:] prefixes can represent USB or ATA-BDM paths.
+            // Do not auto-load MX4SIO here: some MX4SIO builds can loop card
+            // init forever when no MX4SIO media is present.
+            local_want_usb = 1;
+            local_want_ata = 1;
+        } else if (starts_with(path_hint, "usb") || starts_with(path_hint, "ilink")) {
+            local_want_usb = 1;
+            local_strict_usb = 1;
+        }
+    }
+
+    // Fallback for unknown/empty hints: keep both transports available.
+    if (!local_want_usb && !local_want_ata && !local_want_mx4sio) {
+        local_want_usb = 1;
+        local_want_ata = 1;
+    }
+
+    if (want_usb != NULL)
+        *want_usb = local_want_usb;
+    if (want_ata != NULL)
+        *want_ata = local_want_ata;
+    if (want_mx4sio != NULL)
+        *want_mx4sio = local_want_mx4sio;
+    if (strict_usb != NULL)
+        *strict_usb = local_strict_usb;
+    if (strict_ata != NULL)
+        *strict_ata = local_strict_ata;
+    if (strict_mx4sio != NULL)
+        *strict_mx4sio = local_strict_mx4sio;
+}
+
 static int load_bdm_transports_for_path(const char *path_hint)
 {
     int want_usb = 0;
@@ -509,32 +565,13 @@ static int load_bdm_transports_for_path(const char *path_hint)
     int active_transports = 0;
     int had_error = 0;
 
-    if (path_hint != NULL && *path_hint != '\0') {
-        if (starts_with(path_hint, "ata")) {
-            want_ata = 1;
-            strict_ata = 1;
-        } else if (starts_with(path_hint, "mx4sio") || starts_with(path_hint, "massx")) {
-#ifdef MX4SIO
-            want_mx4sio = 1;
-            strict_mx4sio = 1;
-#endif
-        } else if (starts_with(path_hint, "mass")) {
-            // Legacy mass[:|N:] prefixes can represent USB or ATA-BDM paths.
-            // Do not auto-load MX4SIO here: some MX4SIO builds can loop card
-            // init forever when no MX4SIO media is present.
-            want_usb = 1;
-            want_ata = 1;
-        } else if (starts_with(path_hint, "usb") || starts_with(path_hint, "ilink")) {
-            want_usb = 1;
-            strict_usb = 1;
-        }
-    }
-
-    // Fallback for unknown/empty hints: keep both transports available.
-    if (!want_usb && !want_ata && !want_mx4sio) {
-        want_usb = 1;
-        want_ata = 1;
-    }
+    derive_bdm_transport_needs(path_hint,
+                               &want_usb,
+                               &want_ata,
+                               &want_mx4sio,
+                               &strict_usb,
+                               &strict_ata,
+                               &strict_mx4sio);
 
     if (want_usb && !s_bdm_usb_transport_loaded) {
         if (load_usb_transport_modules() < 0) {
@@ -765,6 +802,11 @@ const char *LoaderGetBootCwdConfigPath(void)
     return s_boot_cwd_config_path;
 }
 
+const char *LoaderGetBootPathHint(void)
+{
+    return s_boot_path_hint;
+}
+
 const char *LoaderGetBootConfigPath(void)
 {
     return s_boot_config_path;
@@ -815,6 +857,58 @@ int LoaderEnsurePathFamilyReady(const char *path)
             (int)target_family,
             (path != NULL) ? path : "");
     return reload_for_family(target_family, 1, 1, path);
+}
+
+int LoaderPrepareFinalLaunch(const char *path)
+{
+    LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
+    int need_reboot = 0;
+
+    if (target_family == LOADER_PATH_FAMILY_NONE)
+        return 0;
+    if (target_family == LOADER_PATH_FAMILY_XFROM)
+        target_family = LOADER_PATH_FAMILY_MC;
+
+    if (target_family == LOADER_PATH_FAMILY_MC) {
+        need_reboot = (s_current_family != LOADER_PATH_FAMILY_MC);
+    } else if (s_current_family != target_family) {
+        need_reboot = 1;
+    } else if (target_family == LOADER_PATH_FAMILY_BDM) {
+        int want_usb = 0;
+        int want_ata = 0;
+        int want_mx4sio = 0;
+
+        derive_bdm_transport_needs(path,
+                                   &want_usb,
+                                   &want_ata,
+                                   &want_mx4sio,
+                                   NULL,
+                                   NULL,
+                                   NULL);
+
+        if ((s_bdm_usb_transport_loaded ? 1 : 0) != (want_usb ? 1 : 0) ||
+            (s_bdm_ata_transport_loaded ? 1 : 0) != (want_ata ? 1 : 0))
+            need_reboot = 1;
+#ifdef MX4SIO
+        if ((s_mx4sio_modules_loaded ? 1 : 0) != (want_mx4sio ? 1 : 0))
+            need_reboot = 1;
+#else
+        (void)want_mx4sio;
+#endif
+    }
+
+    if (!need_reboot)
+        return 0;
+
+    DPRINTF("Launch sanitize: rebooting IOP for final path '%s' (from=%d to=%d)\n",
+            (path != NULL) ? path : "",
+            (int)s_current_family,
+            (int)target_family);
+
+    if (reload_for_family(target_family, 1, 1, path) < 0)
+        return -1;
+
+    return 1;
 }
 
 int LoaderLoadBdmTransportsForHint(const char *path_hint)

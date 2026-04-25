@@ -376,6 +376,7 @@ static const char *resolve_path_tokens(const char *path,
         if (bdm_unit >= 0) {
             if (!build_mass_path(out, out_size, bdm_suffix, bdm_unit))
                 return NULL;
+            DPRINTF("CheckPath BDM fixed: requested='%s' resolved='%s'\n", path, out);
             return out;
         }
 
@@ -389,6 +390,9 @@ static const char *resolve_path_tokens(const char *path,
             if (!build_mass_path(candidate, sizeof(candidate), bdm_suffix, i))
                 continue;
             if (exist(candidate)) {
+                DPRINTF("CheckPath BDM match: requested='%s' candidate='%s'\n",
+                        path,
+                        candidate);
                 copy_string_safe(out, out_size, candidate);
                 return out;
             }

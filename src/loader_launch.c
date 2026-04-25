@@ -8,6 +8,46 @@
 
 #define PAD_MASK_ANY 0xffff
 
+static int PrepareLaunchPathForExec(const char *entry_path,
+                                    int key_index,
+                                    int entry_index,
+                                    char **resolved_path,
+                                    int show_not_found_line)
+{
+    int prep_result;
+    char *rechecked_path;
+
+    if (entry_path == NULL || *entry_path == '\0' || resolved_path == NULL)
+        return -1;
+    if (*resolved_path == NULL || **resolved_path == '\0')
+        return -1;
+
+    prep_result = LoaderPrepareFinalLaunch(entry_path);
+    if (prep_result < 0)
+        return -1;
+    if (prep_result == 0)
+        return 0;
+
+    // We just rebooted/reloaded for a clean launch.
+    // Resolve and validate the same entry once more before execution.
+    rechecked_path = CheckPath(entry_path);
+    if (rechecked_path == NULL || *rechecked_path == '\0')
+        return -1;
+    if (!LoaderAllowVirtualPatinfoEntry(key_index, entry_index, rechecked_path) && !exist(rechecked_path)) {
+        if (show_not_found_line) {
+            scr_printf("%s %-15s\r", rechecked_path, "not found");
+        } else {
+            scr_setfontcolor(0x00ffff);
+            DPRINTF("%s not found after launch sanitize\n", rechecked_path);
+            scr_setfontcolor(0xffffff);
+        }
+        return -1;
+    }
+
+    *resolved_path = rechecked_path;
+    return 0;
+}
+
 int LoaderRunLaunchWorkflow(int splash_early_presented,
                             int pre_scanned,
                             int *hotkey_launches_enabled,
@@ -172,6 +212,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             execpaths[j] = CheckPath(entry_path);
                             if (execpaths[j] == NULL || *execpaths[j] == '\0')
                                 continue;
+                            if (PrepareLaunchPathForExec(entry_path, x + 1, j, &execpaths[j], 0) < 0)
+                                continue;
                             ShowLaunchStatus(execpaths[j]);
                             CleanUp();
                             RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
@@ -218,6 +260,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         }
 
                         if (execpaths[j] != NULL && *execpaths[j] != '\0') {
+                            if (PrepareLaunchPathForExec(entry_path, x + 1, j, &execpaths[j], 0) < 0)
+                                continue;
                             ShowLaunchStatus(execpaths[j]);
                             CleanUp();
                             RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
@@ -280,6 +324,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 execpaths[j] = CheckPath(entry_path);
                 if (execpaths[j] == NULL || *execpaths[j] == '\0')
                     continue;
+                if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1) < 0)
+                    continue;
                 ShowLaunchStatus(execpaths[j]);
                 CleanUp();
                 RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
@@ -298,6 +344,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             }
 
             if (execpaths[j] != NULL && *execpaths[j] != '\0') {
+                if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1) < 0)
+                    continue;
                 ShowLaunchStatus(execpaths[j]);
                 CleanUp();
                 RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);

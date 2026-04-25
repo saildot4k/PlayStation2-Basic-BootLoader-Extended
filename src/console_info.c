@@ -8,6 +8,110 @@ static char g_model_name[MODEL_NAME_MAX_LEN];
 
 extern char ConsoleROMVER[];
 
+static int parse_mass_unit_from_path(const char *path)
+{
+    if (path == NULL || !ci_starts_with(path, "mass"))
+        return -1;
+    if (path[4] >= '0' && path[4] <= '9' && path[5] == ':')
+        return path[4] - '0';
+    return -1;
+}
+
+static int parse_mmce_slot_from_path(const char *path)
+{
+    if (path == NULL || !ci_starts_with(path, "mmce"))
+        return -1;
+    if (path[4] >= '0' && path[4] <= '1' && path[5] == ':')
+        return path[4] - '0';
+    return -1;
+}
+
+static void format_cwd_source_name(char *out, size_t out_size)
+{
+    const char *boot_hint = LoaderGetBootPathHint();
+    const char *resolved_path = LoaderGetResolvedConfigPath();
+    int mass_unit = parse_mass_unit_from_path(resolved_path);
+    int mmce_slot = parse_mmce_slot_from_path(resolved_path);
+
+    if (out == NULL || out_size == 0)
+        return;
+
+    if (mass_unit < 0)
+        mass_unit = parse_mass_unit_from_path(boot_hint);
+    if (mmce_slot < 0)
+        mmce_slot = parse_mmce_slot_from_path(boot_hint);
+
+    if (boot_hint != NULL && *boot_hint != '\0') {
+        if (ci_starts_with(boot_hint, "usb")) {
+            snprintf(out, out_size, "USB CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mass")) {
+            if (mass_unit >= 0)
+                snprintf(out, out_size, "MASS%d CWD", mass_unit);
+            else
+                snprintf(out, out_size, "MASS CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mx4sio") || ci_starts_with(boot_hint, "massx")) {
+            snprintf(out, out_size, "MX4SIO CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mmce")) {
+            if (mmce_slot >= 0)
+                snprintf(out, out_size, "MMCE%d CWD", mmce_slot);
+            else
+                snprintf(out, out_size, "MMCE CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "hdd0")) {
+            snprintf(out, out_size, "HDD0 CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "ata")) {
+            snprintf(out, out_size, "ATA CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "ilink")) {
+            snprintf(out, out_size, "ILINK CWD");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "xfrom")) {
+            snprintf(out, out_size, "XFROM CWD");
+            return;
+        }
+    }
+
+    if (resolved_path != NULL && *resolved_path != '\0') {
+        if (ci_starts_with(resolved_path, "usb")) {
+            snprintf(out, out_size, "USB CWD");
+            return;
+        }
+        if (mass_unit >= 0) {
+            snprintf(out, out_size, "MASS%d CWD", mass_unit);
+            return;
+        }
+        if (ci_starts_with(resolved_path, "mx4sio")) {
+            snprintf(out, out_size, "MX4SIO CWD");
+            return;
+        }
+        if (mmce_slot >= 0) {
+            snprintf(out, out_size, "MMCE%d CWD", mmce_slot);
+            return;
+        }
+        if (ci_starts_with(resolved_path, "hdd0")) {
+            snprintf(out, out_size, "HDD0 CWD");
+            return;
+        }
+        if (ci_starts_with(resolved_path, "ata")) {
+            snprintf(out, out_size, "ATA CWD");
+            return;
+        }
+    }
+
+    snprintf(out, out_size, "CWD");
+}
+
 static int ReadModelName(char *name)
 {
     int result;
@@ -88,6 +192,7 @@ static void FormatROMVersion(char *out, size_t out_size, const u8 *romver, size_
 void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, size_t romver_len)
 {
     const char *source_name = "";
+    char source_buf[32];
 
     if (info == NULL)
         return;
@@ -101,8 +206,12 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
     strip_crlf_copy(PS1DRVGetVersion(), info->ps1ver, sizeof(info->ps1ver));
     strip_crlf_copy(DVDPlayerGetVersion(), info->dvdver, sizeof(info->dvdver));
 
-    if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL)
+    if (config_source == SOURCE_CWD) {
+        format_cwd_source_name(source_buf, sizeof(source_buf));
+        source_name = source_buf;
+    } else if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL) {
         source_name = SOURCES[config_source];
+    }
     strip_crlf_copy(source_name, info->source, sizeof(info->source));
 
     FormatROMVersion(info->rom_fmt, sizeof(info->rom_fmt), romver, romver_len);
