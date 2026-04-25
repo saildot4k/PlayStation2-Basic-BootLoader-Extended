@@ -149,6 +149,7 @@ int credits(void);
 void CleanUp(void);
 int LoadUSBIRX(void);
 void LoaderSetBootPathHint(const char *boot_path);
+const char *LoaderGetBootCwdConfigPath(void);
 const char *LoaderGetBootConfigPath(void);
 int LoaderGetBootConfigSourceHint(void);
 int LoaderPathFamilyReadyWithoutReload(const char *path);

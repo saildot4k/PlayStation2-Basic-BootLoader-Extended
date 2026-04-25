@@ -13,6 +13,7 @@ static int s_bdm_ata_transport_loaded = 0;
 static LoaderPathFamily s_boot_family = LOADER_PATH_FAMILY_MC;
 static LoaderPathFamily s_current_family = LOADER_PATH_FAMILY_NONE;
 static char s_boot_config_path[64] = "";
+static char s_boot_cwd_config_path[256] = "";
 static int s_boot_config_source_hint = SOURCE_INVALID;
 
 #ifdef DEV9
@@ -23,7 +24,52 @@ static int starts_with(const char *s, const char *prefix)
 {
     if (s == NULL || prefix == NULL)
         return 0;
-    return (strncmp(s, prefix, strlen(prefix)) == 0);
+    return ci_starts_with(s, prefix);
+}
+
+static int extract_legacy_mass_unit(const char *path)
+{
+    if (path == NULL || !ci_starts_with(path, "mass"))
+        return -1;
+
+    if (path[4] >= '0' && path[4] <= '9' && path[5] == ':')
+        return path[4] - '0';
+
+    return -1;
+}
+
+static void set_boot_cwd_config_path(const char *boot_path)
+{
+    const char *slash;
+    const char *colon;
+    size_t prefix_len;
+    size_t max_prefix_len;
+
+    s_boot_cwd_config_path[0] = '\0';
+
+    if (boot_path == NULL || *boot_path == '\0' || boot_path[0] == '$')
+        return;
+
+    max_prefix_len = sizeof(s_boot_cwd_config_path) - sizeof("CONFIG.INI");
+
+    slash = strrchr(boot_path, '/');
+    if (slash != NULL) {
+        prefix_len = (size_t)(slash - boot_path + 1);
+        if (prefix_len > max_prefix_len)
+            prefix_len = max_prefix_len;
+        memcpy(s_boot_cwd_config_path, boot_path, prefix_len);
+        memcpy(s_boot_cwd_config_path + prefix_len, "CONFIG.INI", sizeof("CONFIG.INI"));
+        return;
+    }
+
+    colon = strchr(boot_path, ':');
+    if (colon != NULL) {
+        prefix_len = (size_t)(colon - boot_path + 1);
+        if (prefix_len > max_prefix_len)
+            prefix_len = max_prefix_len;
+        memcpy(s_boot_cwd_config_path, boot_path, prefix_len);
+        memcpy(s_boot_cwd_config_path + prefix_len, "CONFIG.INI", sizeof("CONFIG.INI"));
+    }
 }
 
 static int source_hint_for_family(LoaderPathFamily family)
@@ -52,6 +98,28 @@ static int source_hint_for_family(LoaderPathFamily family)
     }
 
     return SOURCE_INVALID;
+}
+
+static const char *boot_family_name(LoaderPathFamily family)
+{
+    switch (family) {
+        case LOADER_PATH_FAMILY_NONE:
+            return "NONE";
+        case LOADER_PATH_FAMILY_MC:
+            return "MC";
+        case LOADER_PATH_FAMILY_BDM:
+            return "BDM";
+        case LOADER_PATH_FAMILY_MX4SIO:
+            return "MX4SIO";
+        case LOADER_PATH_FAMILY_MMCE:
+            return "MMCE";
+        case LOADER_PATH_FAMILY_HDD_APA:
+            return "HDD_APA";
+        case LOADER_PATH_FAMILY_XFROM:
+            return "XFROM";
+        default:
+            return "UNKNOWN";
+    }
 }
 
 static void reset_module_flags(void)
@@ -193,17 +261,43 @@ static int load_ata_transport_modules(void)
     return 0;
 }
 
+static int load_mx4sio_transport_modules(void)
+{
+#ifdef MX4SIO
+    int ID, RET;
+
+    ID = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &RET);
+    DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", ID, RET);
+    if (ID < 0 || RET == 1)
+        return -1;
+#endif
+
+    return 0;
+}
+
 static int load_bdm_transports_for_path(const char *path_hint)
 {
     int want_usb = 0;
     int want_ata = 0;
+    int want_mx4sio = 0;
 
     if (path_hint != NULL && *path_hint != '\0') {
         if (starts_with(path_hint, "ata")) {
             want_ata = 1;
-        } else if (starts_with(path_hint, "usb") ||
-                   starts_with(path_hint, "mass") ||
-                   starts_with(path_hint, "ilink")) {
+        } else if (starts_with(path_hint, "mx4sio") || starts_with(path_hint, "massx")) {
+#ifdef MX4SIO
+            want_mx4sio = 1;
+#endif
+        } else if (starts_with(path_hint, "mass")) {
+            // Legacy mass[:|N:] prefixes can represent USB or ATA-BDM paths.
+            // They are also used by MX4SIO on older launch chains.
+            // Keep all compatible transports available for legacy mass hints.
+            want_usb = 1;
+            want_ata = 1;
+#ifdef MX4SIO
+            want_mx4sio = 1;
+#endif
+        } else if (starts_with(path_hint, "usb") || starts_with(path_hint, "ilink")) {
             want_usb = 1;
         }
     }
@@ -225,6 +319,14 @@ static int load_bdm_transports_for_path(const char *path_hint)
             return -2;
         s_bdm_ata_transport_loaded = 1;
     }
+
+#ifdef MX4SIO
+    if (want_mx4sio && !s_mx4sio_modules_loaded) {
+        if (load_mx4sio_transport_modules() < 0)
+            return -3;
+        s_mx4sio_modules_loaded = 1;
+    }
+#endif
 
     return 0;
 }
@@ -356,12 +458,14 @@ static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit
 void LoaderSetBootPathHint(const char *boot_path)
 {
     LoaderPathFamily family = LoaderPathFamilyFromPath(boot_path);
+    int legacy_mass_unit = extract_legacy_mass_unit(boot_path);
 
     s_boot_family = (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_XFROM)
                         ? LOADER_PATH_FAMILY_MC
                         : family;
     s_boot_config_path[0] = '\0';
     s_boot_config_source_hint = SOURCE_INVALID;
+    set_boot_cwd_config_path(boot_path);
 
     switch (family) {
         case LOADER_PATH_FAMILY_MMCE:
@@ -378,6 +482,11 @@ void LoaderSetBootPathHint(const char *boot_path)
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ata:/PS2BBL/CONFIG.INI");
             else if (starts_with(boot_path, "ilink"))
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ilink:/PS2BBL/CONFIG.INI");
+            else if (legacy_mass_unit >= 0)
+                snprintf(s_boot_config_path,
+                         sizeof(s_boot_config_path),
+                         "mass%d:/PS2BBL/CONFIG.INI",
+                         legacy_mass_unit);
             else if (starts_with(boot_path, "mass"))
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mass:/PS2BBL/CONFIG.INI");
             else
@@ -391,6 +500,16 @@ void LoaderSetBootPathHint(const char *boot_path)
     }
 
     s_boot_config_source_hint = source_hint_for_family(family);
+    DPRINTF("Boot hint: argv0='%s' raw_family=%s boot_family=%s cwd_cfg='%s'\n",
+            (boot_path != NULL && *boot_path != '\0') ? boot_path : "<null>",
+            boot_family_name(family),
+            boot_family_name(s_boot_family),
+            (s_boot_cwd_config_path[0] != '\0') ? s_boot_cwd_config_path : "<none>");
+}
+
+const char *LoaderGetBootCwdConfigPath(void)
+{
+    return s_boot_cwd_config_path;
 }
 
 const char *LoaderGetBootConfigPath(void)

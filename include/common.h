@@ -33,8 +33,8 @@ typedef enum
     SOURCE_XFROM,
 #endif
 #ifdef MMCE
-    SOURCE_MMCE1,
     SOURCE_MMCE0,
+    SOURCE_MMCE1,
 #endif
 #ifdef PSX
     SOURCE_XCONFIG,

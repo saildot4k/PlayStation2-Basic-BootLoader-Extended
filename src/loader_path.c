@@ -123,7 +123,7 @@ static int get_legacy_mx4sio_slot(void)
 
 static int path_prefix_matches(const char *path, const char *prefix, size_t prefix_len)
 {
-    return (!strncmp(path, prefix, prefix_len) &&
+    return (ci_starts_with(path, prefix) &&
             (path[prefix_len] == ':' ||
              path[prefix_len] == '?' ||
              (path[prefix_len] >= '0' && path[prefix_len] <= '9')));
@@ -135,9 +135,9 @@ LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
         return LOADER_PATH_FAMILY_NONE;
     if (path[0] == '$')
         return LOADER_PATH_FAMILY_NONE;
-    if (!strncmp(path, "mc", 2))
+    if (path_prefix_matches(path, "mc", 2))
         return LOADER_PATH_FAMILY_MC;
-    if (path_prefix_matches(path, "mx4sio", 7) || !strncmp(path, "massX:", 6))
+    if (path_prefix_matches(path, "mx4sio", 7) || path_prefix_matches(path, "massx", 5))
         return LOADER_PATH_FAMILY_MX4SIO;
     if (path_prefix_matches(path, "mmce", 4))
         return LOADER_PATH_FAMILY_MMCE;
@@ -157,13 +157,13 @@ static int device_id_from_path(const char *path)
 {
     if (path == NULL || *path == '\0')
         return DEV_UNKNOWN;
-    if (!strncmp(path, "mc0:", 4))
+    if (path_prefix_matches(path, "mc0", 3))
         return DEV_MC0;
-    if (!strncmp(path, "mc1:", 4))
+    if (path_prefix_matches(path, "mc1", 3))
         return DEV_MC1;
     if (path_prefix_matches(path, "mx4sio", 7))
         return DEV_MX4SIO;
-    if (!strncmp(path, "massX:", 6))
+    if (path_prefix_matches(path, "massx", 5))
         return DEV_MX4SIO;
     if (path_prefix_matches(path, "usb", 3))
         return DEV_MASS;
@@ -173,13 +173,13 @@ static int device_id_from_path(const char *path)
         return DEV_MASS;
     if (path_prefix_matches(path, "mass", 4))
         return DEV_MASS;
-    if (!strncmp(path, "mmce0:", 6))
+    if (path_prefix_matches(path, "mmce0", 5))
         return DEV_MMCE0;
-    if (!strncmp(path, "mmce1:", 6))
+    if (path_prefix_matches(path, "mmce1", 5))
         return DEV_MMCE1;
-    if (!strncmp(path, "hdd0:", 5))
+    if (path_prefix_matches(path, "hdd0", 4))
         return DEV_HDD;
-    if (!strncmp(path, "xfrom:", 6))
+    if (path_prefix_matches(path, "xfrom", 5))
         return DEV_XFROM;
     return DEV_UNKNOWN;
 }
@@ -211,10 +211,10 @@ int LoaderDeviceAvailableForPathCached(const char *path, const int dev_ok[LOADER
 
     if (path == NULL || *path == '\0' || dev_ok == NULL)
         return 0;
-    if (!strncmp(path, "mc?:", 4))
+    if (ci_starts_with(path, "mc?:"))
         return (dev_ok[DEV_MC0] || dev_ok[DEV_MC1]);
 #ifdef MMCE
-    if (!strncmp(path, "mmce?:", 6))
+    if (ci_starts_with(path, "mmce?:"))
         return (dev_ok[DEV_MMCE0] || dev_ok[DEV_MMCE1]);
 #endif
 
@@ -248,7 +248,7 @@ static int path_prefix_with_optional_unit(const char *path,
 
     if (path == NULL || prefix == NULL)
         return 0;
-    if (strncmp(path, prefix, prefix_len))
+    if (!ci_starts_with(path, prefix))
         return 0;
 
     if (path[prefix_len] == ':') {
@@ -341,7 +341,7 @@ static const char *resolve_path_tokens(const char *path,
     if (!copy_string_safe(out, out_size, path))
         return NULL;
 
-    if (!strncmp(path, "mc?", 3)) {
+    if (ci_starts_with(path, "mc?")) {
         if (!resolve_pair_path_copy(path,
                                     2,
                                     (char)preferred_mc_slot_char(),
@@ -395,7 +395,7 @@ static const char *resolve_path_tokens(const char *path,
     }
 
 #ifdef MMCE
-    if (!strncmp(path, "mmce?", 5)) {
+    if (ci_starts_with(path, "mmce?")) {
         char preferred_slot;
 
         preferred_slot = (char)preferred_mmce_slot_char();
@@ -415,7 +415,7 @@ static const char *resolve_path_tokens(const char *path,
 #endif
 
 #ifdef HDD
-    if (!strncmp(path, "hdd", 3)) {
+    if (ci_starts_with(path, "hdd")) {
         const char *pfs_path;
 
         if (MountParty(path) < 0) {
@@ -430,7 +430,7 @@ static const char *resolve_path_tokens(const char *path,
 #endif
 
 #ifdef MX4SIO
-    if (!strncmp(path, "mx4sio:", 7)) {
+    if (ci_starts_with(path, "mx4sio:")) {
         int slot = get_legacy_mx4sio_slot();
 
         if (mx4sio_typed_root_available())
@@ -442,7 +442,7 @@ static const char *resolve_path_tokens(const char *path,
         return out;
     }
 
-    if (!strncmp(path, "massX:", 6)) {
+    if (ci_starts_with(path, "massX:")) {
         int slot = get_legacy_mx4sio_slot();
 
         if (mx4sio_typed_root_available()) {

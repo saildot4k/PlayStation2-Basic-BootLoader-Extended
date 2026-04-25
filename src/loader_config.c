@@ -216,6 +216,7 @@ int LoaderFindConfigFile(FILE **fp_out,
                          u64 *rescue_combo_deadline,
                          LoaderEmergencyPollFn poll_fn)
 {
+    const char *boot_cwd_config;
     const char *boot_family_config;
     int boot_family_source_hint;
     int source;
@@ -225,12 +226,16 @@ int LoaderFindConfigFile(FILE **fp_out,
     if (path_out != NULL && path_out_size > 0)
         path_out[0] = '\0';
 
+    boot_cwd_config = LoaderGetBootCwdConfigPath();
     boot_family_config = LoaderGetBootConfigPath();
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
 
-    for (source = 0; source < 4; source++) {
+    for (source = 0; source < 5; source++) {
         const char *config_path = NULL;
         int source_hint = SOURCE_INVALID;
+        int attempt = 0;
+        int max_attempts = 1;
+        unsigned int retry_delay_us = 0;
         char *resolved_path;
         FILE *fp = NULL;
 
@@ -241,9 +246,12 @@ int LoaderFindConfigFile(FILE **fp_out,
             config_path = "CONFIG.INI";
             source_hint = SOURCE_CWD;
         } else if (source == 1) {
-            config_path = boot_family_config;
+            config_path = boot_cwd_config;
             source_hint = boot_family_source_hint;
         } else if (source == 2) {
+            config_path = boot_family_config;
+            source_hint = boot_family_source_hint;
+        } else if (source == 3) {
             config_path = "mc?:/SYS-CONF/PS2BBL.INI";
             source_hint = SOURCE_MC0;
         } else {
@@ -253,13 +261,40 @@ int LoaderFindConfigFile(FILE **fp_out,
 
         if (config_path == NULL || *config_path == '\0')
             continue;
+        if (source == 2 && ci_eq(config_path, boot_cwd_config))
+            continue;
         if (!LoaderPathFamilyReadyWithoutReload(config_path))
             continue;
 
-        resolved_path = CheckPath(config_path);
-        if (resolved_path == NULL || *resolved_path == '\0')
-            continue;
-        fp = fopen(resolved_path, "r");
+        // Boot-family devices (especially USB/BDM) can appear shortly after
+        // modules load. Retry briefly before falling through to next location.
+        if (source == 1 || source == 2) {
+            LoaderPathFamily family = LoaderPathFamilyFromPath(config_path);
+
+            if (family == LOADER_PATH_FAMILY_BDM) {
+                max_attempts = 30;
+                retry_delay_us = 100000;
+            } else if (family == LOADER_PATH_FAMILY_MMCE ||
+                       family == LOADER_PATH_FAMILY_MX4SIO) {
+                max_attempts = 15;
+                retry_delay_us = 100000;
+            }
+        }
+
+        for (attempt = 0; attempt < max_attempts; attempt++) {
+            if (poll_fn != NULL)
+                poll_fn(rescue_combo_deadline);
+
+            resolved_path = CheckPath(config_path);
+            if (resolved_path != NULL && *resolved_path != '\0')
+                fp = fopen(resolved_path, "r");
+            if (fp != NULL)
+                break;
+
+            if (attempt + 1 < max_attempts && retry_delay_us > 0)
+                usleep(retry_delay_us);
+        }
+
         if (fp == NULL)
             continue;
 
@@ -271,14 +306,19 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (path_out != NULL && path_out_size > 0)
             snprintf(path_out, path_out_size, "%s", resolved_path);
 
+        DPRINTF("Config found: requested='%s' resolved='%s' source_hint=%d\n",
+                config_path,
+                resolved_path,
+                source_hint);
+
         if (source_hint == SOURCE_MC0) {
-            if (!strncmp(resolved_path, "mc1:", 4))
+            if (ci_starts_with(resolved_path, "mc1:"))
                 return SOURCE_MC1;
             return SOURCE_MC0;
         }
 #ifdef MMCE
         if (source_hint == SOURCE_MMCE0) {
-            if (!strncmp(resolved_path, "mmce1:", 6))
+            if (ci_starts_with(resolved_path, "mmce1:"))
                 return SOURCE_MMCE1;
             return SOURCE_MMCE0;
         }
@@ -535,6 +575,12 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
                                          poll_fn);
     if (config_source != SOURCE_INVALID) {
         DPRINTF("valid config on device '%s', reading now\n", SOURCES[config_source]);
+
+        // Config found: do not inherit embedded fallback LK_* defaults.
+        // Only entries explicitly present in the loaded config should be usable.
+        for (x = 0; x < KEY_COUNT; x++)
+            for (j = 0; j < CONFIG_KEY_INDEXES; j++)
+                GLOBCFG.KEYPATHS[x][j] = NULL;
 
         LoaderParseConfigFile(fp,
                               &parse_result,
