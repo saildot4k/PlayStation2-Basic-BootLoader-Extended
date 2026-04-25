@@ -448,22 +448,18 @@ static const char *resolve_path_tokens(const char *path,
     if (ci_starts_with(path, "mx4sio:")) {
         int slot = get_legacy_mx4sio_slot();
 
-        if (mx4sio_typed_root_available())
-            return out;
         if (slot >= 0) {
             snprintf(out, out_size, "mass%d:%s", slot, path + 7);
             return out;
         }
+        if (mx4sio_typed_root_available())
+            return out;
         return out;
     }
 
     if (ci_starts_with(path, "massX:")) {
         int slot = get_legacy_mx4sio_slot();
 
-        if (mx4sio_typed_root_available()) {
-            snprintf(out, out_size, "mx4sio:%s", path + 6);
-            return out;
-        }
         if (slot >= 0)
             out[4] = '0' + slot;
         return out;
