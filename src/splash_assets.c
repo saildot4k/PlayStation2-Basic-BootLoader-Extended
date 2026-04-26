@@ -11,6 +11,7 @@
 #define CUSTOM_LOGO_PIXELS_SIZE (CUSTOM_LOGO_WIDTH * CUSTOM_LOGO_HEIGHT * 4u)
 #define CUSTOM_LOGO_INDEXED_MAGIC "LGB1"
 #define CUSTOM_LOGO_INDEXED_HEADER_SIZE 12u
+#define CUSTOM_LOGO_PATH_MAX 256u
 
 enum {
     CUSTOM_LOGO_UNCHECKED = 0,
@@ -22,9 +23,8 @@ static int g_custom_logo_state = CUSTOM_LOGO_UNCHECKED;
 static unsigned char *g_custom_logo_pixels = NULL;
 static SPLASH_IMAGE g_custom_logo;
 
-static const char *const g_custom_logo_candidates[] = {
-    "LOGO.BIN",
-};
+extern char *CheckPath(const char *path);
+extern const char *LoaderGetBootCwdConfigPath(void);
 
 extern const unsigned int splash_bg_ps2bble_width;
 extern const unsigned int splash_bg_ps2bble_height;
@@ -262,14 +262,22 @@ static int load_custom_logo_indexed(FILE *fp, long file_size, const char *path)
     return 1;
 }
 
-static int load_custom_logo_from_path(const char *path)
+static int load_custom_logo_from_path(const char *requested_path)
 {
     FILE *fp;
     long file_size;
     int loaded = 0;
+    char *resolved_path;
+    const char *path;
 
-    if (path == NULL || *path == '\0')
+    if (requested_path == NULL || *requested_path == '\0')
         return 0;
+
+    resolved_path = CheckPath(requested_path);
+    if (resolved_path != NULL && *resolved_path != '\0')
+        path = resolved_path;
+    else
+        path = requested_path;
 
     fp = fopen(path, "rb");
     if (fp == NULL)
@@ -309,21 +317,57 @@ static int load_custom_logo_from_path(const char *path)
     g_custom_logo.pixels_rbga = g_custom_logo_pixels;
     g_custom_logo.width = CUSTOM_LOGO_WIDTH;
     g_custom_logo.height = CUSTOM_LOGO_HEIGHT;
-    DPRINTF("Loaded custom splash logo from CWD: %s (%s)\n",
+    DPRINTF("Loaded custom splash logo from CWD: requested='%s' resolved='%s' (%s)\n",
+            requested_path,
             path,
             ((unsigned long)file_size == CUSTOM_LOGO_PIXELS_SIZE) ? "raw RBGA" : "indexed");
     return 1;
 }
 
+static int build_boot_cwd_logo_path(char *out, size_t out_size)
+{
+    const char *boot_cwd_config;
+    const char *slash;
+    size_t prefix_len;
+
+    if (out == NULL || out_size == 0)
+        return 0;
+    out[0] = '\0';
+
+    boot_cwd_config = LoaderGetBootCwdConfigPath();
+    if (boot_cwd_config == NULL || *boot_cwd_config == '\0')
+        return 0;
+
+    slash = strrchr(boot_cwd_config, '/');
+    if (slash == NULL)
+        return 0;
+
+    prefix_len = (size_t)(slash - boot_cwd_config + 1);
+    if (prefix_len + strlen("LOGO.BIN") + 1 > out_size)
+        return 0;
+
+    memcpy(out, boot_cwd_config, prefix_len);
+    memcpy(out + prefix_len, "LOGO.BIN", sizeof("LOGO.BIN"));
+    return 1;
+}
+
 static void probe_custom_logo_once(void)
 {
+    const char *candidates[2];
+    char boot_logo_path[CUSTOM_LOGO_PATH_MAX];
     unsigned int i;
+    unsigned int candidate_count = 0;
 
     if (g_custom_logo_state != CUSTOM_LOGO_UNCHECKED)
         return;
 
-    for (i = 0; i < (unsigned int)(sizeof(g_custom_logo_candidates) / sizeof(g_custom_logo_candidates[0])); i++) {
-        if (load_custom_logo_from_path(g_custom_logo_candidates[i])) {
+    // Keep logo discovery fail-fast: CWD only, no retries/timeouts.
+    candidates[candidate_count++] = "LOGO.BIN";
+    if (build_boot_cwd_logo_path(boot_logo_path, sizeof(boot_logo_path)))
+        candidates[candidate_count++] = boot_logo_path;
+
+    for (i = 0; i < candidate_count; i++) {
+        if (load_custom_logo_from_path(candidates[i])) {
             g_custom_logo_state = CUSTOM_LOGO_READY;
             return;
         }
