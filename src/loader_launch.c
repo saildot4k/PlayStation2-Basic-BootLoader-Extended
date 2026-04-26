@@ -168,6 +168,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
     u64 deadline;
     ConsoleInfo console_info;
     char autoboot_text[48];
+    int console_info_ready = 0;
     const char *model;
     const char *ps1ver;
     const char *dvdver;
@@ -197,15 +198,23 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
         romver == NULL || romver_size == 0 || execpaths == NULL)
         return 1;
 
+    model = "";
+    ps1ver = "";
+    dvdver = "";
+    source = "";
+    temp_celsius = NULL;
+
     if (!SplashRenderIsActive())
         SplashRenderTextBody(GLOBCFG.LOGO_DISP, is_psx_desr);
 
-    ConsoleInfoCapture(&console_info, config_source, romver, romver_size);
-    model = console_info.model;
-    ps1ver = console_info.ps1ver;
-    dvdver = console_info.dvdver;
-    source = console_info.source;
-    temp_celsius = ConsoleInfoRefreshTemperature(&console_info);
+    if (GLOBCFG.LOGO_DISP > 0 || SplashRenderIsActive()) {
+        ConsoleInfoCapture(&console_info, config_source, romver, romver_size);
+        model = console_info.model;
+        ps1ver = console_info.ps1ver;
+        dvdver = console_info.dvdver;
+        source = console_info.source;
+        console_info_ready = 1;
+    }
 
     if (GLOBCFG.LOGO_DISP > 0) {
         if (GLOBCFG.LOGO_DISP == 1) {
@@ -225,6 +234,16 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
     if (SplashRenderIsActive()) {
         int pass_count = splash_early_presented ? 1 : 2;
         int pass;
+
+        if (!console_info_ready) {
+            ConsoleInfoCapture(&console_info, config_source, romver, romver_size);
+            model = console_info.model;
+            ps1ver = console_info.ps1ver;
+            dvdver = console_info.dvdver;
+            source = console_info.source;
+            console_info_ready = 1;
+        }
+
         for (pass = 0; pass < pass_count; pass++) {
             SplashRenderBeginFrame();
             SplashRenderHotkeyLines(GLOBCFG.LOGO_DISP, hotkey_lines);
@@ -255,10 +274,20 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 poll_emergency_combo_window(rescue_combo_deadline);
 
             if (SplashRenderIsActive()) {
-                const char *render_temp = ConsoleInfoRefreshTemperature(&console_info);
+                const char *render_temp;
                 u64 remaining_ms = (now <= deadline) ? (deadline - now) : 0;
                 unsigned int remaining_sec = (unsigned int)(remaining_ms / 1000u);
                 unsigned int remaining_tenths = (unsigned int)((remaining_ms % 1000u) / 100u);
+
+                if (!console_info_ready) {
+                    ConsoleInfoCapture(&console_info, config_source, romver, romver_size);
+                    model = console_info.model;
+                    ps1ver = console_info.ps1ver;
+                    dvdver = console_info.dvdver;
+                    source = console_info.source;
+                    console_info_ready = 1;
+                }
+                render_temp = ConsoleInfoRefreshTemperature(&console_info);
 
                 snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%u", remaining_sec, remaining_tenths);
                 if (GLOBCFG.DELAY > 0)

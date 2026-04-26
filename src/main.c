@@ -125,7 +125,8 @@ int main(int argc, char *argv[])
     // Refresh ROMVER/platform after IOP services are fully initialized.
     ReadROMVEROnce();
     LogDetectedPlatform();
-    ConsoleInfoInit(); // Initialize console info cache (model name, etc.)
+    // Console info (model/version strings) is initialized lazily when first
+    // rendered to keep time-to-menu low, especially when LOGO_DISPLAY=0.
     PS1DRVInit();    // Initialize PlayStation Driver (PS1DRV)
     DVDPlayerInit(); // Initialize ROM DVD player. It is normal for this to fail on consoles that have no DVD ROM chip (i.e. DEX or the SCPH-10000/SCPH-15000).
 
@@ -196,7 +197,8 @@ int main(int argc, char *argv[])
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
     PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
-    SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+    if (GLOBCFG.LOGO_DISP > 0 || SplashRenderIsActive())
+        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
 
     // Main launch workflow: countdown, hotkeys, AUTO fallback, then emergency mode.
     if (LoaderRunLaunchWorkflow(splash_early_presented,
