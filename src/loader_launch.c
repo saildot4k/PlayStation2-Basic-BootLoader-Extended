@@ -82,7 +82,7 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
 {
     unsigned int timeout_ms;
     unsigned int step_ms;
-    unsigned int waited_ms = 0;
+    u64 wait_deadline_ms = 0;
     char *candidate = NULL;
     int logged_wait = 0;
 
@@ -91,19 +91,24 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
 
     timeout_ms = launch_wait_timeout_for_path(entry_path, wait_for_mount);
     step_ms = launch_wait_step_for_path(entry_path, wait_for_mount);
+
+    if (timeout_ms > 0)
+        wait_deadline_ms = Timer() + timeout_ms;
     if (step_ms == 0)
         step_ms = LAUNCH_PATH_WAIT_STEP_MS;
 
     while (1) {
-        candidate = CheckPath(entry_path);
-        if (candidate != NULL && *candidate != '\0') {
-            if (LoaderAllowVirtualPatinfoEntry(key_index, entry_index, candidate) || exist(candidate)) {
-                *resolved_path = candidate;
-                return 0;
+        if (LoaderPathCanAttemptNow(entry_path)) {
+            candidate = CheckPath(entry_path);
+            if (candidate != NULL && *candidate != '\0') {
+                if (LoaderAllowVirtualPatinfoEntry(key_index, entry_index, candidate) || exist(candidate)) {
+                    *resolved_path = candidate;
+                    return 0;
+                }
             }
         }
 
-        if (waited_ms >= timeout_ms)
+        if (timeout_ms == 0 || Timer() >= wait_deadline_ms)
             break;
 
         if (!logged_wait) {
@@ -111,8 +116,20 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
             logged_wait = 1;
         }
 
-        usleep(step_ms * 1000u);
-        waited_ms += step_ms;
+        {
+            u64 now_ms = Timer();
+            unsigned int sleep_ms = step_ms;
+
+            if (now_ms < wait_deadline_ms) {
+                u64 remaining_ms = wait_deadline_ms - now_ms;
+
+                if (remaining_ms < (u64)sleep_ms)
+                    sleep_ms = (unsigned int)remaining_ms;
+            }
+
+            if (sleep_ms > 0)
+                usleep(sleep_ms * 1000u);
+        }
     }
 
     if (candidate != NULL && *candidate != '\0')
