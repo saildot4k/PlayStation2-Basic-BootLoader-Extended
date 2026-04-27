@@ -611,6 +611,26 @@ static int build_mass_path(char *out, size_t out_size, const char *suffix, int u
     return 1;
 }
 
+static int normalize_massx_launch_to_mx4sio(const char *path, char *out, size_t out_size)
+{
+    const char *suffix;
+
+    if (path == NULL || *path == '\0' || out == NULL || out_size == 0)
+        return 0;
+    if (strlen(path) < 6)
+        return 0;
+    if (!prefix_eq_ci_n(path, "massx", 5) ||
+        path[5] != ':')
+        return 0;
+
+    suffix = path + 5;
+    if (suffix[1] == '/' || suffix[1] == '\0')
+        snprintf(out, out_size, "mx4sio%s", suffix);
+    else
+        snprintf(out, out_size, "mx4sio:/%s", suffix + 1);
+    return 1;
+}
+
 // For legacy USB aliases in user config, pass argv[0] as mass* paths.
 // New typed paths (ata:/, mx4sio:/, mx4sioN:/) should be preserved.
 static int normalize_usb_launch_to_legacy_mass(const char *path, char *out, size_t out_size)
@@ -1110,6 +1130,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 {
     DPRINTF("%s\n", __FUNCTION__);
     char patinfo_path[MAX_PATH];
+    char mx4sio_launch_path[MAX_PATH];
     char legacy_launch_path[MAX_PATH];
     LaunchIntent intent;
     int launch_argc;
@@ -1136,6 +1157,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 
     LaunchIntentInit(&intent, filename);
     patinfo_path[0] = '\0';
+    mx4sio_launch_path[0] = '\0';
     legacy_launch_path[0] = '\0';
 #if EGSM_BUILD && defined(HDD)
     patinfo_mem_elf[0] = '\0';
@@ -1289,6 +1311,15 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         }
     }
 #endif
+
+    if (normalize_massx_launch_to_mx4sio(intent.launch_filename,
+                                         mx4sio_launch_path,
+                                         sizeof(mx4sio_launch_path))) {
+        DPRINTF("Using canonical MX4SIO argv[0] path '%s' (from '%s')\n",
+                mx4sio_launch_path,
+                intent.launch_filename);
+        intent.launch_filename = mx4sio_launch_path;
+    }
 
     if (normalize_usb_launch_to_legacy_mass(intent.launch_filename,
                                             legacy_launch_path,

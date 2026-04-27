@@ -377,6 +377,37 @@ static int any_mass_mount_openable_in_range(int start_unit, int end_unit)
     return 0;
 }
 
+#ifdef BDM_ATA
+static int ata_typed_root_openable(int unit)
+{
+    struct stat st;
+    char root_with_unit[] = "ata0:";
+
+    if (unit < 0) {
+        if (stat("ata:", &st) == 0)
+            return 1;
+        unit = 0;
+    }
+
+    if (unit < 0 || unit > 9)
+        return 0;
+
+    root_with_unit[3] = (char)('0' + unit);
+    if (stat(root_with_unit, &st) == 0)
+        return 1;
+
+    if (unit == 0 && stat("ata:", &st) == 0)
+        return 1;
+
+    return 0;
+}
+
+static int ata_typed_root_available(void)
+{
+    return ata_typed_root_openable(-1);
+}
+#endif
+
 int LoaderPathCanAttemptNow(const char *path)
 {
     int unit = -1;
@@ -395,8 +426,11 @@ int LoaderPathCanAttemptNow(const char *path)
 #endif
 
 #ifdef HDD
-    if (path_prefix_matches(path, "hdd", 3) || path_prefix_matches(path, "pfs", 3))
+    if (path_prefix_matches(path, "hdd", 3) || path_prefix_matches(path, "pfs", 3)) {
+        if (s_hdd_modules_loaded != 0)
+            return 1;
         return (stat("pfs0:", &st) == 0 || stat("hdd0:", &st) == 0);
+    }
 #endif
 
 #ifdef MX4SIO
@@ -423,9 +457,22 @@ int LoaderPathCanAttemptNow(const char *path)
     }
 #endif
 
+#ifdef BDM_ATA
+    if (path_prefix_matches(path, "ata", 3)) {
+        int explicit_unit = -1;
+
+        if (parse_prefixed_unit(path, "ata", 3, &explicit_unit) && explicit_unit >= 0)
+            return ata_typed_root_openable(explicit_unit);
+
+        if (ata_typed_root_available())
+            return 1;
+
+        return 0;
+    }
+#endif
+
     if (parse_prefixed_unit(path, "mass", 4, &unit) ||
         parse_prefixed_unit(path, "usb", 3, &unit) ||
-        parse_prefixed_unit(path, "ata", 3, &unit) ||
         parse_prefixed_unit(path, "ilink", 5, &unit)) {
         if (unit >= 0 && unit <= 9)
             return mass_mount_openable(unit);
@@ -530,6 +577,44 @@ static const char *resolve_path_tokens(const char *path,
         return out;
     }
 
+#ifdef BDM_ATA
+    if (path_prefix_with_optional_unit(path, "ata", 3, &bdm_unit, &bdm_suffix)) {
+        int typed_unit = bdm_unit;
+        char typed_candidate[CHECKPATH_BUF_SIZE];
+        char typed_candidate_no_unit[CHECKPATH_BUF_SIZE];
+
+        if (typed_unit < 0)
+            typed_unit = 0;
+
+        snprintf(typed_candidate, sizeof(typed_candidate), "ata%d%s", typed_unit, bdm_suffix);
+        snprintf(typed_candidate_no_unit, sizeof(typed_candidate_no_unit), "ata%s", bdm_suffix);
+
+        if (!require_existing_pairs) {
+            if (bdm_unit >= 0)
+                copy_string_safe(out, out_size, typed_candidate);
+            else
+                copy_string_safe(out, out_size, typed_candidate_no_unit);
+            return out;
+        }
+
+        if (exist(typed_candidate)) {
+            copy_string_safe(out, out_size, typed_candidate);
+            return out;
+        }
+        if (bdm_unit < 0 && exist(typed_candidate_no_unit)) {
+            copy_string_safe(out, out_size, typed_candidate_no_unit);
+            return out;
+        }
+
+        // Keep typed ATA path intent for retry loops and stage2 argv[0].
+        if (bdm_unit >= 0)
+            copy_string_safe(out, out_size, typed_candidate);
+        else
+            copy_string_safe(out, out_size, typed_candidate_no_unit);
+        return out;
+    }
+#endif
+
 #ifdef MMCE
     if (ci_starts_with(path, "mmce?")) {
         char preferred_slot;
@@ -587,20 +672,24 @@ static const char *resolve_path_tokens(const char *path,
             return out;
         }
 
-        // Prefer preserving new typed prefixes whenever they are readable.
-        if (exist(typed_candidate)) {
-            copy_string_safe(out, out_size, typed_candidate);
-            return out;
-        }
+        // Prefer canonical unitless mx4sio:/ for implicit paths.
         if (bdm_unit < 0 && exist(typed_candidate_no_unit)) {
             copy_string_safe(out, out_size, typed_candidate_no_unit);
+            return out;
+        }
+        // Explicit mx4sioN:/ keeps unit; implicit can still fall back to mx4sioN:/.
+        if (exist(typed_candidate)) {
+            copy_string_safe(out, out_size, typed_candidate);
             return out;
         }
 
         // Fallback for environments exposing only legacy massN roots.
         if (build_mass_path(legacy_candidate, sizeof(legacy_candidate), bdm_suffix, typed_unit) &&
             exist(legacy_candidate)) {
-            copy_string_safe(out, out_size, legacy_candidate);
+            if (bdm_unit >= 0)
+                copy_string_safe(out, out_size, typed_candidate);
+            else
+                copy_string_safe(out, out_size, typed_candidate_no_unit);
             return out;
         }
 
@@ -609,7 +698,10 @@ static const char *resolve_path_tokens(const char *path,
             slot != typed_unit &&
             build_mass_path(legacy_candidate, sizeof(legacy_candidate), bdm_suffix, slot) &&
             exist(legacy_candidate)) {
-            copy_string_safe(out, out_size, legacy_candidate);
+            if (bdm_unit >= 0)
+                copy_string_safe(out, out_size, typed_candidate);
+            else
+                copy_string_safe(out, out_size, typed_candidate_no_unit);
             return out;
         }
 
@@ -626,6 +718,8 @@ static const char *resolve_path_tokens(const char *path,
         const char *suffix = path + 5;
         int slot = get_legacy_mx4sio_slot();
         char candidate[CHECKPATH_BUF_SIZE];
+        char typed_candidate[CHECKPATH_BUF_SIZE];
+        char typed_candidate_no_unit[CHECKPATH_BUF_SIZE];
 
         if (require_existing_pairs) {
             int i;
@@ -636,21 +730,43 @@ static const char *resolve_path_tokens(const char *path,
                 (void)mass_mount_openable(i);
         }
 
+        snprintf(typed_candidate_no_unit, sizeof(typed_candidate_no_unit), "mx4sio%s", suffix);
+
+        if (!require_existing_pairs) {
+            copy_string_safe(out, out_size, typed_candidate_no_unit);
+            return out;
+        }
+
+        // Canonical preference for massX entries: behave as mx4sio:/ paths.
+        if (exist(typed_candidate_no_unit)) {
+            DPRINTF("CheckPath massX normalize: requested='%s' candidate='%s'\n",
+                    path,
+                    typed_candidate_no_unit);
+            copy_string_safe(out, out_size, typed_candidate_no_unit);
+            return out;
+        }
+
         if (slot >= 0 && slot <= 4) {
-            if (build_mass_path(candidate, sizeof(candidate), suffix, slot) &&
-                (!require_existing_pairs || exist(candidate))) {
-                DPRINTF("CheckPath massX match: requested='%s' candidate='%s'\n",
+            snprintf(typed_candidate, sizeof(typed_candidate), "mx4sio%d%s", slot, suffix);
+            if (exist(typed_candidate)) {
+                DPRINTF("CheckPath massX normalize: requested='%s' candidate='%s'\n",
                         path,
-                        candidate);
-                copy_string_safe(out, out_size, candidate);
+                        typed_candidate);
+                copy_string_safe(out, out_size, typed_candidate);
                 return out;
             }
-
-            // Keep the resolved slot hint even when the file is missing so
-            // callers can continue polling the same MX4SIO target.
-            out[4] = '0' + slot;
-            DPRINTF("CheckPath massX slot: requested='%s' resolved='%s'\n", path, out);
+            if (build_mass_path(candidate, sizeof(candidate), suffix, slot) &&
+                (!require_existing_pairs || exist(candidate))) {
+                DPRINTF("CheckPath massX normalize: requested='%s' legacy='%s' resolved='%s'\n",
+                        path,
+                        candidate,
+                        typed_candidate_no_unit);
+                copy_string_safe(out, out_size, typed_candidate_no_unit);
+                return out;
+            }
         }
+        // Keep canonical typed mx4sio path intent for retry loops/stage2 argv[0].
+        copy_string_safe(out, out_size, typed_candidate_no_unit);
         return out;
     }
 #endif
