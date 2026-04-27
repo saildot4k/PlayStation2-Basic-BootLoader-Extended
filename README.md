@@ -34,7 +34,10 @@ Config search is now boot-family aware to avoid loading unnecessary drivers at s
    - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
    - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI` / `ilink:/PS2BBL/CONFIG.INI` (based on boot root)
    - PSX DESR xfrom boot: `xfrom:/PS2BBL/CONFIG.INI`
-3. Memory card fallback:
+3. CD enumerator fallback:
+   - `enumerator:/PS2BBL/CONFIG.INI`
+   - only probed when booting from disc (`cdrom*`/`enumerator*` boot path)
+4. Memory card fallback:
    - `mc?:/SYS-CONF/PS2BBL.INI`
    - `mc?:/SYS-CONF/PSXBBL.INI`
 
@@ -49,6 +52,7 @@ PS2BBL supports these launch/config path prefixes:
 - `hdd0:partition:pfs:/<path to elf>` __HDD builds__
 - `xfrom:/` paths __PSX DESR builds__
 - `ata:/`, `ilink:/` (BDM mass-storage roots) __not yet implemented__
+- `DISC_STOP_AT_BOOT=1` to stop optical disc spin at startup
 
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.

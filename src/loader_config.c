@@ -17,6 +17,14 @@ extern int g_is_psx_desr;
 static char s_resolved_config_path[256] = "";
 static char s_requested_config_path[256] = "";
 
+static int path_is_disc_root(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return 0;
+
+    return ci_starts_with(path, "cdrom") || ci_starts_with(path, "enumerator");
+}
+
 typedef struct
 {
     const char *key;
@@ -561,6 +569,7 @@ int LoaderFindConfigFile(FILE **fp_out,
     LoaderPathFamily boot_cwd_family;
     int boot_from_legacy_mass = 0;
     int boot_legacy_mass_unit = -1;
+    int allow_disc_paths = 0;
 #ifdef MX4SIO
     int allow_mx4_on_legacy_mass = 1;
 #endif
@@ -579,6 +588,7 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_driver_tag = LoaderGetBootDriverTag();
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
+    allow_disc_paths = path_is_disc_root(boot_path_hint);
     boot_from_legacy_mass = path_is_legacy_mass(boot_path_hint);
     boot_legacy_mass_unit = extract_legacy_mass_unit(boot_path_hint);
 #ifdef MX4SIO
@@ -600,7 +610,7 @@ int LoaderFindConfigFile(FILE **fp_out,
         (void)boot_driver_tag;
 #endif
 
-        for (source = 0; source < 5; source++) {
+        for (source = 0; source < 6; source++) {
         const char *config_path = NULL;
         int source_hint = SOURCE_INVALID;
         int attempt = 0;
@@ -653,6 +663,11 @@ int LoaderFindConfigFile(FILE **fp_out,
             config_path = boot_family_config;
             source_hint = boot_family_source_hint;
         } else if (source == 3) {
+            if (!allow_disc_paths)
+                continue;
+            config_path = "enumerator:/PS2BBL/CONFIG.INI";
+            source_hint = SOURCE_CWD;
+        } else if (source == 4) {
             config_path = "mc?:/SYS-CONF/PS2BBL.INI";
             source_hint = SOURCE_MC0;
         } else {

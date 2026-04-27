@@ -26,6 +26,7 @@ EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load ex
 EGSM_BUILD ?= 1 # build the embedded stage2 eGSM runtime (0=disabled, 1=enabled)
 PSX_ALL_DRIVERS_LAZY_LOADING ?= 0
 BDM_ATA ?= 0
+DISC_STOP_AT_BOOT ?= 0 # stop optical disc at startup before config/bootstrap
 
 HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
 FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
@@ -95,6 +96,11 @@ $(EE_OBJS_DIR)ps2.o: EE_CFLAGS += -G0 -Os
 
 ifneq ($(VERBOSE), 1)
    .SILENT:
+endif
+
+ifeq ($(DISC_STOP_AT_BOOT), 1)
+  $(info --- disc stop at startup enabled)
+  EE_CFLAGS += -DDISC_STOP_AT_BOOT
 endif
 
 ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)

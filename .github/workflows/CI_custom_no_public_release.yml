@@ -5,6 +5,10 @@ on:
     inputs:
       make_args:
         description: pass extra make argumments to Program compilation
+      disc_stop_at_boot:
+        type: boolean
+        description: include DISC_STOP_AT_BOOT=1 in make command
+        default: false
 
 jobs:
   build:
@@ -23,13 +27,21 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --prune --unshallow
 
+      - name: Resolve optional DISC_STOP_AT_BOOT
+        run: |
+          if [ "${{ github.event.inputs.disc_stop_at_boot }}" = "true" ]; then
+            echo "DISC_STOP_ARG=DISC_STOP_AT_BOOT=1" >> $GITHUB_ENV
+          else
+            echo "DISC_STOP_ARG=" >> $GITHUB_ENV
+          fi
+
       - name: Compile PS2 build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2BBL_CUSTOM_BUILD/ ${{ github.event.inputs.make_args }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2BBL_CUSTOM_BUILD/ ${{ github.event.inputs.make_args }} ${{ env.DISC_STOP_ARG }}
 
       - name: Compile PSX build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2BBL_CUSTOM_BUILD/ PSX=1 ${{ github.event.inputs.make_args }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2BBL_CUSTOM_BUILD/ PSX=1 ${{ github.event.inputs.make_args }} ${{ env.DISC_STOP_ARG }}
 
       - name: list
         run: |
