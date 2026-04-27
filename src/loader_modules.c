@@ -598,6 +598,9 @@ static int load_ata_transport_modules(void)
     DPRINTF(" [ATA_BD]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
         return -2;
+
+    // Match OSDMenu launcher behavior: let ata_bd settle briefly before probes.
+    sleep(1);
 #endif
 
     return 0;

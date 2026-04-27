@@ -8,8 +8,9 @@
 
 #define PAD_MASK_ANY 0xffff
 #define LAUNCH_PATH_WAIT_STEP_MS 50u
+#define LAUNCH_PATH_WAIT_STEP_OSDMENU_MS 1000u
 #define LAUNCH_PATH_WAIT_BDM_MS 5000u
-#define LAUNCH_PATH_WAIT_MX4SIO_MS 15000u
+#define LAUNCH_PATH_WAIT_MX4SIO_MS 20000u
 #define LAUNCH_PATH_WAIT_MMCE_MS 2000u
 #define LAUNCH_PATH_WAIT_HDD_MS 3000u
 
@@ -48,6 +49,31 @@ static unsigned int launch_wait_timeout_for_path(const char *entry_path, int wai
     }
 }
 
+static unsigned int launch_wait_step_for_path(const char *entry_path, int wait_for_mount)
+{
+    LoaderPathFamily family;
+
+    if (!wait_for_mount || entry_path == NULL || *entry_path == '\0')
+        return LAUNCH_PATH_WAIT_STEP_MS;
+
+    family = LoaderPathFamilyFromPath(entry_path);
+    if (family == LOADER_PATH_FAMILY_XFROM)
+        family = LOADER_PATH_FAMILY_MC;
+
+    switch (family) {
+        case LOADER_PATH_FAMILY_BDM:
+#ifdef MX4SIO
+            if (ci_starts_with(entry_path, "massX:") || ci_starts_with(entry_path, "mx4sio"))
+                return LAUNCH_PATH_WAIT_STEP_OSDMENU_MS;
+#endif
+            return LAUNCH_PATH_WAIT_STEP_MS;
+        case LOADER_PATH_FAMILY_MX4SIO:
+            return LAUNCH_PATH_WAIT_STEP_OSDMENU_MS;
+        default:
+            return LAUNCH_PATH_WAIT_STEP_MS;
+    }
+}
+
 static int ResolveLaunchPathForEntry(const char *entry_path,
                                      int key_index,
                                      int entry_index,
@@ -55,6 +81,7 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
                                      int wait_for_mount)
 {
     unsigned int timeout_ms;
+    unsigned int step_ms;
     unsigned int waited_ms = 0;
     char *candidate = NULL;
     int logged_wait = 0;
@@ -63,6 +90,9 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
         return -1;
 
     timeout_ms = launch_wait_timeout_for_path(entry_path, wait_for_mount);
+    step_ms = launch_wait_step_for_path(entry_path, wait_for_mount);
+    if (step_ms == 0)
+        step_ms = LAUNCH_PATH_WAIT_STEP_MS;
 
     while (1) {
         candidate = CheckPath(entry_path);
@@ -81,8 +111,8 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
             logged_wait = 1;
         }
 
-        usleep(LAUNCH_PATH_WAIT_STEP_MS * 1000u);
-        waited_ms += LAUNCH_PATH_WAIT_STEP_MS;
+        usleep(step_ms * 1000u);
+        waited_ms += step_ms;
     }
 
     if (candidate != NULL && *candidate != '\0')
@@ -339,7 +369,9 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
                             if (ensure_family_result < 0)
                                 continue;
-                            if (!LoaderPathCanAttemptNow(entry_path))
+                            if (!LoaderPathCanAttemptNow(entry_path) &&
+                                !(ensure_family_result > 0 &&
+                                  launch_wait_timeout_for_path(entry_path, 1) > 0))
                                 continue;
                             execpaths[j] = NULL;
                             if (ResolveLaunchPathForEntry(entry_path,
@@ -365,7 +397,10 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                                 continue;
                         }
 
-                        if (!is_command && !LoaderPathCanAttemptNow(entry_path)) {
+                        if (!is_command &&
+                            !LoaderPathCanAttemptNow(entry_path) &&
+                            !(ensure_family_result > 0 &&
+                              launch_wait_timeout_for_path(entry_path, 1) > 0)) {
                             continue;
                         }
 
@@ -469,7 +504,9 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
                 if (ensure_family_result < 0)
                     continue;
-                if (!LoaderPathCanAttemptNow(entry_path))
+                if (!LoaderPathCanAttemptNow(entry_path) &&
+                    !(ensure_family_result > 0 &&
+                      launch_wait_timeout_for_path(entry_path, 1) > 0))
                     continue;
                 execpaths[j] = NULL;
                 if (ResolveLaunchPathForEntry(entry_path,
@@ -489,7 +526,9 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
             if (ensure_family_result < 0)
                 continue;
-            if (!LoaderPathCanAttemptNow(entry_path))
+            if (!LoaderPathCanAttemptNow(entry_path) &&
+                !(ensure_family_result > 0 &&
+                  launch_wait_timeout_for_path(entry_path, 1) > 0))
                 continue;
 
             execpaths[j] = NULL;
