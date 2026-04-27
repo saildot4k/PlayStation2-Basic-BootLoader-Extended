@@ -113,7 +113,7 @@ endif
 ifeq ($(MX4SIO), 1)
   HOMEBREW_IRX = 1
   FILEXIO_NEED = 1
-  EE_OBJS += mx4sio_bd_irx.o
+  EE_OBJS += mx4sio_bd_mini_irx.o
   EE_CFLAGS += -DMX4SIO
   ifeq ($(USE_ROM_SIO2MAN), 1)
     $(error MX4SIO needs Homebrew SIO2MAN to work)
@@ -201,7 +201,7 @@ endif
 
 ifeq ($(HAS_EMBED_IRX), 1)
   $(info --- USB drivers will be embedded)
-  EE_OBJS += usbd_irx.o bdm_irx.o bdmfs_fatfs_irx.o usbmass_bd_irx.o
+  EE_OBJS += usbd_mini_irx.o bdm_irx.o bdmfs_fatfs_irx.o usbmass_bd_mini_irx.o
   EE_CFLAGS += -DHAS_EMBEDDED_IRX
 else
   $(info --- USB drivers will be external)

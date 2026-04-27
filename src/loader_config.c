@@ -309,11 +309,6 @@ static int build_mass_usb_alias(const char *path, char *out, size_t out_size)
     return build_mass_typed_alias(path, "usb", -1, out, out_size);
 }
 
-static int build_mass_ata_alias(const char *path, char *out, size_t out_size)
-{
-    return build_mass_typed_alias(path, "ata", -1, out, out_size);
-}
-
 #ifdef MX4SIO
 static int build_mass_mx4_alias(const char *path, char *out, size_t out_size)
 {
@@ -615,13 +610,10 @@ int LoaderFindConfigFile(FILE **fp_out,
         int generic_mass_boot_path = 0;
         char generic_config_path_buf[256];
         char usb_config_path_buf[256];
-        char ata_config_path_buf[256];
         char generic_secondary_path_buf[256];
         char usb_secondary_path_buf[256];
-        char ata_secondary_path_buf[256];
         const char *config_path_generic = NULL;
         const char *config_path_usb = NULL;
-        const char *config_path_ata = NULL;
 #ifdef MX4SIO
         char mx4_config_path_buf[256];
         char mx4_secondary_path_buf[256];
@@ -681,30 +673,24 @@ int LoaderFindConfigFile(FILE **fp_out,
             path_is_legacy_mass(config_path) &&
             !legacy_mass_transports_primed) {
             int usb_ret;
-            int ata_ret;
 #ifdef MX4SIO
             int mx4_ret;
 #endif
 
             usb_ret = LoaderLoadBdmTransportsForHint("usb:/");
-            ata_ret = LoaderLoadBdmTransportsForHint("ata:/");
 #ifdef MX4SIO
             if (allow_mx4_on_legacy_mass) {
                 mx4_ret = LoaderLoadBdmTransportsForHint("mx4sio:/");
-                DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d mx4=%d\n",
+                DPRINTF("Config probe: legacy mass boot transport prime usb=%d mx4=%d\n",
                         usb_ret,
-                        ata_ret,
                         mx4_ret);
             } else {
-                DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d mx4=skipped(unit=%d)\n",
+                DPRINTF("Config probe: legacy mass boot transport prime usb=%d mx4=skipped(unit=%d)\n",
                         usb_ret,
-                        ata_ret,
                         boot_legacy_mass_unit);
             }
 #else
-            DPRINTF("Config probe: legacy mass boot transport prime usb=%d ata=%d\n",
-                    usb_ret,
-                    ata_ret);
+            DPRINTF("Config probe: legacy mass boot transport prime usb=%d\n", usb_ret);
 #endif
             legacy_mass_transports_primed = 1;
         }
@@ -715,9 +701,6 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (build_mass_usb_alias(config_path, usb_config_path_buf, sizeof(usb_config_path_buf)) &&
             !ci_eq(usb_config_path_buf, config_path))
             config_path_usb = usb_config_path_buf;
-        if (build_mass_ata_alias(config_path, ata_config_path_buf, sizeof(ata_config_path_buf)) &&
-            !ci_eq(ata_config_path_buf, config_path))
-            config_path_ata = ata_config_path_buf;
 #ifdef MX4SIO
         if (allow_mx4_on_legacy_mass) {
             if (build_mass_mx4_alias(config_path, mx4_config_path_buf, sizeof(mx4_config_path_buf)) &&
@@ -747,7 +730,6 @@ int LoaderFindConfigFile(FILE **fp_out,
 #ifdef MX4SIO
             primary_count = append_unique_candidate(primary_candidates, primary_count, 8, config_path_mx4);
 #endif
-            primary_count = append_unique_candidate(primary_candidates, primary_count, 8, config_path_ata);
             if (generic_mass_boot_path)
                 primary_count = append_unique_candidate(primary_candidates, primary_count, 8, config_path);
         }
@@ -759,7 +741,6 @@ int LoaderFindConfigFile(FILE **fp_out,
             LoaderPathFamilyReadyWithoutReload(boot_family_config)) {
             const char *secondary_generic = NULL;
             const char *secondary_usb = NULL;
-            const char *secondary_ata = NULL;
 #ifdef MX4SIO
             const char *secondary_mx4 = NULL;
 #endif
@@ -774,9 +755,6 @@ int LoaderFindConfigFile(FILE **fp_out,
             if (build_mass_usb_alias(boot_family_config, usb_secondary_path_buf, sizeof(usb_secondary_path_buf)) &&
                 !ci_eq(usb_secondary_path_buf, boot_family_config))
                 secondary_usb = usb_secondary_path_buf;
-            if (build_mass_ata_alias(boot_family_config, ata_secondary_path_buf, sizeof(ata_secondary_path_buf)) &&
-                !ci_eq(ata_secondary_path_buf, boot_family_config))
-                secondary_ata = ata_secondary_path_buf;
 #ifdef MX4SIO
             if (allow_mx4_on_legacy_mass &&
                 build_mass_mx4_alias(boot_family_config, mx4_secondary_path_buf, sizeof(mx4_secondary_path_buf)) &&
@@ -791,7 +769,6 @@ int LoaderFindConfigFile(FILE **fp_out,
 #ifdef MX4SIO
                 secondary_count = append_unique_candidate(secondary_candidates, secondary_count, 8, secondary_mx4);
 #endif
-                secondary_count = append_unique_candidate(secondary_candidates, secondary_count, 8, secondary_ata);
                 if (secondary_generic_mass_boot_path)
                     secondary_count = append_unique_candidate(secondary_candidates, secondary_count, 8, boot_family_config);
             }

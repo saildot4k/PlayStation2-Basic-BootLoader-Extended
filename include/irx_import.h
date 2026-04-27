@@ -40,7 +40,7 @@ IMPORT_BIN2C(smap_irx);
 #endif
 
 #ifdef MX4SIO
-IMPORT_BIN2C(mx4sio_bd_irx);
+IMPORT_BIN2C(mx4sio_bd_mini_irx);
 #ifdef USE_ROM_SIO2MAN
 #error MX4SIO needs Homebrew SIO2MAN to work
 #endif
@@ -55,13 +55,13 @@ IMPORT_BIN2C(ps2dev9_irx);
 #endif
 
 #ifdef HAS_EMBEDDED_IRX
-IMPORT_BIN2C(usbd_irx);
+IMPORT_BIN2C(usbd_mini_irx);
 #ifdef NO_BDM
 IMPORT_BIN2C(usb_mass_irx);
 #else
 IMPORT_BIN2C(bdm_irx);
 IMPORT_BIN2C(bdmfs_fatfs_irx);
-IMPORT_BIN2C(usbmass_bd_irx);
+IMPORT_BIN2C(usbmass_bd_mini_irx);
 #ifdef BDM_ATA
 IMPORT_BIN2C(ata_bd_irx);
 #endif

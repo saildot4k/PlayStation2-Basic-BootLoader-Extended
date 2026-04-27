@@ -29,6 +29,12 @@ static int starts_with(const char *s, const char *prefix)
     return ci_starts_with(s, prefix);
 }
 
+typedef enum
+{
+    BDM_TRANSPORT_SCOPE_BOOT_HINT = 0,
+    BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY,
+} BdmTransportScope;
+
 static int extract_legacy_mass_unit(const char *path)
 {
     if (path == NULL || !ci_starts_with(path, "mass"))
@@ -560,7 +566,7 @@ static int load_usb_transport_modules(void)
     int ID, RET;
 
 #ifdef HAS_EMBEDDED_IRX
-    ID = SifExecModuleBuffer(usbd_irx, size_usbd_irx, 0, NULL, &RET);
+    ID = SifExecModuleBuffer(usbd_mini_irx, size_usbd_mini_irx, 0, NULL, &RET);
 #else
     ID = SifLoadStartModule(CheckPath("mc?:/PS2BBL/USBD.IRX"), 0, NULL, &RET);
 #endif
@@ -570,7 +576,7 @@ static int load_usb_transport_modules(void)
         return -1;
 
 #ifdef HAS_EMBEDDED_IRX
-    ID = SifExecModuleBuffer(usbmass_bd_irx, size_usbmass_bd_irx, 0, NULL, &RET);
+    ID = SifExecModuleBuffer(usbmass_bd_mini_irx, size_usbmass_bd_mini_irx, 0, NULL, &RET);
 #else
     ID = SifLoadStartModule(CheckPath("mc?:/PS2BBL/USBMASS_BD.IRX"), 0, NULL, &RET);
 #endif
@@ -611,7 +617,7 @@ static int load_mx4sio_transport_modules(void)
 #ifdef MX4SIO
     int ID, RET;
 
-    ID = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &RET);
+    ID = SifExecModuleBuffer(mx4sio_bd_mini_irx, size_mx4sio_bd_mini_irx, 0, NULL, &RET);
     DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", ID, RET);
     if (ID < 0 || RET == 1)
         return -1;
@@ -621,6 +627,7 @@ static int load_mx4sio_transport_modules(void)
 }
 
 static void derive_bdm_transport_needs(const char *path_hint,
+                                       BdmTransportScope scope,
                                        int *want_usb,
                                        int *want_ata,
                                        int *want_mx4sio,
@@ -645,11 +652,25 @@ static void derive_bdm_transport_needs(const char *path_hint,
             local_strict_mx4sio = 1;
 #endif
         } else if (starts_with(path_hint, "mass")) {
-            // Legacy mass[:|N:] prefixes can represent USB or ATA-BDM paths.
-            // Do not auto-load MX4SIO here: some MX4SIO builds can loop card
-            // init forever when no MX4SIO media is present.
-            local_want_usb = 1;
-            local_want_ata = 1;
+            if (scope == BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY) {
+                // For user launch entries, treat legacy mass/massN the same as
+                // usb/usbN and avoid loading ATA transports.
+                local_want_usb = 1;
+                local_strict_usb = 1;
+            } else {
+                int mass_unit = extract_legacy_mass_unit(path_hint);
+
+                // For PS2BBL boot argv0 mass/massN:
+                // - mass:/ or mass0-4:/ can be USB or MX4SIO
+                // - mass5-9:/ is USB-only
+                // ATA stack is only selected for explicit ata:/ boot hints.
+                local_want_usb = 1;
+                local_strict_usb = 1;
+#ifdef MX4SIO
+                if (mass_unit < 0 || mass_unit <= 4)
+                    local_want_mx4sio = 1;
+#endif
+            }
         } else if (starts_with(path_hint, "usb") || starts_with(path_hint, "ilink")) {
             local_want_usb = 1;
             local_strict_usb = 1;
@@ -676,7 +697,14 @@ static void derive_bdm_transport_needs(const char *path_hint,
         *strict_mx4sio = local_strict_mx4sio;
 }
 
+static int load_bdm_transports_for_path_with_scope(const char *path_hint, BdmTransportScope scope);
+
 static int load_bdm_transports_for_path(const char *path_hint)
+{
+    return load_bdm_transports_for_path_with_scope(path_hint, BDM_TRANSPORT_SCOPE_BOOT_HINT);
+}
+
+static int load_bdm_transports_for_path_with_scope(const char *path_hint, BdmTransportScope scope)
 {
     int want_usb = 0;
     int want_ata = 0;
@@ -689,6 +717,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
     int newly_loaded = 0;
 
     derive_bdm_transport_needs(path_hint,
+                               scope,
                                &want_usb,
                                &want_ata,
                                &want_mx4sio,
@@ -745,7 +774,7 @@ static int load_bdm_transports_for_path(const char *path_hint)
     return newly_loaded;
 }
 
-static int load_family_modules(LoaderPathFamily family, const char *path_hint)
+static int load_family_modules(LoaderPathFamily family, const char *path_hint, BdmTransportScope scope)
 {
     int j, x;
 
@@ -759,12 +788,22 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint)
             if (LoadFIO() < 0)
                 return -1;
 #endif
+            // For explicit ATA-BDM paths, bring up DEV9 before BDM core so the
+            // sequence is: LoadFIO -> DEV9 -> BDM -> BDMFS -> ATA_BD.
+            if (path_hint != NULL && starts_with(path_hint, "ata")) {
+#ifdef DEV9
+                if (!dev9_loaded) {
+                    if (!loadDEV9())
+                        return -2;
+                }
+#endif
+            }
             if (!s_bdm_core_loaded) {
                 if (load_bdm_core_modules() < 0)
                     return -2;
                 s_bdm_core_loaded = 1;
             }
-            if (load_bdm_transports_for_path(path_hint) < 0)
+            if (load_bdm_transports_for_path_with_scope(path_hint, scope) < 0)
                 return -3;
             s_usb_modules_loaded = 1;
             return 0;
@@ -772,13 +811,14 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint)
 
         case LOADER_PATH_FAMILY_MX4SIO:
 #ifdef MX4SIO
-            if (load_bdm_core_modules() < 0)
-                return -1;
 #ifdef FILEXIO
             if (LoadFIO() < 0)
-                return -2;
+                return -1;
 #endif
-            j = SifExecModuleBuffer(mx4sio_bd_irx, size_mx4sio_bd_irx, 0, NULL, &x);
+            if (load_bdm_core_modules() < 0)
+                return -2;
+            s_bdm_core_loaded = 1;
+            j = SifExecModuleBuffer(mx4sio_bd_mini_irx, size_mx4sio_bd_mini_irx, 0, NULL, &x);
             DPRINTF(" [MX4SIO_BD]: ID=%d, ret=%d\n", j, x);
             if (j < 0 || x == 1)
                 return -3;
@@ -823,7 +863,11 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint)
     }
 }
 
-static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit_pad, const char *path_hint)
+static int reload_for_family(LoaderPathFamily family,
+                             int reboot_iop,
+                             int reinit_pad,
+                             const char *path_hint,
+                             BdmTransportScope scope)
 {
     int family_load_result;
 
@@ -852,7 +896,7 @@ static int reload_for_family(LoaderPathFamily family, int reboot_iop, int reinit
 
     load_core_modules();
     s_current_family = LOADER_PATH_FAMILY_MC;
-    family_load_result = load_family_modules(family, path_hint);
+    family_load_result = load_family_modules(family, path_hint, scope);
 
     if (family_load_result == 0)
         s_current_family = family;
@@ -1014,6 +1058,7 @@ int LoaderEnsurePathFamilyReady(const char *path)
 {
     LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
     int ret;
+    int reinit_pad_after_reboot = 0;
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
@@ -1025,17 +1070,25 @@ int LoaderEnsurePathFamilyReady(const char *path)
         target_family = LOADER_PATH_FAMILY_MC;
     if (s_current_family == target_family) {
         if (target_family == LOADER_PATH_FAMILY_BDM)
-            return load_bdm_transports_for_path(path);
+            return load_bdm_transports_for_path_with_scope(path, BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY);
         return 0;
     }
+
+    // MX4SIO probing relies on active SIO2/pad traffic on some setups.
+    // Reopen pads immediately after family switch so first-try path probes
+    // can see the mounted media.
+    if (target_family == LOADER_PATH_FAMILY_MX4SIO)
+        reinit_pad_after_reboot = 1;
 
     DPRINTF("Switching IOP driver family from %d to %d for path '%s'\n",
             (int)s_current_family,
             (int)target_family,
             (path != NULL) ? path : "");
-    // Path traversal does not require active pad input. Keep pads closed during
-    // family-switch reboots and reopen only when we return to interactive UI.
-    ret = reload_for_family(target_family, 1, 0, path);
+    ret = reload_for_family(target_family,
+                            1,
+                            reinit_pad_after_reboot,
+                            path,
+                            BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY);
     if (ret < 0)
         return ret;
     return 1;
@@ -1052,6 +1105,9 @@ int LoaderPrepareFinalLaunch(const char *path)
     if (target_family == LOADER_PATH_FAMILY_XFROM)
         target_family = LOADER_PATH_FAMILY_MC;
 
+    if (target_family == LOADER_PATH_FAMILY_MX4SIO)
+        reinit_pad_after_reboot = 1;
+
     if (target_family == LOADER_PATH_FAMILY_MC) {
         // Keep launch IOP clean: when launching from MC after probing other
         // families, reboot once back to core-only (MC) modules.
@@ -1064,6 +1120,7 @@ int LoaderPrepareFinalLaunch(const char *path)
         int want_mx4sio = 0;
 
         derive_bdm_transport_needs(path,
+                                   BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY,
                                    &want_usb,
                                    &want_ata,
                                    &want_mx4sio,
@@ -1090,7 +1147,11 @@ int LoaderPrepareFinalLaunch(const char *path)
             (int)s_current_family,
             (int)target_family);
 
-    if (reload_for_family(target_family, 1, reinit_pad_after_reboot, path) < 0)
+    if (reload_for_family(target_family,
+                          1,
+                          reinit_pad_after_reboot,
+                          path,
+                          BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY) < 0)
         return -1;
 
     return 1;
@@ -1124,7 +1185,11 @@ void LoaderLoadSystemModules(int *usb_modules_loaded,
 
     if (boot_hint == NULL || *boot_hint == '\0')
         boot_hint = NULL;
-    reload_for_family(s_boot_family, 0, 0, boot_hint);
+    reload_for_family(s_boot_family,
+                      0,
+                      0,
+                      boot_hint,
+                      BDM_TRANSPORT_SCOPE_BOOT_HINT);
     refine_boot_hint_from_legacy_mass();
 
     if (usb_modules_loaded != NULL)
