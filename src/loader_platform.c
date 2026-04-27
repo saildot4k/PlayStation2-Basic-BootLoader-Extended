@@ -21,7 +21,8 @@ void LoaderPlatformClearStaleEEDebugState(void)
 #ifdef PSX
 static void InitPSX(void)
 {
-    int result, STAT;
+    int result;
+    u32 STAT;
 
     SifInitRpc(0);
     sceCdInit(SCECdINoD);

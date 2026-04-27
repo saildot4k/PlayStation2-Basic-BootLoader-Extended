@@ -25,6 +25,9 @@ static SPLASH_IMAGE g_custom_logo;
 
 extern char *CheckPath(const char *path);
 extern const char *LoaderGetBootCwdConfigPath(void);
+extern const char *LoaderGetRequestedConfigPath(void);
+extern const char *LoaderGetResolvedConfigPath(void);
+extern int ci_eq(const char *a, const char *b);
 
 extern const unsigned int splash_bg_ps2bble_width;
 extern const unsigned int splash_bg_ps2bble_height;
@@ -338,6 +341,8 @@ static int build_boot_cwd_logo_path(char *out, size_t out_size)
     if (boot_cwd_config == NULL || *boot_cwd_config == '\0')
         return 0;
 
+    // Keep CWD logo discovery strict: always derive LOGO.BIN from the boot CWD
+    // path itself (not from resolved fallback config locations).
     slash = strrchr(boot_cwd_config, '/');
     if (slash == NULL)
         return 0;

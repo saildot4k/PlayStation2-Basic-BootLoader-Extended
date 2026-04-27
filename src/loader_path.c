@@ -105,12 +105,34 @@ static int device_modules_ready(int dev)
 }
 
 #ifdef MX4SIO
-static int mx4sio_typed_root_available(void)
+static int mx4sio_typed_root_openable(int unit)
 {
     struct stat st;
+    char root_with_unit[] = "mx4sio0:";
 
+    if (unit < 0) {
+        if (stat("mx4sio:", &st) == 0)
+            return 1;
+        unit = 0;
+    }
+
+    if (unit < 0 || unit > 9)
+        return 0;
+
+    root_with_unit[6] = (char)('0' + unit);
+    if (stat(root_with_unit, &st) == 0)
+        return 1;
+
+    if (unit == 0 && stat("mx4sio:", &st) == 0)
+        return 1;
+
+    return 0;
+}
+
+static int mx4sio_typed_root_available(void)
+{
     // Newer ps2sdk BDM drivers expose MX4SIO under its own typed root.
-    return (stat("mx4sio:/", &st) == 0 || stat("mx4sio0:/", &st) == 0);
+    return mx4sio_typed_root_openable(-1);
 }
 
 static int get_legacy_mx4sio_slot(void)
@@ -135,6 +157,29 @@ static int path_prefix_matches(const char *path, const char *prefix, size_t pref
              (path[prefix_len] >= '0' && path[prefix_len] <= '9')));
 }
 
+static int parse_prefixed_unit(const char *path, const char *prefix, size_t prefix_len, int *unit_out)
+{
+    int unit = -1;
+
+    if (path == NULL || prefix == NULL || unit_out == NULL)
+        return 0;
+    if (!ci_starts_with(path, prefix))
+        return 0;
+
+    if (path[prefix_len] == ':') {
+        unit = -1;
+    } else if (path[prefix_len] >= '0' &&
+               path[prefix_len] <= '9' &&
+               path[prefix_len + 1] == ':') {
+        unit = path[prefix_len] - '0';
+    } else {
+        return 0;
+    }
+
+    *unit_out = unit;
+    return 1;
+}
+
 LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
 {
     if (path == NULL || *path == '\0')
@@ -143,7 +188,7 @@ LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
         return LOADER_PATH_FAMILY_NONE;
     if (path_prefix_matches(path, "mc", 2))
         return LOADER_PATH_FAMILY_MC;
-    if (path_prefix_matches(path, "mx4sio", 7) || path_prefix_matches(path, "massx", 5))
+    if (path_prefix_matches(path, "mx4sio", 6) || path_prefix_matches(path, "massx", 5))
         return LOADER_PATH_FAMILY_MX4SIO;
     if (path_prefix_matches(path, "mmce", 4))
         return LOADER_PATH_FAMILY_MMCE;
@@ -167,7 +212,7 @@ static int device_id_from_path(const char *path)
         return DEV_MC0;
     if (path_prefix_matches(path, "mc1", 3))
         return DEV_MC1;
-    if (path_prefix_matches(path, "mx4sio", 7))
+    if (path_prefix_matches(path, "mx4sio", 6))
         return DEV_MX4SIO;
     if (path_prefix_matches(path, "massx", 5))
         return DEV_MX4SIO;
@@ -313,10 +358,80 @@ static int mass_mount_openable(int unit)
     }
 }
 
+static int any_mass_mount_openable_in_range(int start_unit, int end_unit)
+{
+    int i;
+
+    if (start_unit < 0)
+        start_unit = 0;
+    if (end_unit > 9)
+        end_unit = 9;
+    if (start_unit > end_unit)
+        return 0;
+
+    for (i = start_unit; i <= end_unit; i++) {
+        if (mass_mount_openable(i))
+            return 1;
+    }
+
+    return 0;
+}
+
 int LoaderPathCanAttemptNow(const char *path)
 {
+    int unit = -1;
+    struct stat st;
+
     if (path == NULL || *path == '\0' || path[0] == '$')
         return 1;
+    if (strchr(path, ':') == NULL)
+        return 1;
+    if (path_prefix_matches(path, "mc", 2))
+        return 1;
+
+#ifdef MMCE
+    if (path_prefix_matches(path, "mmce", 4))
+        return (s_mmce_modules_loaded != 0);
+#endif
+
+#ifdef HDD
+    if (path_prefix_matches(path, "hdd", 3) || path_prefix_matches(path, "pfs", 3))
+        return (stat("pfs0:", &st) == 0 || stat("hdd0:", &st) == 0);
+#endif
+
+#ifdef MX4SIO
+    if (ci_starts_with(path, "massX:")) {
+        unit = get_legacy_mx4sio_slot();
+        if (unit >= 0 && unit <= 4)
+            return mass_mount_openable(unit) || mx4sio_typed_root_openable(unit);
+        return mx4sio_typed_root_available();
+    }
+    if (path_prefix_matches(path, "mx4sio", 6)) {
+        int explicit_unit = -1;
+
+        if (parse_prefixed_unit(path, "mx4sio", 6, &explicit_unit) && explicit_unit >= 0)
+            return mx4sio_typed_root_openable(explicit_unit) || mass_mount_openable(explicit_unit);
+
+        if (mx4sio_typed_root_available())
+            return 1;
+
+        unit = get_legacy_mx4sio_slot();
+        if (unit >= 0 && unit <= 4)
+            return mass_mount_openable(unit);
+
+        return 0;
+    }
+#endif
+
+    if (parse_prefixed_unit(path, "mass", 4, &unit) ||
+        parse_prefixed_unit(path, "usb", 3, &unit) ||
+        parse_prefixed_unit(path, "ata", 3, &unit) ||
+        parse_prefixed_unit(path, "ilink", 5, &unit)) {
+        if (unit >= 0 && unit <= 9)
+            return mass_mount_openable(unit);
+
+        return any_mass_mount_openable_in_range(0, 9);
+    }
 
     return 1;
 }
@@ -451,44 +566,88 @@ static const char *resolve_path_tokens(const char *path,
 #endif
 
 #ifdef MX4SIO
-    if (ci_starts_with(path, "mx4sio:")) {
+    if (path_prefix_with_optional_unit(path, "mx4sio", 6, &bdm_unit, &bdm_suffix)) {
         int slot = get_legacy_mx4sio_slot();
+        int typed_unit = bdm_unit;
+        char typed_candidate[CHECKPATH_BUF_SIZE];
+        char typed_candidate_no_unit[CHECKPATH_BUF_SIZE];
+        char legacy_candidate[CHECKPATH_BUF_SIZE];
 
-        if (slot >= 0) {
-            snprintf(out, out_size, "mass%d:%s", slot, path + 7);
+        if (typed_unit < 0)
+            typed_unit = (slot >= 0 && slot <= 4) ? slot : 0;
+
+        snprintf(typed_candidate, sizeof(typed_candidate), "mx4sio%d%s", typed_unit, bdm_suffix);
+        snprintf(typed_candidate_no_unit, sizeof(typed_candidate_no_unit), "mx4sio%s", bdm_suffix);
+
+        if (!require_existing_pairs) {
+            if (bdm_unit >= 0)
+                copy_string_safe(out, out_size, typed_candidate);
+            else
+                copy_string_safe(out, out_size, typed_candidate_no_unit);
             return out;
         }
-        if (mx4sio_typed_root_available())
+
+        // Prefer preserving new typed prefixes whenever they are readable.
+        if (exist(typed_candidate)) {
+            copy_string_safe(out, out_size, typed_candidate);
             return out;
+        }
+        if (bdm_unit < 0 && exist(typed_candidate_no_unit)) {
+            copy_string_safe(out, out_size, typed_candidate_no_unit);
+            return out;
+        }
+
+        // Fallback for environments exposing only legacy massN roots.
+        if (build_mass_path(legacy_candidate, sizeof(legacy_candidate), bdm_suffix, typed_unit) &&
+            exist(legacy_candidate)) {
+            copy_string_safe(out, out_size, legacy_candidate);
+            return out;
+        }
+
+        if (slot >= 0 &&
+            slot <= 4 &&
+            slot != typed_unit &&
+            build_mass_path(legacy_candidate, sizeof(legacy_candidate), bdm_suffix, slot) &&
+            exist(legacy_candidate)) {
+            copy_string_safe(out, out_size, legacy_candidate);
+            return out;
+        }
+
+        // Not readable yet; keep typed path so callers can retry without losing
+        // mx4sio/mx4sioN intent.
+        if (bdm_unit >= 0)
+            copy_string_safe(out, out_size, typed_candidate);
+        else
+            copy_string_safe(out, out_size, typed_candidate_no_unit);
         return out;
     }
 
     if (ci_starts_with(path, "massX:")) {
         const char *suffix = path + 5;
-        int i;
+        int slot = get_legacy_mx4sio_slot();
         char candidate[CHECKPATH_BUF_SIZE];
-        int slot = -1;
 
         if (require_existing_pairs) {
-            for (i = 0; i < 5; i++) {
-                // Prime legacy mass mountpoints each pass (OSDMenu-style) so MX4SIO
-                // media detection can complete before file existence checks timeout.
-                (void)mass_mount_openable(i);
+            int i;
 
-                if (!build_mass_path(candidate, sizeof(candidate), suffix, i))
-                    continue;
-                if (exist(candidate)) {
-                    DPRINTF("CheckPath massX match: requested='%s' candidate='%s'\n",
-                            path,
-                            candidate);
-                    copy_string_safe(out, out_size, candidate);
-                    return out;
-                }
-            }
+            // Prime legacy mass mountpoints each pass (OSDMenu-style) so MX4SIO
+            // media detection can complete before file existence checks timeout.
+            for (i = 0; i < 5; i++)
+                (void)mass_mount_openable(i);
         }
 
-        slot = get_legacy_mx4sio_slot();
-        if (slot >= 0) {
+        if (slot >= 0 && slot <= 4) {
+            if (build_mass_path(candidate, sizeof(candidate), suffix, slot) &&
+                (!require_existing_pairs || exist(candidate))) {
+                DPRINTF("CheckPath massX match: requested='%s' candidate='%s'\n",
+                        path,
+                        candidate);
+                copy_string_safe(out, out_size, candidate);
+                return out;
+            }
+
+            // Keep the resolved slot hint even when the file is missing so
+            // callers can continue polling the same MX4SIO target.
             out[4] = '0' + slot;
             DPRINTF("CheckPath massX slot: requested='%s' resolved='%s'\n", path, out);
         }

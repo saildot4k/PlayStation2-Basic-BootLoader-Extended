@@ -40,6 +40,23 @@ static int extract_legacy_mass_unit(const char *path)
     return -1;
 }
 
+static int extract_optional_unit_after_prefix(const char *path, const char *prefix, size_t prefix_len)
+{
+    if (path == NULL || prefix == NULL)
+        return -2;
+    if (!ci_starts_with(path, prefix))
+        return -2;
+
+    if (path[prefix_len] == ':')
+        return -1;
+    if (path[prefix_len] >= '0' &&
+        path[prefix_len] <= '9' &&
+        path[prefix_len + 1] == ':')
+        return (int)(path[prefix_len] - '0');
+
+    return -2;
+}
+
 static int build_mass_unit_path(const char *path, int unit, char *out, size_t out_size)
 {
     const char *suffix;
@@ -90,6 +107,71 @@ static int normalize_mass_path_to_unit_or_generic(const char *path, int unit, ch
     else
         snprintf(out, out_size, "mass:/%s", suffix + 1);
     return 1;
+}
+
+typedef enum
+{
+    MASS_CLASS_UNKNOWN = 0,
+    MASS_CLASS_USB,
+    MASS_CLASS_MX4SIO,
+    MASS_CLASS_ATA,
+    MASS_CLASS_OTHER
+} MassClass;
+
+static MassClass mass_class_from_driver_tag(const char *driver_tag)
+{
+    if (driver_tag == NULL || driver_tag[0] == '\0')
+        return MASS_CLASS_UNKNOWN;
+    if (ci_starts_with(driver_tag, "sdc"))
+        return MASS_CLASS_MX4SIO;
+    if (ci_starts_with(driver_tag, "ata"))
+        return MASS_CLASS_ATA;
+    if (ci_starts_with(driver_tag, "usb"))
+        return MASS_CLASS_USB;
+    return MASS_CLASS_OTHER;
+}
+
+static const char *mass_class_name(MassClass mass_class)
+{
+    switch (mass_class) {
+        case MASS_CLASS_USB:
+            return "usb";
+        case MASS_CLASS_MX4SIO:
+            return "mx4sio";
+        case MASS_CLASS_ATA:
+            return "bdm_hdd";
+        case MASS_CLASS_OTHER:
+            return "other";
+        default:
+            return "unknown";
+    }
+}
+
+static int pick_mass_slot_by_preference(const int *slots, const MassClass *classes, int count)
+{
+    static const MassClass preferred_order[] = {
+        MASS_CLASS_USB,
+        MASS_CLASS_MX4SIO,
+        MASS_CLASS_ATA,
+        MASS_CLASS_OTHER,
+        MASS_CLASS_UNKNOWN,
+    };
+    int order_idx;
+
+    if (slots == NULL || classes == NULL || count <= 0)
+        return -1;
+
+    for (order_idx = 0; order_idx < (int)(sizeof(preferred_order) / sizeof(preferred_order[0])); order_idx++) {
+        MassClass wanted = preferred_order[order_idx];
+        int i;
+
+        for (i = 0; i < count; i++) {
+            if (classes[i] == wanted)
+                return slots[i];
+        }
+    }
+
+    return slots[0];
 }
 
 #ifdef FILEXIO
@@ -170,10 +252,15 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
 {
     int unit = extract_legacy_mass_unit(boot_path);
     int i;
-    int first_mount = -1;
-    int mount_count = 0;
     const char *suffix;
-    char candidate[256];
+    int found_slots[10];
+    MassClass found_classes[10];
+    int found_count = 0;
+#ifdef FILEXIO
+    int mounted_slots[10];
+    MassClass mounted_classes[10];
+    int mounted_count = 0;
+#endif
 
     if (unit >= 0)
         return unit;
@@ -182,45 +269,74 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
 
     suffix = boot_path + 4;
     for (i = 0; i < 10; i++) {
-        snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
-        if (exist(candidate))
-            return i;
-        if (suffix[1] != '\0' && suffix[1] != '/') {
-            snprintf(candidate, sizeof(candidate), "mass%d:/%s", i, suffix + 1);
-            if (exist(candidate))
-                return i;
-        }
+        int found = 0;
+        MassClass mass_class = MASS_CLASS_UNKNOWN;
 #ifdef FILEXIO
-        if (mass_mount_openable(i)) {
-            if (first_mount < 0)
-                first_mount = i;
-            mount_count++;
+        int mounted = 0;
+        char driver_tag[16];
+#endif
+        char candidate[256];
+
+#ifdef FILEXIO
+        mounted = mass_mount_openable(i);
+        driver_tag[0] = '\0';
+        if (mounted && read_mass_driver_tag(i, driver_tag, sizeof(driver_tag)) == 0)
+            mass_class = mass_class_from_driver_tag(driver_tag);
+
+        if (mounted) {
+            mounted_slots[mounted_count] = i;
+            mounted_classes[mounted_count] = mass_class;
+            mounted_count++;
         }
 #endif
+
+        snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
+        if (exist(candidate))
+            found = 1;
+        if (!found && suffix[1] != '\0' && suffix[1] != '/') {
+            snprintf(candidate, sizeof(candidate), "mass%d:/%s", i, suffix + 1);
+            if (exist(candidate))
+                found = 1;
+        }
+        if (found) {
+#ifdef FILEXIO
+            if (mass_class == MASS_CLASS_UNKNOWN) {
+                char driver_tag[16];
+                driver_tag[0] = '\0';
+                if (read_mass_driver_tag(i, driver_tag, sizeof(driver_tag)) == 0)
+                    mass_class = mass_class_from_driver_tag(driver_tag);
+            }
+#endif
+            found_slots[found_count] = i;
+            found_classes[found_count] = mass_class;
+            found_count++;
+        }
     }
 
-    if (mount_count == 1)
-        return first_mount;
+    if (found_count > 0) {
+        int picked = pick_mass_slot_by_preference(found_slots, found_classes, found_count);
+        DPRINTF("Boot mass refine candidate: picked mass%d using class order USB->MX4SIO->ATA\n", picked);
+        return picked;
+    }
+
+#ifdef FILEXIO
+    if (mounted_count > 0)
+        return pick_mass_slot_by_preference(mounted_slots, mounted_classes, mounted_count);
+#endif
+
     return -1;
 }
 
 static const char *classify_mass_driver_tag(const char *driver_tag)
 {
-    if (driver_tag == NULL || driver_tag[0] == '\0')
-        return "unknown";
-    if (ci_starts_with(driver_tag, "sdc"))
-        return "mx4sio";
-    if (ci_starts_with(driver_tag, "ata"))
-        return "bdm_hdd";
-    if (ci_starts_with(driver_tag, "usb"))
-        return "usb";
-    return "other";
+    return mass_class_name(mass_class_from_driver_tag(driver_tag));
 }
 
 static void refine_boot_hint_from_legacy_mass(void)
 {
     int mass_unit;
     char resolved[256];
+    char boot_config_resolved[sizeof(s_boot_config_path)];
 
     if (!ci_starts_with(s_boot_path_hint, "mass")) {
         s_boot_driver_tag[0] = '\0';
@@ -243,8 +359,11 @@ static void refine_boot_hint_from_legacy_mass(void)
         snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", resolved);
     if (normalize_mass_path_to_unit_or_generic(s_boot_cwd_config_path, mass_unit, resolved, sizeof(resolved)))
         snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", resolved);
-    if (build_mass_unit_path(s_boot_config_path, mass_unit, resolved, sizeof(resolved)))
-        snprintf(s_boot_config_path, sizeof(s_boot_config_path), "%s", resolved);
+    if (build_mass_unit_path(s_boot_config_path,
+                             mass_unit,
+                             boot_config_resolved,
+                             sizeof(boot_config_resolved)))
+        memcpy(s_boot_config_path, boot_config_resolved, sizeof(s_boot_config_path));
 
 #ifdef FILEXIO
     if (read_mass_driver_tag(mass_unit, s_boot_driver_tag, sizeof(s_boot_driver_tag)) < 0)
@@ -751,6 +870,10 @@ void LoaderSetBootPathHint(const char *boot_path)
 {
     LoaderPathFamily family = LoaderPathFamilyFromPath(boot_path);
     int legacy_mass_unit = extract_legacy_mass_unit(boot_path);
+    int mx4sio_unit = -2;
+    int ata_unit = -2;
+    int ilink_unit = -2;
+    int usb_unit = -2;
     const char *boot_path_for_ops = boot_path;
     char normalized_mass_path[256];
 
@@ -776,6 +899,10 @@ void LoaderSetBootPathHint(const char *boot_path)
             snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", normalized_mass_path);
         }
         boot_path_for_ops = s_boot_path_hint;
+        mx4sio_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "mx4sio", 6);
+        ata_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "ata", 3);
+        ilink_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "ilink", 5);
+        usb_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "usb", 3);
     }
     set_boot_cwd_config_path(boot_path_for_ops);
 
@@ -784,16 +911,35 @@ void LoaderSetBootPathHint(const char *boot_path)
             snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mmce?:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_MX4SIO:
-            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mx4sio:/PS2BBL/CONFIG.INI");
+            if (mx4sio_unit >= 0)
+                snprintf(s_boot_config_path,
+                         sizeof(s_boot_config_path),
+                         "mx4sio%d:/PS2BBL/CONFIG.INI",
+                         mx4sio_unit);
+            else
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mx4sio:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_HDD_APA:
             snprintf(s_boot_config_path, sizeof(s_boot_config_path), "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_BDM:
-            if (starts_with(boot_path_for_ops, "ata"))
-                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ata:/PS2BBL/CONFIG.INI");
-            else if (starts_with(boot_path_for_ops, "ilink"))
-                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ilink:/PS2BBL/CONFIG.INI");
+            if (starts_with(boot_path_for_ops, "ata")) {
+                if (ata_unit >= 0)
+                    snprintf(s_boot_config_path,
+                             sizeof(s_boot_config_path),
+                             "ata%d:/PS2BBL/CONFIG.INI",
+                             ata_unit);
+                else
+                    snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ata:/PS2BBL/CONFIG.INI");
+            } else if (starts_with(boot_path_for_ops, "ilink")) {
+                if (ilink_unit >= 0)
+                    snprintf(s_boot_config_path,
+                             sizeof(s_boot_config_path),
+                             "ilink%d:/PS2BBL/CONFIG.INI",
+                             ilink_unit);
+                else
+                    snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ilink:/PS2BBL/CONFIG.INI");
+            }
             else if (legacy_mass_unit >= 0)
                 snprintf(s_boot_config_path,
                          sizeof(s_boot_config_path),
@@ -801,8 +947,13 @@ void LoaderSetBootPathHint(const char *boot_path)
                          legacy_mass_unit);
             else if (starts_with(boot_path_for_ops, "mass"))
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mass:/PS2BBL/CONFIG.INI");
+            else if (usb_unit >= 0)
+                snprintf(s_boot_config_path,
+                         sizeof(s_boot_config_path),
+                         "mass%d:/PS2BBL/CONFIG.INI",
+                         usb_unit);
             else
-                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "usb:/PS2BBL/CONFIG.INI");
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mass:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_XFROM:
             snprintf(s_boot_config_path, sizeof(s_boot_config_path), "xfrom:/PS2BBL/CONFIG.INI");

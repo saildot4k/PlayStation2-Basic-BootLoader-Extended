@@ -441,7 +441,7 @@ static int read_patinfo_payload(const char *launch_path, int read_ioprp, void *d
         DPRINTF("PATINFO: failed to read %s payload (%d/%u)\n",
                 read_ioprp ? "IOPRP" : "ELF",
                 read_res,
-                payload.size);
+                (unsigned int)payload.size);
         return -1;
     }
 
@@ -472,6 +472,30 @@ static int arg_eq_ci(const char *a, const char *b)
         b++;
     }
     return (*a == '\0' && *b == '\0');
+}
+
+static int prefix_eq_ci_n(const char *s, const char *prefix, size_t prefix_len)
+{
+    size_t i;
+
+    if (s == NULL || prefix == NULL)
+        return 0;
+
+    for (i = 0; i < prefix_len; i++) {
+        unsigned char a = (unsigned char)s[i];
+        unsigned char b = (unsigned char)prefix[i];
+
+        if (a == '\0' || b == '\0')
+            return 0;
+        if (a >= 'a' && a <= 'z')
+            a -= ('a' - 'A');
+        if (b >= 'a' && b <= 'z')
+            b -= ('a' - 'A');
+        if (a != b)
+            return 0;
+    }
+
+    return 1;
 }
 
 static int arg_prefix_ci(const char *arg, const char *prefix, const char **value_out)
@@ -553,7 +577,7 @@ static int path_prefix_with_optional_unit(const char *path,
 
     if (path == NULL || prefix == NULL)
         return 0;
-    if (strncmp(path, prefix, prefix_len) != 0)
+    if (!prefix_eq_ci_n(path, prefix, prefix_len))
         return 0;
 
     if (path[prefix_len] == ':') {
@@ -587,9 +611,9 @@ static int build_mass_path(char *out, size_t out_size, const char *suffix, int u
     return 1;
 }
 
-// For best compatibility with older homebrew launchers/apps, prefer passing
-// BDM app argv[0] as legacy mass* paths whenever we can map to an existing file.
-static int normalize_bdm_launch_to_legacy_mass(const char *path, char *out, size_t out_size)
+// For legacy USB aliases in user config, pass argv[0] as mass* paths.
+// New typed paths (ata:/, mx4sio:/, mx4sioN:/) should be preserved.
+static int normalize_usb_launch_to_legacy_mass(const char *path, char *out, size_t out_size)
 {
     const char *suffix;
     int unit;
@@ -599,35 +623,12 @@ static int normalize_bdm_launch_to_legacy_mass(const char *path, char *out, size
     if (path == NULL || *path == '\0' || out == NULL || out_size == 0)
         return 0;
 
-#ifdef MX4SIO
-    if (path_prefix_with_optional_unit(path, "mx4sio", 6, &unit, &suffix)) {
-        int slot = LookForBDMDevice();
-
-        if (slot >= 0 && slot <= 9 &&
-            build_mass_path(candidate, sizeof(candidate), suffix, slot) &&
-            exist(candidate)) {
-            snprintf(out, out_size, "%s", candidate);
-            return 1;
-        }
-
-        for (i = 0; i < 10; i++) {
-            if (build_mass_path(candidate, sizeof(candidate), suffix, i) &&
-                exist(candidate)) {
-                snprintf(out, out_size, "%s", candidate);
-                return 1;
-            }
-        }
-
-        return 0;
-    }
-#endif
-
     if (!path_prefix_with_optional_unit(path, "usb", 3, &unit, &suffix))
         return 0;
 
     if (unit >= 0 &&
-        build_mass_path(candidate, sizeof(candidate), suffix, unit) &&
-        exist(candidate)) {
+        build_mass_path(candidate, sizeof(candidate), suffix, unit)) {
+        // Explicit usbN always maps to massN for child argv[0].
         snprintf(out, out_size, "%s", candidate);
         return 1;
     }
@@ -645,6 +646,12 @@ static int normalize_bdm_launch_to_legacy_mass(const char *path, char *out, size
             snprintf(out, out_size, "%s", candidate);
             return 1;
         }
+    }
+
+    // Keep legacy normalization deterministic even if mounts are still settling.
+    if (build_mass_path(candidate, sizeof(candidate), suffix, -1)) {
+        snprintf(out, out_size, "%s", candidate);
+        return 1;
     }
 
     return 0;
@@ -1283,10 +1290,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     }
 #endif
 
-    if (normalize_bdm_launch_to_legacy_mass(intent.launch_filename,
+    if (normalize_usb_launch_to_legacy_mass(intent.launch_filename,
                                             legacy_launch_path,
                                             sizeof(legacy_launch_path))) {
-        DPRINTF("Using legacy BDM argv[0] path '%s' (from '%s')\n",
+        DPRINTF("Using legacy USB argv[0] path '%s' (from '%s')\n",
                 legacy_launch_path,
                 intent.launch_filename);
         intent.launch_filename = legacy_launch_path;
