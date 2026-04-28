@@ -19,8 +19,7 @@ int g_native_video_mode = CFG_VIDEO_MODE_NTSC;
 
 // --------------- glob stuff --------------- //
 CONFIG GLOBCFG;
-static int g_pre_scanned = 0;
-static int g_usb_modules_loaded = 0;
+static int g_bdm_modules_loaded = 0;
 static int g_mx4sio_modules_loaded = 0;
 static int g_mmce_modules_loaded = 0;
 static int g_hdd_modules_loaded = 0;
@@ -99,7 +98,7 @@ int main(int argc, char *argv[])
     sceCdSync(0);
 #endif
     LoaderSetBootPathHint((argc > 0) ? argv[0] : NULL);
-    LoaderLoadSystemModules(&g_usb_modules_loaded,
+    LoaderLoadSystemModules(&g_bdm_modules_loaded,
                             &g_mx4sio_modules_loaded,
                             &g_mmce_modules_loaded,
                             &g_hdd_modules_loaded);
@@ -171,11 +170,10 @@ int main(int argc, char *argv[])
     SetDefaultSettings();
 
     // Config bootstrap: locate CNF, apply defaults/fallbacks, and render early splash status.
-    config_source = LoaderBootstrapConfigAndSplash(&g_pre_scanned,
-                                                   &splash_early_presented,
+    config_source = LoaderBootstrapConfigAndSplash(&splash_early_presented,
                                                    g_config_path_in_use,
                                                    sizeof(g_config_path_in_use),
-                                                   g_usb_modules_loaded,
+                                                   g_bdm_modules_loaded,
                                                    g_mx4sio_modules_loaded,
                                                    g_mmce_modules_loaded,
                                                    g_hdd_modules_loaded,
@@ -188,8 +186,7 @@ int main(int argc, char *argv[])
 
     // Optional rescue flow: allow user to adjust VIDEO_MODE before launch dispatch.
     if (g_video_mode_selector_requested) {
-        LoaderRunEmergencyVideoModeSelector(&g_pre_scanned,
-                                            &g_hotkey_launches_enabled,
+        LoaderRunEmergencyVideoModeSelector(&g_hotkey_launches_enabled,
                                             &g_block_hotkeys_until_release,
                                             g_is_psx_desr,
                                             g_native_video_mode,
@@ -207,7 +204,6 @@ int main(int argc, char *argv[])
 
     // Main launch workflow: countdown, hotkeys, AUTO fallback, then emergency mode.
     if (LoaderRunLaunchWorkflow(splash_early_presented,
-                                g_pre_scanned,
                                 &g_hotkey_launches_enabled,
                                 &g_block_hotkeys_until_release,
                                 0x0001,

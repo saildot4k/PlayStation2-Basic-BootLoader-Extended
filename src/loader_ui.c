@@ -115,7 +115,7 @@ static void SplashDrawStatusForLaunch(int logo_disp, const char *text, u32 color
 
 void SplashDrawLoadingStatus(int logo_disp)
 {
-    const char *scan_hotkey_lines[KEY_COUNT] = {
+    const char *splash_hotkey_lines[KEY_COUNT] = {
         GLOBCFG.KEYNAMES[AUTO],
         GLOBCFG.KEYNAMES[TRIANGLE],
         GLOBCFG.KEYNAMES[CIRCLE],
@@ -198,7 +198,7 @@ void SplashDrawLoadingStatus(int logo_disp)
     SplashRenderSetHotkeysVisible(logo_disp >= 3);
     SplashRenderBeginFrame();
     if (logo_disp >= 3)
-        SplashRenderHotkeyLines(logo_disp, scan_hotkey_lines);
+        SplashRenderHotkeyLines(logo_disp, splash_hotkey_lines);
     SplashRenderDrawTextPxScaled(loading_x, loading_y, 0x404040, loading_line, 1);
     SplashRenderPresent();
 }

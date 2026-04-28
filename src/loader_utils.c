@@ -109,6 +109,14 @@ int ci_starts_with_n(const char *s, size_t s_len, const char *prefix)
     return 1;
 }
 
+int path_is_disc_root(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return 0;
+
+    return ci_starts_with(path, "cdrom") || ci_starts_with(path, "enumerator");
+}
+
 int normalize_logo_display(int value)
 {
     if (value < 0)
@@ -120,14 +128,6 @@ int normalize_logo_display(int value)
 
 int logo_to_hotkey_display(int logo_disp)
 {
-    switch (logo_disp) {
-        case 3:
-            return 1;
-        case 4:
-            return 2;
-        case 5:
-            return 3;
-        default:
-            return 0;
-    }
+    // LOGO_DISPLAY is normalized to 0..3. Only 3 uses NAME_* mode.
+    return (logo_disp == 3) ? 1 : 0;
 }

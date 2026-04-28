@@ -30,11 +30,10 @@ int LoaderParseConfigFile(FILE *fp,
                           u64 *rescue_combo_deadline,
                           LoaderEmergencyPollFn poll_fn);
 
-int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
-                                   int *splash_early_presented_out,
+int LoaderBootstrapConfigAndSplash(int *splash_early_presented_out,
                                    char *config_path_in_use,
                                    size_t config_path_in_use_size,
-                                   int usb_modules_loaded,
+                                   int bdm_modules_loaded,
                                    int mx4sio_modules_loaded,
                                    int mmce_modules_loaded,
                                    int hdd_modules_loaded,

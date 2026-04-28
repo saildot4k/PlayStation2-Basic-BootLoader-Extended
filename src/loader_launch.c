@@ -7,12 +7,14 @@
 #include "splash_screen.h"
 
 #define PAD_MASK_ANY 0xffff
-#define LAUNCH_PATH_WAIT_STEP_MS 50u
-#define LAUNCH_PATH_WAIT_STEP_OSDMENU_MS 1000u
+// Default fast poll cadence for most launch families.
+#define LAUNCH_PATH_WAIT_STEP_DEFAULT_MS 50u
+// Coarser poll cadence for MX4SIO legacy massX/mx4sio mounts.
+#define LAUNCH_PATH_WAIT_STEP_MX4SIO_MS 1000u
 #define LAUNCH_PATH_WAIT_BDM_MS 5000u
 #define LAUNCH_PATH_WAIT_MX4SIO_MS 3000u
 #define LAUNCH_PATH_WAIT_MMCE_MS 2000u
-#define LAUNCH_PATH_WAIT_HDD_MS 3000u
+#define LAUNCH_PATH_WAIT_HDD_MS 5000u
 
 static void EnsurePadsReadyForInput(void)
 {
@@ -54,7 +56,7 @@ static unsigned int launch_wait_step_for_path(const char *entry_path, int wait_f
     LoaderPathFamily family;
 
     if (!wait_for_mount || entry_path == NULL || *entry_path == '\0')
-        return LAUNCH_PATH_WAIT_STEP_MS;
+        return LAUNCH_PATH_WAIT_STEP_DEFAULT_MS;
 
     family = LoaderPathFamilyFromPath(entry_path);
     if (family == LOADER_PATH_FAMILY_XFROM)
@@ -64,13 +66,13 @@ static unsigned int launch_wait_step_for_path(const char *entry_path, int wait_f
         case LOADER_PATH_FAMILY_BDM:
 #ifdef MX4SIO
             if (ci_starts_with(entry_path, "massX:") || ci_starts_with(entry_path, "mx4sio"))
-                return LAUNCH_PATH_WAIT_STEP_OSDMENU_MS;
+                return LAUNCH_PATH_WAIT_STEP_MX4SIO_MS;
 #endif
-            return LAUNCH_PATH_WAIT_STEP_MS;
+            return LAUNCH_PATH_WAIT_STEP_DEFAULT_MS;
         case LOADER_PATH_FAMILY_MX4SIO:
-            return LAUNCH_PATH_WAIT_STEP_OSDMENU_MS;
+            return LAUNCH_PATH_WAIT_STEP_MX4SIO_MS;
         default:
-            return LAUNCH_PATH_WAIT_STEP_MS;
+            return LAUNCH_PATH_WAIT_STEP_DEFAULT_MS;
     }
 }
 
@@ -95,7 +97,7 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
     if (timeout_ms > 0)
         wait_deadline_ms = Timer() + timeout_ms;
     if (step_ms == 0)
-        step_ms = LAUNCH_PATH_WAIT_STEP_MS;
+        step_ms = LAUNCH_PATH_WAIT_STEP_DEFAULT_MS;
 
     while (1) {
         if (LoaderPathCanAttemptNow(entry_path)) {
@@ -196,7 +198,6 @@ static int PrepareLaunchPathForExec(const char *entry_path,
 }
 
 int LoaderRunLaunchWorkflow(int splash_early_presented,
-                            int pre_scanned,
                             int *hotkey_launches_enabled,
                             int *block_hotkeys_until_release,
                             int pad_button,
@@ -382,29 +383,6 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             continue;
 
                         is_command = (entry_path[0] == '$');
-                        if (pre_scanned && !is_command) {
-                            ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
-                            if (ensure_family_result < 0)
-                                continue;
-                            if (!LoaderPathCanAttemptNow(entry_path) &&
-                                !(ensure_family_result > 0 &&
-                                  launch_wait_timeout_for_path(entry_path, 1) > 0))
-                                continue;
-                            execpaths[j] = NULL;
-                            if (ResolveLaunchPathForEntry(entry_path,
-                                                          x + 1,
-                                                          j,
-                                                          &execpaths[j],
-                                                          (ensure_family_result > 0)) < 0)
-                                continue;
-                            if (PrepareLaunchPathForExec(entry_path, x + 1, j, &execpaths[j], 0) < 0)
-                                continue;
-                            ShowLaunchStatus(execpaths[j]);
-                            CleanUp();
-                            RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
-                            break;
-                        }
-
                         if (is_command) {
                             ShowLaunchStatus(entry_path);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
@@ -517,29 +495,6 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             is_command = (entry_path[0] == '$');
             if (is_command)
                 continue; // Don't execute commands without a key press.
-            if (pre_scanned) {
-                ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
-                if (ensure_family_result < 0)
-                    continue;
-                if (!LoaderPathCanAttemptNow(entry_path) &&
-                    !(ensure_family_result > 0 &&
-                      launch_wait_timeout_for_path(entry_path, 1) > 0))
-                    continue;
-                execpaths[j] = NULL;
-                if (ResolveLaunchPathForEntry(entry_path,
-                                              0,
-                                              j,
-                                              &execpaths[j],
-                                              (ensure_family_result > 0)) < 0)
-                    continue;
-                if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1) < 0)
-                    continue;
-                ShowLaunchStatus(execpaths[j]);
-                CleanUp();
-                RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
-                break;
-            }
-
             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
             if (ensure_family_result < 0)
                 continue;

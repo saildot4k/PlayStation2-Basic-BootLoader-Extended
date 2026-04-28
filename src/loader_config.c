@@ -17,14 +17,6 @@ extern int g_is_psx_desr;
 static char s_resolved_config_path[256] = "";
 static char s_requested_config_path[256] = "";
 
-static int path_is_disc_root(const char *path)
-{
-    if (path == NULL || *path == '\0')
-        return 0;
-
-    return ci_starts_with(path, "cdrom") || ci_starts_with(path, "enumerator");
-}
-
 typedef struct
 {
     const char *key;
@@ -1281,11 +1273,10 @@ fail:
     return -1;
 }
 
-int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
-                                   int *splash_early_presented_out,
+int LoaderBootstrapConfigAndSplash(int *splash_early_presented_out,
                                    char *config_path_in_use,
                                    size_t config_path_in_use_size,
-                                   int usb_modules_loaded,
+                                   int bdm_modules_loaded,
                                    int mx4sio_modules_loaded,
                                    int mmce_modules_loaded,
                                    int hdd_modules_loaded,
@@ -1299,21 +1290,18 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
     FILE *fp = NULL;
     LoaderConfigParseResult parse_result;
     int config_source;
-    int pre_scanned = 0;
     int splash_early_presented = 0;
     int video_mode_applied = 0;
     int config_has_launch_key_entries = 0;
     int config_read_success = 0;
     int x, j;
 
-    if (pre_scanned_out != NULL)
-        *pre_scanned_out = 0;
     if (splash_early_presented_out != NULL)
         *splash_early_presented_out = 0;
     if (config_path_in_use != NULL && config_path_in_use_size > 0)
         config_path_in_use[0] = '\0';
 
-    LoaderPathSetModuleStates(usb_modules_loaded,
+    LoaderPathSetModuleStates(bdm_modules_loaded,
                               mx4sio_modules_loaded,
                               mmce_modules_loaded,
                               hdd_modules_loaded);
@@ -1349,7 +1337,6 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
 #endif
         GLOBCFG.LOGO_DISP = normalize_logo_display(GLOBCFG.LOGO_DISP);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
-        pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         // For LOGO_DISPLAY=3 (name mode), show only NAME_* entries that were
         // explicitly present in the loaded config. Missing/commented NAME_*
         // keys should render as blank instead of falling back to built-ins.
@@ -1372,16 +1359,12 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
             LoaderRunEmergencyMode("CONFIG FILE HAS NO LAUNCH KEY ENTRIES");
 
         // Show splash immediately after video mode is known so users can read it
-        // while path validation runs. For LOGO_DISPLAY=3, skip the transient
+        // before launch workflow begins. For LOGO_DISPLAY=3, skip the transient
         // Loading... overlay so the first visible hotkey frame is the final
         // NAME_* splash/countdown render.
         if (GLOBCFG.LOGO_DISP > 0) {
             int show_loading_overlay = (GLOBCFG.HOTKEY_DISPLAY != 1);
 
-            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
-                for (x = 0; x < KEY_COUNT; x++)
-                    GLOBCFG.KEYNAMES[x] = "";
-            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, is_psx_desr);
             if (show_loading_overlay) {
@@ -1390,7 +1373,7 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
             }
         }
 
-        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, pre_scanned);
+        LoaderApplyDisplayNameMode(GLOBCFG.HOTKEY_DISPLAY);
     } else {
         const char *no_config_status = "Can't find config, loading hardcoded paths";
         char **default_paths = DEFPATH;
@@ -1405,7 +1388,6 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
 
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
-        pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
         // No config means no valid VIDEO_MODE was parsed, so apply the default
         // AUTO/native mode now.
         if (!video_mode_applied && apply_video_mode_fn != NULL)
@@ -1418,10 +1400,6 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
         if (GLOBCFG.LOGO_DISP > 0) {
             int show_loading_overlay = (GLOBCFG.HOTKEY_DISPLAY != 1);
 
-            if (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3) {
-                for (x = 0; x < KEY_COUNT; x++)
-                    GLOBCFG.KEYNAMES[x] = "";
-            }
             SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, native_video_mode);
             SplashRenderTextBody(GLOBCFG.LOGO_DISP, is_psx_desr);
             SplashDrawCenteredStatusWithInfo(no_config_status,
@@ -1433,17 +1411,15 @@ int LoaderBootstrapConfigAndSplash(int *pre_scanned_out,
                                              NULL,
                                              "");
             splash_early_presented = 1;
-            if (show_loading_overlay && !pre_scanned) {
+            if (show_loading_overlay) {
                 SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
                 splash_early_presented = 1;
             }
         }
 
-        ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, pre_scanned);
+        LoaderApplyDisplayNameMode(GLOBCFG.HOTKEY_DISPLAY);
     }
 
-    if (pre_scanned_out != NULL)
-        *pre_scanned_out = pre_scanned;
     if (splash_early_presented_out != NULL)
         *splash_early_presented_out = splash_early_presented;
 

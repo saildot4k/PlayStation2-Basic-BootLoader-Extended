@@ -114,13 +114,12 @@ int custom_sceCdReadPS1BootParam(char *param, u32 *stat)
 }
 
 int sceCdRcBypassCtl(int bypass, u32 *stat)
-{ // TODO: not implemented.
+{ // Best-effort compatibility wrapper around SCMD 0x24.
     u8 in[16], out[16];
     int result;
 
     memset(in, 0, 11);
     if (MECHACON_CMD_S24_supported) {
-        // TODO
         // if ((result = sceCdApplySCmd(0x24, &bypass, 4, out, 13)) != 0)
         if ((result = sceCdApplySCmd(0x24, &bypass, 4, out)) != 0) {
             *stat = out[0];

@@ -23,8 +23,7 @@
 #define PAD_MASK_LEFT 0x0080
 #define PAD_MASK_SELECT 0x0001
 
-void LoaderRunEmergencyVideoModeSelector(int *pre_scanned,
-                                         int *hotkey_launches_enabled,
+void LoaderRunEmergencyVideoModeSelector(int *hotkey_launches_enabled,
                                          int *block_hotkeys_until_release,
                                          int is_psx_desr,
                                          int native_video_mode,
@@ -65,7 +64,7 @@ void LoaderRunEmergencyVideoModeSelector(int *pre_scanned,
     int save_feedback_ok = 0;
     char save_feedback_path[128];
 
-    if (pre_scanned == NULL || hotkey_launches_enabled == NULL || block_hotkeys_until_release == NULL ||
+    if (hotkey_launches_enabled == NULL || block_hotkeys_until_release == NULL ||
         romver == NULL || romver_size == 0 || config_path_in_use == NULL || config_path_in_use_size == 0)
         return;
 
@@ -76,8 +75,7 @@ void LoaderRunEmergencyVideoModeSelector(int *pre_scanned,
 
     GLOBCFG.LOGO_DISP = 3;
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
-    *pre_scanned = (GLOBCFG.HOTKEY_DISPLAY == 2 || GLOBCFG.HOTKEY_DISPLAY == 3);
-    ValidateKeypathsAndSetNames(GLOBCFG.HOTKEY_DISPLAY, *pre_scanned);
+    LoaderApplyDisplayNameMode(GLOBCFG.HOTKEY_DISPLAY);
 
     ConsoleInfoCapture(&console_info, config_source, romver, romver_size);
     model = console_info.model;

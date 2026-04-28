@@ -19,7 +19,7 @@ enum {
     DEV_COUNT
 };
 
-static int s_usb_modules_loaded = 0;
+static int s_bdm_modules_loaded = 0;
 static int s_mx4sio_modules_loaded = 0;
 static int s_mmce_modules_loaded = 0;
 static int s_hdd_modules_loaded = 0;
@@ -28,15 +28,13 @@ static int s_pending_command_argc = 0;
 static char **s_pending_command_argv = NULL;
 static int s_cdvd_cancelled = 0;
 
-static char s_resolved_keypaths[KEY_COUNT][CONFIG_KEY_INDEXES][CHECKPATH_BUF_SIZE];
-
 #ifdef MX4SIO
 static int s_mx4sio_slot = -2;
 #endif
 
-void LoaderPathSetModuleStates(int usb_ready, int mx4sio_ready, int mmce_ready, int hdd_ready)
+void LoaderPathSetModuleStates(int bdm_ready, int mx4sio_ready, int mmce_ready, int hdd_ready)
 {
-    s_usb_modules_loaded = usb_ready;
+    s_bdm_modules_loaded = bdm_ready;
     s_mx4sio_modules_loaded = mx4sio_ready;
     s_mmce_modules_loaded = mmce_ready;
     s_hdd_modules_loaded = hdd_ready;
@@ -86,23 +84,6 @@ static int preferred_mmce_slot_char(void)
     return '0';
 }
 #endif
-
-static int device_modules_ready(int dev)
-{
-    switch (dev) {
-        case DEV_MASS:
-            return s_usb_modules_loaded;
-        case DEV_MX4SIO:
-            return s_mx4sio_modules_loaded;
-        case DEV_MMCE0:
-        case DEV_MMCE1:
-            return s_mmce_modules_loaded;
-        case DEV_HDD:
-            return s_hdd_modules_loaded;
-        default:
-            return 1;
-    }
-}
 
 #ifdef MX4SIO
 static int mx4sio_typed_root_openable(int unit)
@@ -202,78 +183,6 @@ LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
         path_prefix_matches(path, "ilink", 5))
         return LOADER_PATH_FAMILY_BDM;
     return LOADER_PATH_FAMILY_NONE;
-}
-
-static int device_id_from_path(const char *path)
-{
-    if (path == NULL || *path == '\0')
-        return DEV_UNKNOWN;
-    if (path_prefix_matches(path, "mc0", 3))
-        return DEV_MC0;
-    if (path_prefix_matches(path, "mc1", 3))
-        return DEV_MC1;
-    if (path_prefix_matches(path, "mx4sio", 6))
-        return DEV_MX4SIO;
-    if (path_prefix_matches(path, "massx", 5))
-        return DEV_MX4SIO;
-    if (path_prefix_matches(path, "usb", 3))
-        return DEV_MASS;
-    if (path_prefix_matches(path, "ata", 3))
-        return DEV_MASS;
-    if (path_prefix_matches(path, "ilink", 5))
-        return DEV_MASS;
-    if (path_prefix_matches(path, "mass", 4))
-        return DEV_MASS;
-    if (path_prefix_matches(path, "mmce0", 5))
-        return DEV_MMCE0;
-    if (path_prefix_matches(path, "mmce1", 5))
-        return DEV_MMCE1;
-    if (path_prefix_matches(path, "hdd0", 4))
-        return DEV_HDD;
-    if (path_prefix_matches(path, "xfrom", 5))
-        return DEV_XFROM;
-    return DEV_UNKNOWN;
-}
-
-static int device_available_for_dev(int dev)
-{
-    if (dev == DEV_UNKNOWN)
-        return 1;
-
-    if (!device_modules_ready(dev))
-        return 0;
-    return 1;
-}
-
-void LoaderBuildDeviceAvailableCache(int dev_ok[LOADER_DEVICE_COUNT])
-{
-    int dev;
-
-    if (dev_ok == NULL)
-        return;
-
-    for (dev = 0; dev < DEV_COUNT; dev++)
-        dev_ok[dev] = device_available_for_dev(dev) ? 1 : 0;
-}
-
-int LoaderDeviceAvailableForPathCached(const char *path, const int dev_ok[LOADER_DEVICE_COUNT])
-{
-    int dev;
-
-    if (path == NULL || *path == '\0' || dev_ok == NULL)
-        return 0;
-    if (ci_starts_with(path, "mc?:"))
-        return (dev_ok[DEV_MC0] || dev_ok[DEV_MC1]);
-#ifdef MMCE
-    if (ci_starts_with(path, "mmce?:"))
-        return (dev_ok[DEV_MMCE0] || dev_ok[DEV_MMCE1]);
-#endif
-
-    dev = device_id_from_path(path);
-    if (dev == DEV_UNKNOWN)
-        return 1;
-
-    return dev_ok[dev];
 }
 
 static int copy_string_safe(char *dst, size_t dst_size, const char *src)
@@ -774,57 +683,6 @@ static const char *resolve_path_tokens(const char *path,
     return out;
 }
 
-static int command_display_path(const char *path,
-                                const int dev_ok[LOADER_DEVICE_COUNT],
-                                char *display_out,
-                                size_t display_out_size)
-{
-    const char *runkelf_prefix = "$RUNKELF:";
-
-    if (path == NULL || *path == '\0' || !is_command_token(path))
-        return 0;
-
-#ifndef HDD
-    if (!strcmp(path, "$HDDCHECKER"))
-        return 0;
-#endif
-
-    if (!strncmp(path, runkelf_prefix, strlen(runkelf_prefix))) {
-        char resolved[CHECKPATH_BUF_SIZE];
-        const char *kelf_path = path + strlen(runkelf_prefix);
-        const char *resolved_path;
-
-        if (kelf_path == NULL || *kelf_path == '\0')
-            return 0;
-        if (strncmp(kelf_path, "mc", 2) != 0 && strncmp(kelf_path, "hdd", 3) != 0)
-            return 0;
-        if (!LoaderDeviceAvailableForPathCached(kelf_path, dev_ok))
-            return 0;
-
-        resolved_path = resolve_path_tokens(kelf_path, resolved, sizeof(resolved), 1);
-        if (resolved_path == NULL)
-            return 0;
-        if (!exist(resolved_path))
-            return 0;
-
-        copy_string_safe(display_out, display_out_size, resolved_path);
-        return 1;
-    }
-
-    copy_string_safe(display_out, display_out_size, path + 1);
-    return 1;
-}
-
-static inline int is_elf_ext_ci(const char *s, size_t len)
-{
-    if (len < 4)
-        return 0;
-    return ((s[len - 4] == '.') &&
-            ((s[len - 3] == 'e' || s[len - 3] == 'E')) &&
-            ((s[len - 2] == 'l' || s[len - 2] == 'L')) &&
-            ((s[len - 1] == 'f' || s[len - 1] == 'F')));
-}
-
 #ifdef HDD
 static int path_has_patinfo_token(const char *path)
 {
@@ -898,149 +756,17 @@ static int allow_virtual_patinfo_entry(int key_idx, int entry_idx, const char *p
 }
 #endif
 
-static const char *path_basename(const char *path)
-{
-    const char *base = path;
-    const char *p = path;
-
-    if (p == NULL)
-        return "";
-
-    while (*p) {
-        if (*p == '/' || *p == '\\')
-            base = p + 1;
-        p++;
-    }
-
-    return base;
-}
-
 int LoaderAllowVirtualPatinfoEntry(int key_idx, int entry_idx, const char *path)
 {
     return allow_virtual_patinfo_entry(key_idx, entry_idx, path);
 }
 
-void ValidateKeypathsAndSetNames(int display_mode, int scan_paths)
+void LoaderApplyDisplayNameMode(int display_mode)
 {
-    static char name_buf[KEY_COUNT][MAX_LEN];
-    int dev_ok[LOADER_DEVICE_COUNT];
-    const char *first_valid[KEY_COUNT];
-    int logo_disp = GLOBCFG.LOGO_DISP;
-    u64 next_loading_refresh_ms = 0;
     int i;
-    int j;
-
-    for (i = 0; i < KEY_COUNT; i++)
-        first_valid[i] = NULL;
-
-    if (scan_paths) {
-        LoaderBuildDeviceAvailableCache(dev_ok);
-        if (logo_disp > 0)
-            next_loading_refresh_ms = Timer() + 500u;
-
-        for (i = 0; i < KEY_COUNT; i++) {
-            int found = 0;
-
-            for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
-                char *path = GLOBCFG.KEYPATHS[i][j];
-
-                if (logo_disp > 0) {
-                    u64 now_ms = Timer();
-
-                    if (now_ms >= next_loading_refresh_ms) {
-                        SplashDrawLoadingStatus(logo_disp);
-                        next_loading_refresh_ms = now_ms + 500u;
-                    }
-                }
-
-                if (found) {
-                    GLOBCFG.KEYPATHS[i][j] = "";
-                    continue;
-                }
-                if (path == NULL || *path == '\0') {
-                    GLOBCFG.KEYPATHS[i][j] = "";
-                    continue;
-                }
-
-                if (is_command_token(path)) {
-                    char cmd_display[CHECKPATH_BUF_SIZE];
-
-                    if (command_display_path(path, dev_ok, cmd_display, sizeof(cmd_display))) {
-                        copy_string_safe(s_resolved_keypaths[i][j],
-                                         sizeof(s_resolved_keypaths[i][j]),
-                                         cmd_display);
-                        if (first_valid[i] == NULL)
-                            first_valid[i] = s_resolved_keypaths[i][j];
-                        found = 1;
-                    }
-                    continue; // Commands only run on keypress.
-                }
-
-                if (!LoaderDeviceAvailableForPathCached(path, dev_ok)) {
-                    GLOBCFG.KEYPATHS[i][j] = "";
-                    continue;
-                }
-
-                {
-                    char resolved[CHECKPATH_BUF_SIZE];
-                    const char *resolved_path = resolve_path_tokens(path,
-                                                                    resolved,
-                                                                    sizeof(resolved),
-                                                                    1);
-
-                    if (resolved_path == NULL) {
-                        GLOBCFG.KEYPATHS[i][j] = "";
-                        continue;
-                    }
-
-                    if (allow_virtual_patinfo_entry(i, j, resolved_path) || exist(resolved_path)) {
-                        copy_string_safe(s_resolved_keypaths[i][j],
-                                         sizeof(s_resolved_keypaths[i][j]),
-                                         resolved_path);
-                        // Keep raw HDD launch paths so CheckPath() can remount and
-                        // refresh PART at launch time (pre-scanned LOGO modes).
-                        if (path_prefix_matches(path, "hdd", 3))
-                            GLOBCFG.KEYPATHS[i][j] = path;
-                        else
-                            GLOBCFG.KEYPATHS[i][j] = s_resolved_keypaths[i][j];
-                        if (first_valid[i] == NULL)
-                            first_valid[i] = GLOBCFG.KEYPATHS[i][j];
-                        found = 1;
-                    } else {
-                        GLOBCFG.KEYPATHS[i][j] = "";
-                    }
-                }
-            }
-        }
-    }
-
-    if (display_mode < 0 || display_mode > 3)
-        display_mode = 0;
-
-    if (display_mode == 0) {
+    if (display_mode <= 0) {
         for (i = 0; i < KEY_COUNT; i++)
             GLOBCFG.KEYNAMES[i] = "";
-        return;
-    }
-
-    if (display_mode == 1)
-        return; // Keep user-defined names.
-
-    for (i = 0; i < KEY_COUNT; i++) {
-        if (display_mode == 3) {
-            GLOBCFG.KEYNAMES[i] = (first_valid[i] != NULL) ? first_valid[i] : "";
-        } else {
-            const char *base = (first_valid[i] != NULL) ? path_basename(first_valid[i]) : "";
-            size_t len = strlen(base);
-
-            if (is_elf_ext_ci(base, len))
-                len -= 4;
-            if (len >= MAX_LEN)
-                len = MAX_LEN - 1;
-            memcpy(name_buf[i], base, len);
-            name_buf[i][len] = '\0';
-            GLOBCFG.KEYNAMES[i] = name_buf[i];
-        }
     }
 }
 

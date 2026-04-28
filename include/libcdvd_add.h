@@ -19,7 +19,7 @@ int sceCdRM(char *ModelName, u32 *stat);
 // Provides an equivalent of the sceCdBootCertify function from the newer CDVDMAN modules. The old CDVDFSV and CDVDMAN modules don't support this S-command.
 int sceCdBootCertify(const u8 *data);
 
-// TODO: Not implemented.
+// Reserved placeholders for optional alt SCMD wrappers.
 // int sceCdAltRcBypassCtl(int bypass, u32 *stat);
 // int sceCdAltBootCertify(const u8 *data);
 // int sceCdAltRM(char *ModelName, u32 *stat);

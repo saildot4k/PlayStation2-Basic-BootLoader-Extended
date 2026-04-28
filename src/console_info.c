@@ -26,6 +26,67 @@ static int parse_mmce_slot_from_path(const char *path)
     return -1;
 }
 
+static int parse_mass_alias(const char *path, const char **suffix_out, int *unit_out)
+{
+    const char *suffix = NULL;
+    int unit = -1;
+
+    if (path == NULL || !ci_starts_with(path, "mass"))
+        return 0;
+
+    if (path[4] == ':') {
+        suffix = path + 4;
+        unit = -1;
+    } else if (path[4] >= '0' && path[4] <= '9' && path[5] == ':') {
+        suffix = path + 5;
+        unit = path[4] - '0';
+    } else {
+        return 0;
+    }
+
+    if (suffix == NULL || suffix[0] != ':')
+        return 0;
+
+    if (suffix_out != NULL)
+        *suffix_out = suffix;
+    if (unit_out != NULL)
+        *unit_out = unit;
+    return 1;
+}
+
+static int mass_paths_equivalent_for_cwd(const char *a, const char *b)
+{
+    const char *suffix_a = NULL;
+    const char *suffix_b = NULL;
+    int unit_a = -1;
+    int unit_b = -1;
+
+    if (!parse_mass_alias(a, &suffix_a, &unit_a) ||
+        !parse_mass_alias(b, &suffix_b, &unit_b))
+        return 0;
+    if (!ci_eq(suffix_a, suffix_b))
+        return 0;
+
+    // Explicit units must match. A generic legacy "mass:" alias is treated as
+    // equivalent to any specific massN path with the same suffix.
+    if (unit_a >= 0 && unit_b >= 0 && unit_a != unit_b)
+        return 0;
+
+    return 1;
+}
+
+static int path_equivalent_for_cwd_label(const char *path, const char *boot_cwd_path)
+{
+    if (path == NULL || boot_cwd_path == NULL || *path == '\0' || *boot_cwd_path == '\0')
+        return 0;
+    if (ci_eq(path, boot_cwd_path))
+        return 1;
+    if (mass_paths_equivalent_for_cwd(path, boot_cwd_path))
+        return 1;
+
+    return 0;
+}
+
 static int format_mass_device_name(char *out,
                                    size_t out_size,
                                    const char *resolved_path,
@@ -301,19 +362,12 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
     strip_crlf_copy(PS1DRVGetVersion(), info->ps1ver, sizeof(info->ps1ver));
     strip_crlf_copy(DVDPlayerGetVersion(), info->dvdver, sizeof(info->dvdver));
 
-    if (requested_config_path != NULL &&
-        boot_cwd_config_path != NULL &&
-        *requested_config_path != '\0' &&
-        *boot_cwd_config_path != '\0' &&
-        ci_eq(requested_config_path, boot_cwd_config_path)) {
+    if (path_equivalent_for_cwd_label(resolved_config_path, boot_cwd_config_path)) {
         config_is_boot_cwd = 1;
     }
     if (!config_is_boot_cwd &&
-        resolved_config_path != NULL &&
-        boot_cwd_config_path != NULL &&
-        *resolved_config_path != '\0' &&
-        *boot_cwd_config_path != '\0' &&
-        ci_eq(resolved_config_path, boot_cwd_config_path)) {
+        (resolved_config_path == NULL || *resolved_config_path == '\0') &&
+        path_equivalent_for_cwd_label(requested_config_path, boot_cwd_config_path)) {
         config_is_boot_cwd = 1;
     }
 

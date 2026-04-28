@@ -7,7 +7,7 @@
 #include "splash_render.h"
 #include "splash_screen.h"
 
-// Console info text anchor for LOGO_DISPLAY = 1-5.
+// Console info text anchor for LOGO_DISPLAY = 1-3.
 #define INFO_CENTER_ADJUST_X 0
 #define INFO_BOTTOM_MARGIN_PERCENT 10
 #define INFO_Y_ADJUST 0
@@ -81,7 +81,7 @@ static HotkeyClockState g_hotkey_clock = {
     .last_right_anchor = {-1, -1},
 };
 
-// Hotkey text layout for LOGO_DISPLAY = 3-5.
+// Hotkey text layout for LOGO_DISPLAY = 3.
 // AUTO line anchors from the hotkeys image top-left.
 #define HOTKEY_TEXT_LOGO_DISPLAY_MIN 3
 #define HOTKEY_TEXT_LINE_COUNT KEY_COUNT

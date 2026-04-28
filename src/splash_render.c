@@ -40,7 +40,7 @@
 #define MODE2_LOGO_X_FROM_CENTER 0
 #define MODE2_LOGO_Y_FROM_CENTER 0
 
-// LOGO_DISPLAY = 3-5 layout:
+// LOGO_DISPLAY = 3 layout:
 // - Logo geometrically centered on screen.
 // - Hotkeys image left aligned and vertically centered on screen.
 // Logo Y and hotkeys Y values are center-relative tuning offsets in pixels.
@@ -975,7 +975,7 @@ int SplashRenderBegin(int logo_disp, int is_psx_desr)
         g_hotkeys_visible = 1;
         init_logo_shimmer_state();
 
-        // For LOGO_DISPLAY 3-5, defer the first present until the caller draws
+        // For LOGO_DISPLAY=3, defer the first present until the caller draws
         // hotkey text lines so the image/text appear together.
     }
 

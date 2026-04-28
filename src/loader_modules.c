@@ -2,7 +2,9 @@
 #include "main.h"
 #include "loader_path.h"
 
-static int s_usb_modules_loaded = 0;
+// Tracks whether the BDM family stack is available for path probing/launch.
+// This is broader than just USB transport readiness.
+static int s_bdm_modules_loaded = 0;
 static int s_mx4sio_modules_loaded = 0;
 static int s_mmce_modules_loaded = 0;
 static int s_hdd_modules_loaded = 0;
@@ -338,6 +340,19 @@ static const char *classify_mass_driver_tag(const char *driver_tag)
     return mass_class_name(mass_class_from_driver_tag(driver_tag));
 }
 
+static void normalize_disc_separators(char *path)
+{
+    char *p;
+
+    if (path == NULL)
+        return;
+
+    for (p = path; *p != '\0'; p++) {
+        if (*p == '/')
+            *p = '\\';
+    }
+}
+
 static void refine_boot_hint_from_legacy_mass(void)
 {
     int mass_unit;
@@ -389,34 +404,54 @@ static void refine_boot_hint_from_legacy_mass(void)
 static void set_boot_cwd_config_path(const char *boot_path)
 {
     const char *slash;
+    const char *backslash;
+    const char *separator;
     const char *colon;
+    const char *cwd_file_name;
+    const char *cwd_tail_from_root;
     size_t prefix_len;
     size_t max_prefix_len;
+    int use_disc_paths;
 
     s_boot_cwd_config_path[0] = '\0';
 
     if (boot_path == NULL || *boot_path == '\0' || boot_path[0] == '$')
         return;
 
-    max_prefix_len = sizeof(s_boot_cwd_config_path) - sizeof("/CONFIG.INI");
+    use_disc_paths = path_is_disc_root(boot_path);
+    cwd_file_name = use_disc_paths ? "CONFIG.INI;1" : "CONFIG.INI";
+    cwd_tail_from_root = use_disc_paths ? "\\CONFIG.INI;1" : "/CONFIG.INI";
 
     slash = strrchr(boot_path, '/');
-    if (slash != NULL) {
-        prefix_len = (size_t)(slash - boot_path + 1);
+    backslash = strrchr(boot_path, '\\');
+    separator = slash;
+    if (backslash != NULL && (separator == NULL || backslash > separator))
+        separator = backslash;
+
+    if (separator != NULL) {
+        max_prefix_len = sizeof(s_boot_cwd_config_path) - strlen(cwd_file_name) - 1;
+        prefix_len = (size_t)(separator - boot_path + 1);
         if (prefix_len > max_prefix_len)
             prefix_len = max_prefix_len;
         memcpy(s_boot_cwd_config_path, boot_path, prefix_len);
-        memcpy(s_boot_cwd_config_path + prefix_len, "CONFIG.INI", sizeof("CONFIG.INI"));
+        memcpy(s_boot_cwd_config_path + prefix_len, cwd_file_name, strlen(cwd_file_name) + 1);
+        if (use_disc_paths)
+            normalize_disc_separators(s_boot_cwd_config_path);
         return;
     }
 
     colon = strchr(boot_path, ':');
     if (colon != NULL) {
+        max_prefix_len = sizeof(s_boot_cwd_config_path) - strlen(cwd_tail_from_root) - 1;
         prefix_len = (size_t)(colon - boot_path + 1);
         if (prefix_len > max_prefix_len)
             prefix_len = max_prefix_len;
         memcpy(s_boot_cwd_config_path, boot_path, prefix_len);
-        memcpy(s_boot_cwd_config_path + prefix_len, "/CONFIG.INI", sizeof("/CONFIG.INI"));
+        memcpy(s_boot_cwd_config_path + prefix_len,
+               cwd_tail_from_root,
+               strlen(cwd_tail_from_root) + 1);
+        if (use_disc_paths)
+            normalize_disc_separators(s_boot_cwd_config_path);
     }
 }
 
@@ -472,7 +507,7 @@ static const char *boot_family_name(LoaderPathFamily family)
 
 static void reset_module_flags(void)
 {
-    s_usb_modules_loaded = 0;
+    s_bdm_modules_loaded = 0;
     s_mx4sio_modules_loaded = 0;
     s_mmce_modules_loaded = 0;
     s_hdd_modules_loaded = 0;
@@ -483,7 +518,7 @@ static void reset_module_flags(void)
 
 static void publish_module_states(void)
 {
-    LoaderPathSetModuleStates(s_usb_modules_loaded,
+    LoaderPathSetModuleStates(s_bdm_modules_loaded,
                               s_mx4sio_modules_loaded,
                               s_mmce_modules_loaded,
                               s_hdd_modules_loaded);
@@ -805,7 +840,7 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
             }
             if (load_bdm_transports_for_path_with_scope(path_hint, scope) < 0)
                 return -3;
-            s_usb_modules_loaded = 1;
+            s_bdm_modules_loaded = 1;
             return 0;
         }
 
@@ -1171,12 +1206,12 @@ int LoaderLoadBdmTransportsForHint(const char *path_hint)
         return ret;
 
     if (s_bdm_usb_transport_loaded || s_bdm_ata_transport_loaded || s_mx4sio_modules_loaded)
-        s_usb_modules_loaded = 1;
+        s_bdm_modules_loaded = 1;
     publish_module_states();
     return 0;
 }
 
-void LoaderLoadSystemModules(int *usb_modules_loaded,
+void LoaderLoadSystemModules(int *bdm_modules_loaded,
                              int *mx4sio_modules_loaded,
                              int *mmce_modules_loaded,
                              int *hdd_modules_loaded)
@@ -1192,23 +1227,14 @@ void LoaderLoadSystemModules(int *usb_modules_loaded,
                       BDM_TRANSPORT_SCOPE_BOOT_HINT);
     refine_boot_hint_from_legacy_mass();
 
-    if (usb_modules_loaded != NULL)
-        *usb_modules_loaded = s_usb_modules_loaded;
+    if (bdm_modules_loaded != NULL)
+        *bdm_modules_loaded = s_bdm_modules_loaded;
     if (mx4sio_modules_loaded != NULL)
         *mx4sio_modules_loaded = s_mx4sio_modules_loaded;
     if (mmce_modules_loaded != NULL)
         *mmce_modules_loaded = s_mmce_modules_loaded;
     if (hdd_modules_loaded != NULL)
         *hdd_modules_loaded = s_hdd_modules_loaded;
-}
-
-int LoadUSBIRX(void)
-{
-    if (load_bdm_core_modules() < 0)
-        return -1;
-    if (load_usb_transport_modules() < 0)
-        return -2;
-    return 0;
 }
 
 #ifdef MX4SIO

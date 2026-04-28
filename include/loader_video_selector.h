@@ -4,8 +4,7 @@
 #include <stddef.h>
 #include <tamtypes.h>
 
-void LoaderRunEmergencyVideoModeSelector(int *pre_scanned,
-                                         int *hotkey_launches_enabled,
+void LoaderRunEmergencyVideoModeSelector(int *hotkey_launches_enabled,
                                          int *block_hotkeys_until_release,
                                          int is_psx_desr,
                                          int native_video_mode,

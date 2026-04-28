@@ -7,7 +7,6 @@
 typedef void (*LoaderPollEmergencyComboWindowFn)(u64 *window_deadline_ms);
 
 int LoaderRunLaunchWorkflow(int splash_early_presented,
-                            int pre_scanned,
                             int *hotkey_launches_enabled,
                             int *block_hotkeys_until_release,
                             int pad_button,

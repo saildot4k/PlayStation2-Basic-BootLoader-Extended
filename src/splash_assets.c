@@ -28,6 +28,7 @@ extern const char *LoaderGetBootCwdConfigPath(void);
 extern const char *LoaderGetRequestedConfigPath(void);
 extern const char *LoaderGetResolvedConfigPath(void);
 extern int ci_eq(const char *a, const char *b);
+extern int ci_starts_with(const char *s, const char *prefix);
 
 extern const unsigned int splash_bg_ps2bble_width;
 extern const unsigned int splash_bg_ps2bble_height;
@@ -331,7 +332,12 @@ static int build_boot_cwd_logo_path(char *out, size_t out_size)
 {
     const char *boot_cwd_config;
     const char *slash;
+    const char *backslash;
+    const char *separator;
+    const char *logo_name;
     size_t prefix_len;
+    char *p;
+    int use_disc_paths;
 
     if (out == NULL || out_size == 0)
         return 0;
@@ -340,19 +346,32 @@ static int build_boot_cwd_logo_path(char *out, size_t out_size)
     boot_cwd_config = LoaderGetBootCwdConfigPath();
     if (boot_cwd_config == NULL || *boot_cwd_config == '\0')
         return 0;
+    use_disc_paths = ci_starts_with(boot_cwd_config, "cdrom") ||
+                     ci_starts_with(boot_cwd_config, "enumerator");
+    logo_name = use_disc_paths ? "LOGO.BIN;1" : "LOGO.BIN";
 
     // Keep CWD logo discovery strict: always derive LOGO.BIN from the boot CWD
     // path itself (not from resolved fallback config locations).
     slash = strrchr(boot_cwd_config, '/');
-    if (slash == NULL)
+    backslash = strrchr(boot_cwd_config, '\\');
+    separator = slash;
+    if (backslash != NULL && (separator == NULL || backslash > separator))
+        separator = backslash;
+    if (separator == NULL)
         return 0;
 
-    prefix_len = (size_t)(slash - boot_cwd_config + 1);
-    if (prefix_len + strlen("LOGO.BIN") + 1 > out_size)
+    prefix_len = (size_t)(separator - boot_cwd_config + 1);
+    if (prefix_len + strlen(logo_name) + 1 > out_size)
         return 0;
 
     memcpy(out, boot_cwd_config, prefix_len);
-    memcpy(out + prefix_len, "LOGO.BIN", sizeof("LOGO.BIN"));
+    memcpy(out + prefix_len, logo_name, strlen(logo_name) + 1);
+    if (use_disc_paths) {
+        for (p = out; *p != '\0'; p++) {
+            if (*p == '/')
+                *p = '\\';
+        }
+    }
     return 1;
 }
 

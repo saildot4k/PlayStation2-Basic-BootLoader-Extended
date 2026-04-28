@@ -58,6 +58,7 @@ const char *strip_crlf_copy(const char *s, char *buf, size_t buf_len);
 int ci_eq(const char *a, const char *b);
 int ci_starts_with(const char *s, const char *prefix);
 int ci_starts_with_n(const char *s, size_t s_len, const char *prefix);
+int path_is_disc_root(const char *path);
 int normalize_logo_display(int value);
 int logo_to_hotkey_display(int logo_disp);
 
@@ -149,7 +150,6 @@ int dischandler(int skip_ps2logo, int argc, char *argv[]);
 void CDVDBootCertify(u8 romver[16]);
 int credits(void);
 void CleanUp(void);
-int LoadUSBIRX(void);
 void LoaderSetBootPathHint(const char *boot_path);
 const char *LoaderGetBootPathHint(void);
 const char *LoaderGetBootCwdConfigPath(void);
@@ -160,7 +160,7 @@ int LoaderPathFamilyReadyWithoutReload(const char *path);
 int LoaderEnsurePathFamilyReady(const char *path);
 int LoaderPrepareFinalLaunch(const char *path);
 int LoaderLoadBdmTransportsForHint(const char *path_hint);
-void LoaderLoadSystemModules(int *usb_modules_loaded,
+void LoaderLoadSystemModules(int *bdm_modules_loaded,
                              int *mx4sio_modules_loaded,
                              int *mmce_modules_loaded,
                              int *hdd_modules_loaded);
