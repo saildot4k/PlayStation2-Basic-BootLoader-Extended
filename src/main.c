@@ -125,10 +125,7 @@ int main(int argc, char *argv[])
     InitOsd(); // Initialize OSD so kernel patches can do their magic
 
     DPRINTF("init ROMVER, model name ps1dvr and dvdplayer ver\n");
-    OSDInitROMVER(); // Initialize ROM version (must be done first).
-    // Refresh ROMVER/platform after IOP services are fully initialized.
-    ReadROMVEROnce();
-    LogDetectedPlatform();
+    OSDInitROMVER(); // Initialize ConsoleROMVER from cached ROMVER for legacy consumers.
     // Console info (model/version strings) is initialized lazily when first
     // rendered to keep time-to-menu low, especially when LOGO_DISPLAY=0.
     PS1DRVInit();    // Initialize PlayStation Driver (PS1DRV)

@@ -1,19 +1,17 @@
 // eGSM argument parsing utilities shared by launch and disc workflows.
 #define NEWLIB_PORT_AWARE
-#include <fcntl.h>
 #include <stdint.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "debugprintf.h"
 #include "egsm_parse.h"
+
+extern unsigned char ROMVER[16];
 
 uint32_t parse_egsm_flags_common(const char *gsm_arg)
 {
     uint32_t flags = 0;
     const char *p = gsm_arg;
-    int fd;
-    int nread;
     char romver[4] = {0};
 
     if (p == NULL || *p == '\0')
@@ -68,18 +66,20 @@ uint32_t parse_egsm_flags_common(const char *gsm_arg)
     if (flags == 0)
         return 0;
 
-    fd = open("rom0:ROMVER", O_RDONLY);
-    if (fd < 0) {
+    if (ROMVER[0] == '\0')
         flags |= EGSM_FLAG_NO_576P;
-    } else {
-        nread = read(fd, romver, sizeof(romver));
-        close(fd);
-        if (nread < (int)sizeof(romver) ||
-            romver[1] < '0' || romver[1] > '9' ||
-            romver[2] < '0' || romver[2] > '9' ||
-            romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
-            flags |= EGSM_FLAG_NO_576P;
+    else {
+        romver[0] = (char)ROMVER[0];
+        romver[1] = (char)ROMVER[1];
+        romver[2] = (char)ROMVER[2];
+        romver[3] = (char)ROMVER[3];
     }
+
+    if ((flags & EGSM_FLAG_NO_576P) ||
+        romver[1] < '0' || romver[1] > '9' ||
+        romver[2] < '0' || romver[2] > '9' ||
+        romver[1] < '2' || (romver[1] == '2' && romver[2] < '2'))
+        flags |= EGSM_FLAG_NO_576P;
 
     DPRINTF("%s: parsed flags=0x%08x from '%s'\n", __func__, (unsigned int)flags, gsm_arg);
     return flags;

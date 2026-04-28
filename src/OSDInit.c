@@ -51,6 +51,7 @@ static char SystemExecFolder[] = "BREXEC-SYSTEM";
 static char DVDPLExecFolder[] = "BREXEC-DVDPLAYER";
 
 char ConsoleROMVER[ROMVER_MAX_LEN];
+extern u8 ROMVER[16];
 
 static int InitMGRegion(void)
 {
@@ -160,11 +161,15 @@ static int GetConsoleRegion(void)
     int result;
 
     if ((result = ConsoleRegion) < 0) {
-        int fd;
-        if ((fd = open("rom0:ROMVER", O_RDONLY)) >= 0) {
-            char romver[16];
-            read(fd, romver, sizeof(romver));
-            close(fd);
+        int have_romver = 0;
+        char romver[16];
+
+        if (ROMVER[0] != '\0') {
+            memcpy(romver, ROMVER, sizeof(romver));
+            have_romver = 1;
+        }
+
+        if (have_romver) {
             ConsoleRegionParamsInitPS1DRV(romver);
 
             switch (romver[4]) {
@@ -545,13 +550,9 @@ const char *OSDGetDVDPLExecFolder(void)
 
 int OSDInitROMVER(void)
 {
-    int fd;
-
     memset(ConsoleROMVER, 0, ROMVER_MAX_LEN);
-    if ((fd = open("rom0:ROMVER", O_RDONLY)) >= 0) {
-        read(fd, ConsoleROMVER, ROMVER_MAX_LEN);
-        close(fd);
-    }
+    if (ROMVER[0] != '\0')
+        memcpy(ConsoleROMVER, ROMVER, ROMVER_MAX_LEN);
 
     return 0;
 }

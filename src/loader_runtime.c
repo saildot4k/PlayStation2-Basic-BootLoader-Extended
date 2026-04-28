@@ -39,11 +39,14 @@ static int IsPSXDESRROMVER(const u8 romver[16])
 void ReadROMVEROnce(void)
 {
     int fd;
+    int nread;
 
     memset(ROMVER, 0, sizeof(ROMVER));
     if ((fd = open("rom0:ROMVER", O_RDONLY)) >= 0) {
-        read(fd, ROMVER, sizeof(ROMVER));
+        nread = read(fd, ROMVER, sizeof(ROMVER));
         close(fd);
+        if (nread != (int)sizeof(ROMVER))
+            memset(ROMVER, 0, sizeof(ROMVER));
     }
 
     g_is_psx_desr = IsPSXDESRROMVER(ROMVER);

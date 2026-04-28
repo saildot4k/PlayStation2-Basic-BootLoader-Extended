@@ -77,9 +77,20 @@ void ResetIOP(void)
 void CDVDBootCertify(u8 romver[16])
 {
     u8 RomName[4];
+    int romver_valid = 0;
+
+    if (romver != NULL &&
+        romver[0] >= '0' && romver[0] <= '9' &&
+        romver[1] >= '0' && romver[1] <= '9' &&
+        romver[2] >= '0' && romver[2] <= '9' &&
+        romver[3] >= '0' && romver[3] <= '9' &&
+        romver[4] != '\0' &&
+        romver[5] != '\0')
+        romver_valid = 1;
+
     /*  Perform boot certification to enable the CD/DVD drive.
         This is not required for the PSX, as its OSDSYS will do it before booting the update. */
-    if (romver != NULL) {
+    if (romver_valid) {
         // e.g. 0160HC = 1,60,'H','C'
         RomName[0] = (romver[0] - '0') * 10 + (romver[1] - '0');
         RomName[1] = (romver[2] - '0') * 10 + (romver[3] - '0');
@@ -91,7 +102,7 @@ void CDVDBootCertify(u8 romver[16])
 #ifdef REPORT_FATAL_ERRORS
     } else {
         scr_setfontcolor(0x0000ff);
-        scr_printf("\tERROR: Could not certify CDVD Boot. ROMVER was NULL\n");
+        scr_printf("\tERROR: Could not certify CDVD Boot. ROMVER unavailable/invalid\n");
         scr_setfontcolor(0xffffff);
 #endif
     }
