@@ -1,5 +1,6 @@
 //  command handler and disc-type boot dispatch with splash status updates.
 #include <stdint.h>
+#include <string.h>
 
 #include "main.h"
 #include "egsm_parse.h"
@@ -46,7 +47,7 @@ static void ParseDiscEgsmOverride(int argc, char *argv[], uint32_t *flags_out, c
         const char *value;
         uint32_t flags;
 
-        if (argv[i] == NULL || !ci_starts_with(argv[i], "-gsm="))
+        if (argv[i] == NULL || strncmp(argv[i], "-gsm=", 5) != 0)
             continue;
 
         value = argv[i] + 5;

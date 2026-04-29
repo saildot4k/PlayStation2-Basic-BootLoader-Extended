@@ -302,7 +302,7 @@ ifeq ($(PROHBIT_DVD_0100),1)
 endif
 
 # ---{ RECIPES }--- #
-.PHONY: greeting debug all clean clean-subprojects kelf packed release rebuild banner analize celan
+.PHONY: greeting debug all clean clean-subprojects kelf packed release rebuild banner analyze clean
 
 all: $(EE_BIN)
 ifeq ($(DEBUG), 1)

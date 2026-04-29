@@ -178,16 +178,11 @@ int main(int argc, char *argv[])
 
 #ifdef DISC_STOP_AT_BOOT
     {
-        const char *boot_hint = LoaderGetBootPathHint();
-        int booted_from_disc = path_is_disc_root(boot_hint);
-
-        // Disc-stop profile for optical boot builds:
-        // stop disc after config bootstrap whenever boot source is optical media.
-        if (booted_from_disc) {
-            DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
-            sceCdStop();
-            sceCdSync(0);
-        }
+        // Disc-stop profile: always stop the drive after config bootstrap.
+        // Do not depend on argv[0] boot hints, which can be absent on disc boots.
+        DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
+        sceCdStop();
+        sceCdSync(0);
     }
 #endif
 

@@ -498,60 +498,9 @@ static int prefix_eq_ci_n(const char *s, const char *prefix, size_t prefix_len)
     return 1;
 }
 
-static int arg_prefix_ci(const char *arg, const char *prefix, const char **value_out)
-{
-    size_t i;
-
-    if (arg == NULL || prefix == NULL)
-        return 0;
-
-    for (i = 0; prefix[i] != '\0'; i++) {
-        unsigned char a = (unsigned char)arg[i];
-        unsigned char b = (unsigned char)prefix[i];
-
-        if (a == '\0')
-            return 0;
-        if (a >= 'a' && a <= 'z')
-            a -= ('a' - 'A');
-        if (b >= 'a' && b <= 'z')
-            b -= ('a' - 'A');
-        if (a != b)
-            return 0;
-    }
-
-    if (value_out != NULL)
-        *value_out = arg + i;
-
-    return 1;
-}
-
 static int path_has_patinfo_token(const char *path)
 {
-    static const char token[] = ":PATINFO";
-    size_t token_len = sizeof(token) - 1;
-    const char *p;
-
-    if (path == NULL)
-        return 0;
-
-    for (p = path; *p != '\0'; p++) {
-        size_t k;
-        for (k = 0; k < token_len && p[k] != '\0'; k++) {
-            unsigned char a = (unsigned char)p[k];
-            unsigned char b = (unsigned char)token[k];
-
-            if (a >= 'a' && a <= 'z')
-                a -= ('a' - 'A');
-            if (b >= 'a' && b <= 'z')
-                b -= ('a' - 'A');
-            if (a != b)
-                break;
-        }
-        if (k == token_len)
-            return 1;
-    }
-
-    return 0;
+    return (path != NULL && strstr(path, ":PATINFO") != NULL);
 }
 
 static int path_is_rom_binary(const char *path)
@@ -741,6 +690,7 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
         min_index = 1;
 
     for (i = argc - 1; i >= min_index; i--) {
+        const char *eq = NULL;
         const char *val = NULL;
 
         if (argv[i] == NULL)
@@ -749,26 +699,30 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
         if (argv[i][0] != '-' && argv[i][0] != '+')
             break;
 
-        if (arg_eq_ci(argv[i], "-appid")) {
+        eq = strchr(argv[i], '=');
+
+        if (strcmp(argv[i], "-appid") == 0) {
             intent->force_appid = 1;
             argc--;
             continue;
         }
-        if (arg_eq_ci(argv[i], "-patinfo")) {
+        if (strcmp(argv[i], "-patinfo") == 0) {
             intent->use_patinfo_path = 1;
             argc--;
             continue;
         }
-        if (arg_prefix_ci(argv[i], "-titleid=", &val)) {
+        if (strncmp(argv[i], "-titleid=", 9) == 0) {
+            val = argv[i] + 9;
             while (*val == ' ' || *val == '\t')
                 val++;
             ParseTitleOverrideValue(intent, val);
             argc--;
             continue;
         }
-        if (arg_prefix_ci(argv[i], "-gsm=", &val)) {
+        if (strncmp(argv[i], "-gsm=", 5) == 0) {
             uint32_t parsed_flags;
 
+            val = argv[i] + 5;
             while (*val == ' ' || *val == '\t')
                 val++;
             parsed_flags = parse_egsm_flags_common(val);
@@ -782,12 +736,13 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
             argc--;
             continue;
         }
-        if (arg_prefix_ci(argv[i], "-dev9=", &val)) {
+        if (eq != NULL && strncmp(argv[i], "-dev9", 5) == 0) {
+            val = eq + 1;
             while (*val == ' ' || *val == '\t')
                 val++;
-            if (arg_eq_ci(val, "NIC")) {
+            if (strcmp(val, "NIC") == 0) {
                 intent->dev9_mode = DEV9_NIC;
-            } else if (arg_eq_ci(val, "NICHDD")) {
+            } else if (strcmp(val, "NICHDD") == 0) {
                 intent->dev9_mode = DEV9_NICHDD;
             } else {
                 DPRINTF("Ignoring unknown -dev9 value: '%s'\n", val);
@@ -795,13 +750,6 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
             argc--;
             continue;
         }
-        if (arg_prefix_ci(argv[i], "-la=", &val)) {
-            (void)val;
-            DPRINTF("Ignoring reserved internal loader flag override '%s'\n", argv[i]);
-            argc--;
-            continue;
-        }
-
         break;
     }
 
@@ -975,6 +923,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
     int stage2_argc_base;
     int stage2_argc;
     int extra_count = 0;
+    int has_loader_flags = 0;
     int use_gsm = 0;
     int use_ioprp = 0;
     int use_elf = 0;
@@ -1017,21 +966,19 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         loader_args[i++] = 'I';
     if (use_elf)
         loader_args[i++] = 'E';
-    // Keep stage2 DEV9 handling aligned with direct launch behavior.
-    // Non-HDD builds should never request stage2 DEV9/fileXio policy.
 #if defined(HDD) && defined(FILEXIO)
     if (dev9_mode == DEV9_NIC) {
         loader_args[i++] = 'N';
-    } else
-#endif
-    {
-        // Keep stage2 behavior aligned with direct launch:
-        // default launch policy should not shut down DEV9/HDD.
+    } else if (dev9_mode == DEV9_NICHDD) {
         loader_args[i++] = 'D';
     }
+#else
+    (void)dev9_mode;
+#endif
     if (skip_argv0)
         loader_args[i++] = 'A';
     loader_args[i] = '\0';
+    has_loader_flags = (i > 4);
 
     if (use_elf) {
         owned_elf = malloc(strlen(elf_mem_arg) + 1);
@@ -1070,8 +1017,8 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         extra_count++;
     }
 
-    stage2_argc_base = argc + 2;
-    stage2_argc = stage2_argc_base + extra_count;
+    stage2_argc_base = argc + 1;
+    stage2_argc = stage2_argc_base + extra_count + (has_loader_flags ? 1 : 0);
     stage2_argv = malloc(sizeof(char *) * stage2_argc);
     if (stage2_argv == NULL) {
         if (owned_gsm != NULL)
@@ -1096,7 +1043,8 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         stage2_argv[i++] = owned_ioprp;
     if (owned_gsm != NULL)
         stage2_argv[i++] = owned_gsm;
-    stage2_argv[i++] = loader_args;
+    if (has_loader_flags)
+        stage2_argv[i++] = loader_args;
 
     DebugPrintStage2Argv(__func__, stage2_argc, stage2_argv);
 
@@ -1179,8 +1127,8 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #ifdef HDD
     if (patinfo_cnf_ok) {
         patinfo_no_history = patinfo_opts.no_history;
-        if (intent.dev9_mode == DEV9_DEFAULT)
-            intent.dev9_mode = patinfo_opts.dev9_mode;
+        // Match OSDMenu PATINFO behavior: SYSTEM.CNF DEV9 policy drives launch.
+        intent.dev9_mode = patinfo_opts.dev9_mode;
         if (intent.title_override == NULL && patinfo_opts.title_id != NULL)
             intent.title_override = strdup(patinfo_opts.title_id);
     }

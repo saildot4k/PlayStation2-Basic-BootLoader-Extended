@@ -585,9 +585,11 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
     allow_disc_paths = path_is_disc_root(boot_path_hint);
 #ifdef DISC_STOP_AT_BOOT
-    // Disc-stop profile: when booted from optical media, do not probe disc CWD.
-    // Use a single fixed disc config location, then fallback to MC config paths.
-    disc_boot_mc_fallback_profile = allow_disc_paths;
+    // Disc-stop profile: do not probe disc CWD.
+    // When enabled, force a deterministic startup search order that does not
+    // depend on argv[0] boot hints: prefer user-mutable MC config first, then
+    // immutable disc config fallback.
+    disc_boot_mc_fallback_profile = 1;
 #endif
     boot_from_legacy_mass = path_is_legacy_mass(boot_path_hint);
     boot_legacy_mass_unit = extract_legacy_mass_unit(boot_path_hint);
@@ -656,14 +658,14 @@ int LoaderFindConfigFile(FILE **fp_out,
 #ifdef DISC_STOP_AT_BOOT
         if (disc_boot_mc_fallback_profile) {
             if (source == 0) {
-                config_path = "cdrom0:\\PS2BBL\\CONFIG.INI;1";
-                source_hint = SOURCE_CWD;
-            } else if (source == 1) {
                 config_path = "mc?:/SYS-CONF/PS2BBL.INI";
                 source_hint = SOURCE_MC0;
-            } else if (source == 2) {
+            } else if (source == 1) {
                 config_path = "mc?:/SYS-CONF/PSXBBL.INI";
                 source_hint = SOURCE_MC0;
+            } else if (source == 2) {
+                config_path = "cdrom0:\\PS2BBL\\CONFIG.INI;1";
+                source_hint = SOURCE_CWD;
             } else {
                 continue;
             }
