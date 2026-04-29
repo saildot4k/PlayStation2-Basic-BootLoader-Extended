@@ -1,5 +1,6 @@
 // Runtime utilities (ROM detection, cleanup, emergency/rescue mode).
 #include "main.h"
+#include "loader_path.h"
 #include "splash_render.h"
 #include "splash_screen.h"
 
@@ -199,6 +200,9 @@ void runOSDNoUpdate(void)
 
 void LoaderRunEmergencyMode(const char *reason)
 {
+    const char *rescue_path = "mass:/RESCUE.ELF";
+    int rescue_family_ready = 0;
+
     if (!SplashRenderIsActive()) {
         int emergency_logo_disp = normalize_logo_display(GLOBCFG.LOGO_DISP);
 
@@ -210,12 +214,37 @@ void LoaderRunEmergencyMode(const char *reason)
 
     SplashDrawEmergencyModeStatus(reason);
     while (1) {
+        char *resolved_rescue_path = NULL;
+
         usleep(100000);
-        if (exist("mass:/RESCUE.ELF")) {
+
+        // Match launch-entry behavior: ensure BDM family is active first.
+        // If booted on MC/MMCE/HDD, this may reboot IOP once to load USB stack.
+        if (!rescue_family_ready) {
+            int ensure_ready = LoaderEnsurePathFamilyReady(rescue_path);
+
+            if (ensure_ready < 0) {
+                DPRINTF("Emergency mode: failed to ready path family for '%s' (ret=%d), retrying\n",
+                        rescue_path,
+                        ensure_ready);
+                continue;
+            }
+
+            rescue_family_ready = 1;
+            DPRINTF("Emergency mode: path family ready for '%s'\n", rescue_path);
+        }
+
+        if (!LoaderPathCanAttemptNow(rescue_path))
+            continue;
+
+        resolved_rescue_path = CheckPath(rescue_path);
+        if (resolved_rescue_path != NULL &&
+            *resolved_rescue_path != '\0' &&
+            exist(resolved_rescue_path)) {
             if (SplashRenderIsActive())
                 SplashRenderEnd();
             CleanUp();
-            RunLoaderElf("mass:/RESCUE.ELF", NULL, 0, NULL);
+            RunLoaderElf(resolved_rescue_path, NULL, 0, NULL);
         }
     }
 }

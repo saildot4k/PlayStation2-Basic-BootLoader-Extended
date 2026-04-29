@@ -149,6 +149,10 @@ static void format_device_source_name(char *out,
     }
 
     if (resolved_path != NULL && *resolved_path != '\0') {
+        if (path_is_disc_root(resolved_path)) {
+            snprintf(out, out_size, "CDROM");
+            return;
+        }
         if (ci_starts_with(resolved_path, "mc0")) {
             snprintf(out, out_size, "MC0");
             return;
@@ -193,6 +197,10 @@ static void format_cwd_source_name(char *out, size_t out_size)
         mmce_slot = parse_mmce_slot_from_path(boot_hint);
 
     if (boot_hint != NULL && *boot_hint != '\0') {
+        if (path_is_disc_root(boot_hint)) {
+            snprintf(out, out_size, "CDROM");
+            return;
+        }
         if (ci_starts_with(boot_hint, "usb")) {
             snprintf(out, out_size, "USB CWD");
             return;
@@ -234,6 +242,10 @@ static void format_cwd_source_name(char *out, size_t out_size)
     }
 
     if (resolved_path != NULL && *resolved_path != '\0') {
+        if (path_is_disc_root(resolved_path)) {
+            snprintf(out, out_size, "CDROM");
+            return;
+        }
         if (ci_starts_with(resolved_path, "usb")) {
             snprintf(out, out_size, "USB CWD");
             return;

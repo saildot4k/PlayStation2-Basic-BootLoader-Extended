@@ -418,6 +418,11 @@ static void set_boot_cwd_config_path(const char *boot_path)
     if (boot_path == NULL || *boot_path == '\0' || boot_path[0] == '$')
         return;
 
+#ifdef DISC_STOP_AT_BOOT
+    if (path_is_disc_root(boot_path))
+        return;
+#endif
+
     use_disc_paths = path_is_disc_root(boot_path);
     cwd_file_name = use_disc_paths ? "CONFIG.INI;1" : "CONFIG.INI";
     cwd_tail_from_root = use_disc_paths ? "\\CONFIG.INI;1" : "/CONFIG.INI";

@@ -92,11 +92,6 @@ int main(int argc, char *argv[])
 
     DPRINTF("disabling MODLOAD device blacklist/whitelist\n");
     sbv_patch_disable_prefix_check(); /* disable the MODLOAD module black/white list, allowing executables to be freely loaded from any device. */
-#ifdef DISC_STOP_AT_BOOT
-    // Optional startup behavior for disc-first flows.
-    sceCdStop();
-    sceCdSync(0);
-#endif
     LoaderSetBootPathHint((argc > 0) ? argv[0] : NULL);
     LoaderLoadSystemModules(&g_bdm_modules_loaded,
                             &g_mx4sio_modules_loaded,
@@ -180,6 +175,21 @@ int main(int argc, char *argv[])
                                                    PollEmergencyComboWindow,
                                                    LoaderParseVideoModeValue,
                                                    LoaderApplyVideoMode);
+
+#ifdef DISC_STOP_AT_BOOT
+    {
+        const char *boot_hint = LoaderGetBootPathHint();
+        int booted_from_disc = path_is_disc_root(boot_hint);
+
+        // Disc-stop profile for optical boot builds:
+        // stop disc after config bootstrap whenever boot source is optical media.
+        if (booted_from_disc) {
+            DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
+            sceCdStop();
+            sceCdSync(0);
+        }
+    }
+#endif
 
     // Optional rescue flow: allow user to adjust VIDEO_MODE before launch dispatch.
     if (g_video_mode_selector_requested) {

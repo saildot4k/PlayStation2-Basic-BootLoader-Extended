@@ -562,6 +562,9 @@ int LoaderFindConfigFile(FILE **fp_out,
     int boot_from_legacy_mass = 0;
     int boot_legacy_mass_unit = -1;
     int allow_disc_paths = 0;
+#ifdef DISC_STOP_AT_BOOT
+    int disc_boot_mc_fallback_profile = 0;
+#endif
 #ifdef MX4SIO
     int allow_mx4_on_legacy_mass = 1;
 #endif
@@ -581,6 +584,11 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
     allow_disc_paths = path_is_disc_root(boot_path_hint);
+#ifdef DISC_STOP_AT_BOOT
+    // Disc-stop profile: when booted from optical media, do not probe disc CWD.
+    // Use a single fixed disc config location, then fallback to MC config paths.
+    disc_boot_mc_fallback_profile = allow_disc_paths;
+#endif
     boot_from_legacy_mass = path_is_legacy_mass(boot_path_hint);
     boot_legacy_mass_unit = extract_legacy_mass_unit(boot_path_hint);
 #ifdef MX4SIO
@@ -645,26 +653,44 @@ int LoaderFindConfigFile(FILE **fp_out,
         if (poll_fn != NULL)
             poll_fn(rescue_combo_deadline);
 
-        if (source == 0) {
-            config_path = "CONFIG.INI";
-            source_hint = SOURCE_CWD;
-        } else if (source == 1) {
-            config_path = boot_cwd_config;
-            source_hint = boot_family_source_hint;
-        } else if (source == 2) {
-            config_path = boot_family_config;
-            source_hint = boot_family_source_hint;
-        } else if (source == 3) {
-            if (!allow_disc_paths)
+#ifdef DISC_STOP_AT_BOOT
+        if (disc_boot_mc_fallback_profile) {
+            if (source == 0) {
+                config_path = "cdrom0:\\PS2BBL\\CONFIG.INI;1";
+                source_hint = SOURCE_CWD;
+            } else if (source == 1) {
+                config_path = "mc?:/SYS-CONF/PS2BBL.INI";
+                source_hint = SOURCE_MC0;
+            } else if (source == 2) {
+                config_path = "mc?:/SYS-CONF/PSXBBL.INI";
+                source_hint = SOURCE_MC0;
+            } else {
                 continue;
-            config_path = "enumerator:/PS2BBL/CONFIG.INI";
-            source_hint = SOURCE_CWD;
-        } else if (source == 4) {
-            config_path = "mc?:/SYS-CONF/PS2BBL.INI";
-            source_hint = SOURCE_MC0;
-        } else {
-            config_path = "mc?:/SYS-CONF/PSXBBL.INI";
-            source_hint = SOURCE_MC0;
+            }
+        } else
+#endif
+        {
+            if (source == 0) {
+                config_path = "CONFIG.INI";
+                source_hint = SOURCE_CWD;
+            } else if (source == 1) {
+                config_path = boot_cwd_config;
+                source_hint = boot_family_source_hint;
+            } else if (source == 2) {
+                config_path = boot_family_config;
+                source_hint = boot_family_source_hint;
+            } else if (source == 3) {
+                if (!allow_disc_paths)
+                    continue;
+                config_path = "enumerator:/PS2BBL/CONFIG.INI";
+                source_hint = SOURCE_CWD;
+            } else if (source == 4) {
+                config_path = "mc?:/SYS-CONF/PS2BBL.INI";
+                source_hint = SOURCE_MC0;
+            } else {
+                config_path = "mc?:/SYS-CONF/PSXBBL.INI";
+                source_hint = SOURCE_MC0;
+            }
         }
 
         if (config_path == NULL || *config_path == '\0')
