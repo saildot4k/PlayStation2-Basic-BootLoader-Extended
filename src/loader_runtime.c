@@ -234,9 +234,6 @@ void LoaderRunEmergencyMode(const char *reason)
             DPRINTF("Emergency mode: path family ready for '%s'\n", rescue_path);
         }
 
-        if (!LoaderPathCanAttemptNow(rescue_path))
-            continue;
-
         resolved_rescue_path = CheckPath(rescue_path);
         if (resolved_rescue_path != NULL &&
             *resolved_rescue_path != '\0' &&
