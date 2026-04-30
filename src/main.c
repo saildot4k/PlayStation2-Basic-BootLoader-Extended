@@ -65,25 +65,23 @@ static int StopDiscWithRetry(const char *reason)
     const int max_attempts = 40;
     const useconds_t retry_delay_us = 100000;
     int attempt;
+    int stop_issued = 0;
 
     for (attempt = 0; attempt < max_attempts; attempt++) {
         int disc_type = sceCdGetDiskType();
-        int drive_status = sceCdStatus();
+        int drive_status;
 
-        // Consider no-disc/open-tray/stopped as already satisfied.
-        if (disc_type == SCECdNODISC ||
-            drive_status == SCECdStatStop ||
-            drive_status == SCECdStatShellOpen) {
-            DPRINTF("%s: disc already stopped on attempt %d (disc_type=%d status=%d)\n",
+        // Nothing inserted: treat as already stopped.
+        if (disc_type == SCECdNODISC) {
+            DPRINTF("%s: no disc detected on attempt %d\n",
                     reason,
-                    attempt + 1,
-                    disc_type,
-                    drive_status);
+                    attempt + 1);
             return 1;
         }
 
         // sceCdStop returns 0 while CDVD is still not ready/busy.
         if (sceCdStop()) {
+            stop_issued = 1;
             sceCdSync(0);
             drive_status = sceCdStatus();
             disc_type = sceCdGetDiskType();
@@ -102,7 +100,10 @@ static int StopDiscWithRetry(const char *reason)
         usleep(retry_delay_us); // 100ms backoff while CDVD settles.
     }
 
-    DPRINTF("%s: disc stop was not confirmed after %d attempts\n", reason, max_attempts);
+    DPRINTF("%s: disc stop was not confirmed after %d attempts (stop_issued=%d)\n",
+            reason,
+            max_attempts,
+            stop_issued);
     return 0;
 }
 
