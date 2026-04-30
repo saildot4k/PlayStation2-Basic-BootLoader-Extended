@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <tamtypes.h>
 #include <kernel.h>
+#include <libcdvd-common.h>
 #include <elf-loader.h>
 #include <ctype.h>
 #include "util.h"
@@ -518,6 +519,24 @@ static int path_is_rom_binary(const char *path)
             (path[4] == ':'));
 }
 
+static int path_is_cdrom_launch(const char *path)
+{
+    if (path == NULL)
+        return 0;
+
+    return prefix_eq_ci_n(path, "cdrom", 5);
+}
+
+static int path_is_ps2logo_launch(const char *path)
+{
+    return arg_eq_ci(path, "rom0:PS2LOGO");
+}
+
+static int path_is_disc_bound_launch(const char *path)
+{
+    return (path_is_cdrom_launch(path) || path_is_ps2logo_launch(path));
+}
+
 static int path_prefix_with_optional_unit(const char *path,
                                           const char *prefix,
                                           size_t prefix_len,
@@ -952,6 +971,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
     int use_gsm = 0;
     int use_ioprp = 0;
     int use_elf = 0;
+    int effective_disc_stop;
     int i;
 
     if (launch_filename == NULL || *launch_filename == '\0')
@@ -984,6 +1004,16 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         }
     }
 
+    effective_disc_stop = disc_stop;
+    if (effective_disc_stop && path_is_disc_bound_launch(stage2_launch)) {
+        DPRINTF("Ignoring -disc_stop for disc-bound launch path '%s'\n", stage2_launch);
+        effective_disc_stop = 0;
+    } else if (effective_disc_stop) {
+        DPRINTF("Applying -disc_stop before stage2 handoff for '%s'\n", stage2_launch);
+        sceCdStop();
+        sceCdSync(0);
+    }
+
     i = (int)strlen(loader_args);
     if (use_gsm)
         loader_args[i++] = 'G';
@@ -1000,8 +1030,8 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
 #else
     (void)dev9_mode;
 #endif
-    if (disc_stop)
-        loader_args[i++] = 'S';
+    // Stage1 handles -disc_stop deterministically for supported paths.
+    // Do not pass stage2 'S' flag to avoid duplicate/ambiguous disc handling.
     if (skip_argv0)
         loader_args[i++] = 'A';
     loader_args[i] = '\0';

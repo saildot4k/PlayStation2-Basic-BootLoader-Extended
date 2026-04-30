@@ -16,7 +16,6 @@
 #include <iopcontrol_special.h>
 #include <kernel.h>
 #include <libcdvd-common.h>
-#include <libcdvd.h>
 #include <loadfile.h>
 #include <ps2sdkapi.h>
 #include <sifrpc.h>
@@ -131,8 +130,9 @@ static void stopDiscIfRequested() {
   if (!stopDiscAfterElfLoad)
     return;
 
-  sceCdStop();
-  sceCdSync(0);
+  // Keep stage2 footprint within bram: avoid pulling extra libcdvd symbols.
+  // Best-effort disc stop/deinit for handoff timing parity.
+  sceCdInit(SCECdEXIT);
 }
 
 // Loads an ELF file from the path specified in argv[0].

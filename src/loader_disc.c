@@ -17,6 +17,37 @@ static void AlarmCallback(s32 alarm_id, u16 time, void *common)
     iWakeupThread((int)common);
 }
 
+static int IsNoDiscOrDetecting(int disc_type)
+{
+    return (disc_type >= SCECdNODISC && disc_type < SCECdUNKNOWN);
+}
+
+static int IsLegacyMechaConForCdQuirk(void)
+{
+    uint8_t out_buffer[5] = {0};
+    u32 status = 0;
+    int mv;
+
+    if (!sceCdMV(out_buffer, &status) || (status & 0x80)) {
+        DPRINTF("%s: CDVD quirk check skipped (sceCdMV unavailable)\n", __func__);
+        return 0;
+    }
+
+    mv = (out_buffer[0] << 8) | out_buffer[1];
+    DPRINTF("%s: MechaCon version 0x%04x\n", __func__, mv);
+    return (mv < 0x0600);
+}
+
+static void ApplyLegacyCdLaunchQuirkFast(void)
+{
+    u32 status = 0;
+
+    DPRINTF("%s: applying <70k CDVD quirk (open tray, close after 500ms)\n", __func__);
+    sceCdTrayReq(SCECdTrayOpen, &status);
+    usleep(500000);
+    sceCdTrayReq(SCECdTrayClose, &status);
+}
+
 static int GetDiscConfigHintFromSource(int source)
 {
 #ifdef HDD
@@ -120,6 +151,8 @@ static void ParseDiscCommandOptions(int argc, char *argv[], DiscCommandOptions *
 int dischandler(int skip_ps2logo, int argc, char *argv[], int wait_for_disc)
 {
     int old_disc_type, disc_type, valid_disc_inserted, result, first_run = 1;
+    int disc_type_on_entry;
+    int apply_legacy_cd_quirk = 0;
     int cancel_requested = 0;
     int start_was_down;
     u64 start_hold_deadline = 0;
@@ -197,6 +230,9 @@ int dischandler(int skip_ps2logo, int argc, char *argv[], int wait_for_disc)
 
     valid_disc_inserted = 0;
     old_disc_type = -1;
+    disc_type_on_entry = sceCdGetDiskType();
+    if (!IsNoDiscOrDetecting(disc_type_on_entry) && IsLegacyMechaConForCdQuirk())
+        apply_legacy_cd_quirk = 1;
     start_was_down = (ReadCombinedPadStatus_raw() & PAD_START) ? 1 : 0;
     if (start_was_down)
         start_hold_deadline = Timer() + 150;
@@ -471,6 +507,15 @@ int dischandler(int skip_ps2logo, int argc, char *argv[], int wait_for_disc)
         SleepThread();
 
         return -1;
+    }
+
+    if (apply_legacy_cd_quirk &&
+        (disc_type == SCECdPSCD || disc_type == SCECdPSCDDA ||
+         disc_type == SCECdPS2CD || disc_type == SCECdPS2CDDA ||
+         disc_type == SCECdPS2DVD || disc_type == SCECdDVDV)) {
+        ApplyLegacyCdLaunchQuirkFast();
+        sceCdDiskReady(0);
+        disc_type = sceCdGetDiskType();
     }
 
     if (use_splash_ui) {
