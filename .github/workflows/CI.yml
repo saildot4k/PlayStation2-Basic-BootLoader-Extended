@@ -83,7 +83,7 @@ jobs:
 
       - name: Compile PSX-ALL-DRIVERS-LAZY-LOADING build
         run: |
-          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX-ALL-DRIVERS-LAZY-LOADING/ PSX_ALL_DRIVERS_LAZY_LOADING=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX-ALL-DRIVERS-LAZY-LOADING/ PSX_ALL_DRIVERS_LAZY_LOADING=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
       - name: list
         run: |

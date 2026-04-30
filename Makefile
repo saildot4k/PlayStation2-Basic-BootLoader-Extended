@@ -22,8 +22,8 @@ XCDVD_READKEY ?= 0 # Enable the newer sceCdReadKey checks, which are only suppor
 UDPTTY ?= 0 # printf over UDP
 PPCTTY ?= 0 # printf over PowerPC UART
 PRINTF ?= NONE
-override EMBED_PS1VN := 1 # always embed PS1VModeNegator (PS1VN)
-override EGSM_BUILD := 1 # always build the embedded PS2 stage2 eGSM runtime
+EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
+EGSM_BUILD ?= 1 # build the embedded stage2 eGSM runtime (0=disabled, 1=enabled)
 PSX_ALL_DRIVERS_LAZY_LOADING ?= 0
 BDM_ATA ?= 0
 DISC_STOP_AT_BOOT ?= 0 # stop optical disc after config bootstrap when booted from disc (disc-boot profile)

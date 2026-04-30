@@ -715,6 +715,7 @@ void ShowLaunchStatus(const char *path)
     if (!is_cdvd) {
         scr_setfontcolor(0x00ff00);
         scr_printf("  Loading %s\n", safe_path);
+        scr_setfontcolor(0xffffff);
         return;
     }
 
