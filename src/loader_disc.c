@@ -31,46 +31,92 @@ static int GetDiscConfigHintFromSource(int source)
     return PS2_DISC_HINT_MC0;
 }
 
-static void ParseDiscEgsmOverride(int argc, char *argv[], uint32_t *flags_out, const char **arg_out)
+typedef struct
+{
+    uint32_t egsm_flags;
+    const char *egsm_arg;
+    int skip_ps2logo;
+    int disable_gameid;
+    int ps1drv_fast;
+    int ps1drv_smooth;
+    int ps1drv_use_ps1vn;
+} DiscCommandOptions;
+
+static void ParseDiscCommandOptions(int argc, char *argv[], DiscCommandOptions *options_out)
 {
     int i;
 
-    if (flags_out != NULL)
-        *flags_out = 0;
-    if (arg_out != NULL)
-        *arg_out = NULL;
+    if (options_out != NULL)
+        memset(options_out, 0, sizeof(*options_out));
 
-    if (argc <= 0 || argv == NULL)
+    if (options_out == NULL || argc <= 0 || argv == NULL)
         return;
 
     for (i = 0; i < argc; i++) {
-        const char *value;
-        uint32_t flags;
+        const char *arg = argv[i];
 
-        if (argv[i] == NULL || strncmp(argv[i], "-gsm=", 5) != 0)
+        if (arg == NULL || arg[0] != '-')
             continue;
 
-        value = argv[i] + 5;
-        while (*value == ' ' || *value == '\t')
-            value++;
-
-        if (*value == '\0')
+        arg++;
+        while (*arg == ' ' || *arg == '\t')
+            arg++;
+        if (*arg == '\0')
             continue;
 
-        flags = parse_egsm_flags_common(value);
-        if (flags == 0) {
-            DPRINTF("Ignoring invalid disc command -gsm value '%s'\n", value);
+        if (ci_eq(arg, "nologo")) {
+            options_out->skip_ps2logo = 1;
             continue;
         }
+        if (ci_eq(arg, "nogameid")) {
+            options_out->disable_gameid = 1;
+            continue;
+        }
+        if (ci_eq(arg, "disc_stop")) {
+            DPRINTF("Ignoring unsupported CDVD command option '-disc_stop' (disc launch requires media online)\n");
+            continue;
+        }
+        if (ci_eq(arg, "ps1fast")) {
+            options_out->ps1drv_fast = 1;
+            continue;
+        }
+        if (ci_eq(arg, "ps1smooth")) {
+            options_out->ps1drv_smooth = 1;
+            continue;
+        }
+        if (ci_eq(arg, "ps1vneg")) {
+            options_out->ps1drv_use_ps1vn = 1;
+            continue;
+        }
+        if (ci_eq(arg, "dkwdrv") || ci_starts_with(arg, "dkwdrv=")) {
+            DPRINTF("Ignoring unsupported CDVD command option '-%s' (DKWDRV path launch is not implemented)\n",
+                    arg);
+            continue;
+        }
+        if (ci_starts_with(arg, "gsm=")) {
+            const char *value;
+            uint32_t flags;
 
-        if (flags_out != NULL)
-            *flags_out = flags;
-        if (arg_out != NULL)
-            *arg_out = value;
+            value = arg + 4;
+            while (*value == ' ' || *value == '\t')
+                value++;
+
+            if (*value == '\0')
+                continue;
+
+            flags = parse_egsm_flags_common(value);
+            if (flags == 0) {
+                DPRINTF("Ignoring invalid disc command -gsm value '%s'\n", value);
+                continue;
+            }
+
+            options_out->egsm_flags = flags;
+            options_out->egsm_arg = value;
+        }
     }
 }
 
-int dischandler(int skip_ps2logo, int argc, char *argv[])
+int dischandler(int skip_ps2logo, int argc, char *argv[], int wait_for_disc)
 {
     int old_disc_type, disc_type, valid_disc_inserted, result, first_run = 1;
     int cancel_requested = 0;
@@ -87,14 +133,32 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
     const char *source = "";
     const char *temp_celsius = NULL;
     const char *egsm_override_arg = NULL;
+    DiscCommandOptions disc_options;
     char disc_status[64];
     uint32_t egsm_override_flags = 0;
+    int effective_skip_ps2logo;
+    int effective_cdrom_disable_gameid;
+    int effective_ps1drv_enable_fast;
+    int effective_ps1drv_enable_smooth;
+    int effective_ps1drv_use_ps1vn;
     u32 stat;
 
-    ParseDiscEgsmOverride(argc, argv, &egsm_override_flags, &egsm_override_arg);
+    ParseDiscCommandOptions(argc, argv, &disc_options);
+    egsm_override_flags = disc_options.egsm_flags;
+    egsm_override_arg = disc_options.egsm_arg;
     if (egsm_override_flags != 0)
         DPRINTF("%s: using command -gsm override '%s' flags=0x%08x\n",
                 __func__, egsm_override_arg, (unsigned int)egsm_override_flags);
+
+    effective_skip_ps2logo = (skip_ps2logo != 0) ||
+                             (disc_options.skip_ps2logo != 0);
+    effective_cdrom_disable_gameid = (GLOBCFG.CDROM_DISABLE_GAMEID != 0) || (disc_options.disable_gameid != 0);
+    effective_ps1drv_enable_fast = (disc_options.ps1drv_fast != 0);
+    effective_ps1drv_enable_smooth = (disc_options.ps1drv_smooth != 0);
+    effective_ps1drv_use_ps1vn = (disc_options.ps1drv_use_ps1vn != 0);
+
+    if (!sceCdInit(SCECdINIT))
+        DPRINTF("%s: sceCdInit(SCECdINIT) failed, continuing with current CDVD state\n", __func__);
 
     use_splash_ui = SplashRenderIsActive();
 
@@ -105,7 +169,7 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
         dvdver = console_info.dvdver;
         source = console_info.source;
         temp_celsius = ConsoleInfoRefreshTemperature(&console_info);
-        SplashDrawCenteredStatusWithInfo("CDVD: Waiting for disc (START=Back)",
+        SplashDrawCenteredStatusWithInfo(wait_for_disc ? "CDVD: Waiting for disc (START=Back)" : "CDVD: Checking disc (AUTO)",
                                          0x00ffff,
                                          model,
                                          console_info.rom_fmt,
@@ -123,8 +187,12 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
         result = sceCdAutoAdjustCtrl(0, &stat);
     } while ((stat & 0x08) || (result == 0));
 
-    if (!use_splash_ui)
-        scr_printf("\tWaiting for disc to be inserted...\n\n");
+    if (!use_splash_ui) {
+        if (wait_for_disc)
+            scr_printf("\tWaiting for disc to be inserted...\n\n");
+        else
+            scr_printf("\tChecking disc for AUTO launch...\n\n");
+    }
 
     valid_disc_inserted = 0;
     old_disc_type = -1;
@@ -175,6 +243,10 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                         scr_setfontcolor(0x0000ff);
                         scr_printf("No Disc\n");
                         scr_setfontcolor(0xffffff);
+                    }
+                    if (!wait_for_disc) {
+                        DPRINTF("%s: AUTO disc command skipped (no disc)\n", __func__);
+                        return -1;
                     }
                     break;
 
@@ -260,6 +332,10 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                         scr_printf("Audio Disc (not supported by this program)\n");
                         scr_setfontcolor(0xffffff);
                     }
+                    if (!wait_for_disc) {
+                        DPRINTF("%s: AUTO disc command skipped (unsupported audio disc)\n", __func__);
+                        return -1;
+                    }
                     break;
 
                 case SCECdDVDV:
@@ -301,6 +377,10 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
                         scr_setfontcolor(0x0000ff);
                         scr_printf("Unknown (%d)\n", disc_type);
                         scr_setfontcolor(0xffffff);
+                    }
+                    if (!wait_for_disc) {
+                        DPRINTF("%s: AUTO disc command skipped (unknown disc type %d)\n", __func__, disc_type);
+                        return -1;
                     }
                     break;
             }
@@ -430,6 +510,11 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
         }
     }
 
+    GameIDSetConfig(GLOBCFG.APP_GAMEID, effective_cdrom_disable_gameid);
+    PS1DRVSetOptions(effective_ps1drv_enable_fast,
+                     effective_ps1drv_enable_smooth,
+                     effective_ps1drv_use_ps1vn);
+
     switch (disc_type) {
         case SCECdPSCD:
         case SCECdPSCDDA:
@@ -440,13 +525,16 @@ int dischandler(int skip_ps2logo, int argc, char *argv[])
         case SCECdPS2CDDA:
         case SCECdPS2DVD:
             PS2DiscSetConfigHint(GetDiscConfigHintFromSource(config_source));
-            PS2DiscBoot(skip_ps2logo, egsm_override_flags, egsm_override_arg);
+            PS2DiscBoot(effective_skip_ps2logo, egsm_override_flags, egsm_override_arg);
             break;
 
         case SCECdDVDV:
             DVDPlayerBoot();
             break;
     }
+
+    GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
+    PS1DRVSetOptions(0, 0, 0);
 
     return 0;
 }

@@ -9,9 +9,7 @@
 #define LOGO_DISPLAY_DEFAULT 3      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=banner+NAME
 #define DEFDELAY 30000              // default ammount of time this program will wait for a key press in ms/
 #define CDROM_DISABLE_GAMEID_DEFAULT 0
-#define PS1DRV_ENABLE_FAST_DEFAULT 0
-#define PS1DRV_ENABLE_SMOOTH_DEFAULT 0
-#define PS1DRV_USE_PS1VN_DEFAULT 0
+#define DISC_STOP_DEFAULT 0
 #ifdef PSX
 #define APP_GAMEID_DEFAULT 0
 #else
@@ -70,6 +68,13 @@ typedef enum
 
 extern const char *KEYS_ID[KEY_COUNT];
 
+typedef struct
+{
+    int key_index;
+    int entry_index; // Zero-based CONFIG_KEY_INDEXES slot.
+    const char *arg;
+} DefaultLaunchArgEntry;
+
 #ifdef PSX
 extern const char *DEFAULT_KEYNAMES_PSX[KEY_COUNT];
 #endif
@@ -83,13 +88,21 @@ extern const char *DEFAULT_KEYNAMES_PS2[KEY_COUNT];
 
 #ifdef PSX
 extern char *DEFPATH_PSX[];
+extern const DefaultLaunchArgEntry DEFAULT_LAUNCH_ARGS_PSX[];
+extern const int DEFAULT_LAUNCH_ARGS_PSX_COUNT;
 #endif
 extern char *DEFPATH_PS2[];
+extern const DefaultLaunchArgEntry DEFAULT_LAUNCH_ARGS_PS2[];
+extern const int DEFAULT_LAUNCH_ARGS_PS2_COUNT;
 
 #if defined(PSX)
 #define DEFPATH DEFPATH_PSX
+#define DEFAULT_LAUNCH_ARGS DEFAULT_LAUNCH_ARGS_PSX
+#define DEFAULT_LAUNCH_ARGS_COUNT DEFAULT_LAUNCH_ARGS_PSX_COUNT
 #else
 #define DEFPATH DEFPATH_PS2
+#define DEFAULT_LAUNCH_ARGS DEFAULT_LAUNCH_ARGS_PS2
+#define DEFAULT_LAUNCH_ARGS_COUNT DEFAULT_LAUNCH_ARGS_PS2_COUNT
 #endif
 
 #ifndef COMMIT_HASH

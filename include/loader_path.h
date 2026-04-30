@@ -16,7 +16,9 @@ typedef enum
 
 void LoaderPathSetModuleStates(int bdm_ready, int mx4sio_ready, int mmce_ready, int hdd_ready);
 void LoaderPathSetPendingCommandArgs(int argc, char *argv[]);
+void LoaderPathSetPendingCommandAutoMode(int auto_mode);
 int LoaderPathConsumeCdvdCancelled(void);
+int LoaderPathIsCommandToken(const char *path);
 LoaderPathFamily LoaderPathFamilyFromPath(const char *path);
 
 int LoaderAllowVirtualPatinfoEntry(int key_idx, int entry_idx, const char *path);

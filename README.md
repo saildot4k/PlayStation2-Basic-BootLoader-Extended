@@ -52,7 +52,7 @@ PS2BBL supports these launch/config path prefixes:
 - `hdd0:partition:pfs:/<path to elf>` __HDD builds__
 - `xfrom:/` paths __PSX DESR builds__
 - `ata:/`, `ilink:/` (BDM mass-storage roots) __not yet implemented__
-- `DISC_STOP_AT_BOOT=1` to stop optical disc spin at startup
+- `DISC_STOP_AT_BOOT=1` compile-time profile to always stop optical disc after config bootstrap
 
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.
@@ -82,12 +82,19 @@ Convert a PNG to the expected raw file:
 
 ### Retrogem Visual game ID
 - `APP_GAMEID = 1` enables visual game ID for apps/homebrew up to 11 characters derived from filename or PS1/2 Disc
-- `CDROM_DISABLE_GAMEID = 1` disables visual game ID for discs launched via `$CDVD`.
+- `CDROM_DISABLE_GAMEID = 1` disables visual game ID for discs launched via `cdrom`.
+
+### Disc spin control
+- Global key/value: `DISC_STOP = 0/1`
+- `DISC_STOP = 1` stops optical disc after config bootstrap when a config file was found.
+- `DISC_STOP = 0` (or omitted) keeps default behavior.
+- `-disc_stop` can be added per launch entry to stop disc after target ELF is loaded (stage2 handoff path for ELF launches).
 
 ### PS2LOGO patching (PS2 discs only)
-- `$CDVD` Runs disc with logo.  PS2BBL gets the target video mode from the disc's SYSTEM.CNF and patches PS2LOGO to always use the disc region instead of the console region, removing logo checksum check.
-- `$CDVD_NO_PS2LOGO` always boots PS2 discs directly (no logo).
-  - DECKARD IE 75K and later: Logo Patches are applied via PS2SDK XPARAM.IRX
+- Use `cdrom` as the launch entry path.
+- Add `-nologo` to the entry args to boot PS2 discs directly (skip `rom0:PS2LOGO`).
+- Without `-nologo`, PS2BBL runs disc via PS2LOGO and patches it to always use disc region and bypass logo checksum checks.
+- DECKARD IE 75K and later: XPARAM.IRX is applied automatically when needed for no-logo launches.
 
 ### Video Mode
 - `VIDEO_MODE = AUTO, NTSC, PAL, 480P` Will use PS2 default or force either of the other 3 modes.
@@ -100,18 +107,29 @@ Convert a PNG to the expected raw file:
   - `SELECT` save the currently selected mode to the active config file
   - `START` exit selector and continue to hotkey display
 
-### PS1DRV options (PS1 discs only)
-These apply only when launching a PS1 disc via `$CDVD` or `$CDVD_NO_PS2LOGO`.
-- `PS1DRV_ENABLE_FAST = 1` enables fast PS1 disc speed.
-- `PS1DRV_ENABLE_SMOOTH = 1` enables texture smoothing.
-- `PS1DRV_USE_PS1VN = 1` runs PS1DRV via PS1VModeNegator. This makes PS1 discs run in their repsective regions video mode. Useful for MechaPwn users where MechaPwn forces disc NTSC video. Modchip users may need to disable.
+### PS1 disc options (per launch)
+These apply per `cdrom` launch entry, not globally.
+- `-ps1fast` enables fast PS1 disc speed.
+- `-ps1smooth` enables texture smoothing.
+- `-ps1vneg` runs PS1DRV via PS1VModeNegator. Useful on setups where console mode and disc mode differ (for example some MechaPwn/modchip cases).
+
+### CDROM launch args
+For `LK_*_E* = cdrom`, supported args are:
+- `-nologo`
+- `-nogameid`
+- `-ps1fast`
+- `-ps1smooth`
+- `-ps1vneg`
+- `-gsm=<v[:c]>`
 
 ### App arguments
 Use `ARG_<BUTTON>_E? =` lines to pass args to an ELF (see INI examples).
 - Insert launched elf args first then append with desired internal PS2BBL args next (see below) [NHDDL](https://github.com/pcm720/nhddl) is a great candidate to use args, as it speeds up NHDDL boot.
 - `-titleid=SLUS_123.45` overrides the app title ID (up to 11 chars).
 - `-appid` forces app visual game ID even if `APP_GAMEID = 0`.
+- `-disc_stop` stops disc after target ELF is loaded (useful per entry without `DISC_STOP_AT_BOOT` builds).
 - `-gsm=<v[:c]>` runs the target ELF via embedded eGSM (ignored for `rom?:` paths). This must be the last arg if used.
+- `-disc_stop` is ignored for `cdrom` launch entries.
 - `-dev9=<mode>` sets DEV9/HDD policy before launching the target ELF. Supported modes:
   - `NICHDD` keeps both DEV9 (network adapter) and HDD powered/on.
   - `NIC` keeps DEV9/network on, unmounts `pfs0:`, and puts `hdd0:`/`hdd1:` into immediate idle.
@@ -141,7 +159,7 @@ ARG_R1_E1 = -mode=ata
 ```
 
 #### Argument precedence and order
-1. PS2BBL parses and consumes only trailing loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-gsm=`.
+1. PS2BBL parses and consumes only trailing loader-control args from `ARG_*`: `-appid`, `-titleid=`, `-dev9=`, `-patinfo`, `-disc_stop`, `-gsm=`.
 2. Parsing is bottom to top and stops at the first non-control arg (OSDMenu-style trailing behavior).
 4. For `:PATINFO` launch paths, PS2BBL parses partition-attribute `SYSTEM.CNF` and appends CNF `arg*` entries after user app arguments.
 5. If `-patinfo` is set and launch path contains `:PATINFO`, the first remaining user app argument becomes the target ELF path (overrides CNF boot path) and is removed from app argv. If no remaining argument exists, launch is aborted (OSDMenu parity), and CNF `BOOT2/BOOT/path` is not used.
@@ -179,7 +197,6 @@ ARG_TRIANGLE = -gsm=1080ix2
 ```
 
 ## Deprecated/Removed
-- ~~`SKIP_PS2LOGO`~~ Global config is deprecated from PS2BBLE because the above 2 options cover with and wthout logo.
 - ~~`RUNKELF`~~ PS2BBLE now handles launching elf/kelf internally without user needint to define kelf launch action.
 
 

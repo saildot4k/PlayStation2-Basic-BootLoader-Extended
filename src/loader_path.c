@@ -26,6 +26,7 @@ static int s_hdd_modules_loaded = 0;
 
 static int s_pending_command_argc = 0;
 static char **s_pending_command_argv = NULL;
+static int s_pending_command_auto_mode = 0;
 static int s_cdvd_cancelled = 0;
 
 #ifdef MX4SIO
@@ -56,6 +57,11 @@ void LoaderPathSetPendingCommandArgs(int argc, char *argv[])
     }
 }
 
+void LoaderPathSetPendingCommandAutoMode(int auto_mode)
+{
+    s_pending_command_auto_mode = (auto_mode != 0);
+}
+
 int LoaderPathConsumeCdvdCancelled(void)
 {
     int cancelled = s_cdvd_cancelled;
@@ -66,7 +72,15 @@ int LoaderPathConsumeCdvdCancelled(void)
 
 static int is_command_token(const char *path)
 {
-    return (path != NULL && path[0] == '$');
+    if (path == NULL)
+        return 0;
+
+    return (path[0] == '$' || ci_eq(path, "cdrom"));
+}
+
+int LoaderPathIsCommandToken(const char *path)
+{
+    return is_command_token(path);
 }
 
 static int preferred_mc_slot_char(void)
@@ -322,7 +336,7 @@ int LoaderPathCanAttemptNow(const char *path)
     int unit = -1;
     struct stat st;
 
-    if (path == NULL || *path == '\0' || path[0] == '$')
+    if (path == NULL || *path == '\0' || is_command_token(path))
         return 1;
     if (strchr(path, ':') == NULL)
         return 1;
@@ -791,13 +805,19 @@ char *CheckPath(const char *path)
     if (path == NULL)
         return path_buf;
 
-    if (path[0] == '$') {
+    if (is_command_token(path)) {
         s_cdvd_cancelled = 0;
 
-        if (!strcmp("$CDVD", path))
-            s_cdvd_cancelled = (dischandler(0, s_pending_command_argc, s_pending_command_argv) < 0);
+        if (ci_eq(path, "cdrom") || !strcmp("$CDVD", path))
+            s_cdvd_cancelled = (dischandler(0,
+                                            s_pending_command_argc,
+                                            s_pending_command_argv,
+                                            (s_pending_command_auto_mode == 0)) < 0);
         if (!strcmp("$CDVD_NO_PS2LOGO", path))
-            s_cdvd_cancelled = (dischandler(1, s_pending_command_argc, s_pending_command_argv) < 0);
+            s_cdvd_cancelled = (dischandler(1,
+                                            s_pending_command_argc,
+                                            s_pending_command_argv,
+                                            (s_pending_command_auto_mode == 0)) < 0);
 #ifdef HDD
         if (!strcmp("$HDDCHECKER", path))
             HDDChecker();

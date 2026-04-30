@@ -30,9 +30,7 @@ static const ConfigIntKey g_int_keys[] = {
     {"LOGO_DISPLAY", offsetof(CONFIG, LOGO_DISP)},
     {"CDROM_DISABLE_GAMEID", offsetof(CONFIG, CDROM_DISABLE_GAMEID)},
     {"APP_GAMEID", offsetof(CONFIG, APP_GAMEID)},
-    {"PS1DRV_ENABLE_FAST", offsetof(CONFIG, PS1DRV_ENABLE_FAST)},
-    {"PS1DRV_ENABLE_SMOOTH", offsetof(CONFIG, PS1DRV_ENABLE_SMOOTH)},
-    {"PS1DRV_USE_PS1VN", offsetof(CONFIG, PS1DRV_USE_PS1VN)},
+    {"DISC_STOP", offsetof(CONFIG, DISC_STOP)},
 };
 
 static int parse_scalar_int_key(const char *name, const char *value)
@@ -215,6 +213,49 @@ static int parse_launch_key_entry(const char *name, char *value, u32 *parsed_lau
     }
 
     return 0;
+}
+
+static void set_fallback_entry_args(const DefaultLaunchArgEntry *default_args, int default_arg_count)
+{
+    int arg_counts[KEY_COUNT][CONFIG_KEY_INDEXES];
+    int i;
+
+    memset(arg_counts, 0, sizeof(arg_counts));
+
+    if (default_args != NULL && default_arg_count > 0) {
+        for (i = 0; i < default_arg_count; i++) {
+            int key_index = default_args[i].key_index;
+            int entry_index = default_args[i].entry_index;
+            const char *arg = default_args[i].arg;
+
+            if (key_index < 0 || key_index >= KEY_COUNT ||
+                entry_index < 0 || entry_index >= CONFIG_KEY_INDEXES)
+                continue;
+            if (arg == NULL || *arg == '\0')
+                continue;
+
+            arg_counts[key_index][entry_index]++;
+        }
+    }
+
+    prepare_arg_storage_from_counts(arg_counts);
+
+    if (default_args == NULL || default_arg_count <= 0)
+        return;
+
+    for (i = 0; i < default_arg_count; i++) {
+        int key_index = default_args[i].key_index;
+        int entry_index = default_args[i].entry_index;
+        const char *arg = default_args[i].arg;
+
+        if (key_index < 0 || key_index >= KEY_COUNT ||
+            entry_index < 0 || entry_index >= CONFIG_KEY_INDEXES)
+            continue;
+        if (arg == NULL || *arg == '\0')
+            continue;
+
+        append_arg_entry(key_index, entry_index, (char *)arg);
+    }
 }
 
 static int path_is_legacy_mass_or_usb(const char *path)
@@ -1405,14 +1446,20 @@ int LoaderBootstrapConfigAndSplash(int *splash_early_presented_out,
     } else {
         const char *no_config_status = "Can't find config, loading hardcoded paths";
         char **default_paths = DEFPATH;
+        const DefaultLaunchArgEntry *default_args = DEFAULT_LAUNCH_ARGS;
+        int default_arg_count = DEFAULT_LAUNCH_ARGS_COUNT;
 
 #if defined(PSX)
-        if (!is_psx_desr)
+        if (!is_psx_desr) {
             default_paths = DEFPATH_PS2;
+            default_args = DEFAULT_LAUNCH_ARGS_PS2;
+            default_arg_count = DEFAULT_LAUNCH_ARGS_PS2_COUNT;
+        }
 #endif
         for (x = 0; x < KEY_COUNT; x++)
             for (j = 0; j < CONFIG_KEY_INDEXES; j++)
                 GLOBCFG.KEYPATHS[x][j] = default_paths[CONFIG_KEY_INDEXES * x + j];
+        set_fallback_entry_args(default_args, default_arg_count);
 
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);

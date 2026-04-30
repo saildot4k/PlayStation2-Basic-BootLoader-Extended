@@ -60,6 +60,25 @@ static void PollEmergencyComboWindow(u64 *window_deadline_ms)
         g_video_mode_selector_requested = 1;
 }
 
+static void StopDiscAfterConfigBootstrap(int config_source)
+{
+#ifdef DISC_STOP_AT_BOOT
+    // Disc-stop profile: always stop the drive after config bootstrap.
+    // Do not depend on argv[0] boot hints, which can be absent on disc boots.
+    DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
+    sceCdStop();
+    sceCdSync(0);
+#else
+    // Runtime profile: only stop disc when user config exists and enables it.
+    if (config_source == SOURCE_INVALID || GLOBCFG.DISC_STOP == 0)
+        return;
+
+    DPRINTF("DISC_STOP=1: stopping disc after config bootstrap\n");
+    sceCdStop();
+    sceCdSync(0);
+#endif
+}
+
 int main(int argc, char *argv[])
 {
     u32 STAT;
@@ -175,16 +194,7 @@ int main(int argc, char *argv[])
                                                    PollEmergencyComboWindow,
                                                    LoaderParseVideoModeValue,
                                                    LoaderApplyVideoMode);
-
-#ifdef DISC_STOP_AT_BOOT
-    {
-        // Disc-stop profile: always stop the drive after config bootstrap.
-        // Do not depend on argv[0] boot hints, which can be absent on disc boots.
-        DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
-        sceCdStop();
-        sceCdSync(0);
-    }
-#endif
+    StopDiscAfterConfigBootstrap(config_source);
 
     // Optional rescue flow: allow user to adjust VIDEO_MODE before launch dispatch.
     if (g_video_mode_selector_requested) {
@@ -200,7 +210,6 @@ int main(int argc, char *argv[])
     }
 
     GameIDSetConfig(GLOBCFG.APP_GAMEID, GLOBCFG.CDROM_DISABLE_GAMEID);
-    PS1DRVSetOptions(GLOBCFG.PS1DRV_ENABLE_FAST, GLOBCFG.PS1DRV_ENABLE_SMOOTH, GLOBCFG.PS1DRV_USE_PS1VN);
     if (GLOBCFG.LOGO_DISP > 0 || SplashRenderIsActive())
         SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
 

@@ -382,9 +382,10 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         if (entry_path == NULL || *entry_path == '\0')
                             continue;
 
-                        is_command = (entry_path[0] == '$');
+                        is_command = LoaderPathIsCommandToken(entry_path);
                         if (is_command) {
                             ShowLaunchStatus(entry_path);
+                            LoaderPathSetPendingCommandAutoMode(0);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         } else {
                             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
@@ -404,6 +405,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
 
                         if (is_command) {
                             LoaderPathSetPendingCommandArgs(0, NULL);
+                            LoaderPathSetPendingCommandAutoMode(0);
                             if (LoaderPathConsumeCdvdCancelled()) {
                                 command_cancelled = 1;
                                 if (SplashRenderIsActive())
@@ -492,9 +494,18 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             if (entry_path == NULL || *entry_path == '\0')
                 continue;
 
-            is_command = (entry_path[0] == '$');
-            if (is_command)
-                continue; // Don't execute commands without a key press.
+            is_command = LoaderPathIsCommandToken(entry_path);
+            if (is_command) {
+                ShowLaunchStatus(entry_path);
+                LoaderPathSetPendingCommandAutoMode(1);
+                LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
+                execpaths[j] = CheckPath(entry_path);
+                LoaderPathSetPendingCommandArgs(0, NULL);
+                LoaderPathSetPendingCommandAutoMode(0);
+                if (LoaderPathConsumeCdvdCancelled())
+                    continue;
+                continue;
+            }
             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
             if (ensure_family_result < 0)
                 continue;

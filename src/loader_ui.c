@@ -54,7 +54,7 @@ static int IsCdvdCommandToken(const char *path)
 {
     if (path == NULL)
         return 0;
-    return (!strcmp(path, "$CDVD") || !strcmp(path, "$CDVD_NO_PS2LOGO"));
+    return (ci_eq(path, "cdrom") || !strcmp(path, "$CDVD") || !strcmp(path, "$CDVD_NO_PS2LOGO"));
 }
 
 static void SplashDrawStatusBelowLogo(const char *text, u32 color)

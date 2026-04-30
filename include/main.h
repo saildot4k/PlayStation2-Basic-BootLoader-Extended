@@ -76,9 +76,7 @@ typedef struct
     int LOGO_DISP; // 0=off, 1=console info, 2=logo+info, 3=banner+names.
     int CDROM_DISABLE_GAMEID;
     int APP_GAMEID;
-    int PS1DRV_ENABLE_FAST;
-    int PS1DRV_ENABLE_SMOOTH;
-    int PS1DRV_USE_PS1VN;
+    int DISC_STOP;
     int VIDEO_MODE;
 } CONFIG;
 
@@ -145,7 +143,7 @@ char *CheckPath(const char *path);
 int LoaderGetConfigSource(void);
 const char *LoaderGetResolvedConfigPath(void);
 const char *LoaderGetRequestedConfigPath(void);
-int dischandler(int skip_ps2logo, int argc, char *argv[]);
+int dischandler(int skip_ps2logo, int argc, char *argv[], int wait_for_disc);
 // There is no need to call this on a PSX DESR since OSDSYS performs it at boot.
 void CDVDBootCertify(u8 romver[16]);
 int credits(void);

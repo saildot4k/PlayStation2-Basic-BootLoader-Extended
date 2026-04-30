@@ -11,26 +11,26 @@ export HEADER
 
 
 # ---{BUILD CFG}--- #
-HAS_EMBED_IRX ?= 1 # whether to embed or not non vital IRX (wich will be loaded from memcard files)
+HAS_EMBED_IRX ?= 1                  # whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
-PSX ?= 0 # PSX DESR support
-HDD ?= 0 # Internal HDD support
+PSX ?= 0                            # PSX DESR support
+HDD ?= 0                            # Internal HDD support
 MMCE ?= 0
 MX4SIO ?= 0
-PROHBIT_DVD_0100 ?= 0 # prohibit the DVD Players v1.00 and v1.01 from being booted.
-XCDVD_READKEY ?= 0 # Enable the newer sceCdReadKey checks, which are only supported by a newer CDVDMAN module.
-UDPTTY ?= 0 # printf over UDP
-PPCTTY ?= 0 # printf over PowerPC UART
+PROHBIT_DVD_0100 ?= 0               # prohibit the DVD Players v1.00 and v1.01 from being booted.
+XCDVD_READKEY ?= 0                  # Enable the newer sceCdReadKey checks, which are only supported by a newer CDVDMAN module.
+UDPTTY ?= 0                         # printf over UDP
+PPCTTY ?= 0                         # printf over PowerPC UART
 PRINTF ?= NONE
-EMBED_PS1VN ?= 1 # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
-EGSM_BUILD ?= 1 # build the embedded stage2 eGSM runtime (0=disabled, 1=enabled)
-PSX_ALL_DRIVERS_LAZY_LOADING ?= 0
+EMBED_PS1VN ?= 1                    # embed PS1VModeNegator (PS1VN) for PS1 discs; set 0 to load external PS1VN.ELF
+EGSM_BUILD ?= 1                     # build the embedded stage2 eGSM runtime (0=disabled, 1=enabled)
+PSX_ALL_DRIVERS_LAZY_LOADING ?= 1
 BDM_ATA ?= 0
-DISC_STOP_AT_BOOT ?= 0 # stop optical disc after config bootstrap when booted from disc (disc-boot profile)
+DISC_STOP_AT_BOOT ?= 0              # stop optical disc after config bootstrap when booted from disc (disc-boot profile)
 
-HOMEBREW_IRX ?= 0 # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
-FILEXIO_NEED ?= 0 # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
-DEV9_NEED ?= 0    # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
+HOMEBREW_IRX ?= 0                   # if we need homebrew SIO2MAN, MCMAN, MCSERV & PADMAN embedded, else, builtin console drivers are used
+FILEXIO_NEED ?= 0                   # if we need filexio and imanx loaded for other features (HDD, mx4sio, etc)
+DEV9_NEED ?= 0                      # if we need DEV9 loaded for other features (HDD, UDPTTY, etc)
 
 # Related to binary size reduction (it disables some features, please be sure you won't disable something you need)
 KERNEL_NOPATCH = 0

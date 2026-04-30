@@ -114,17 +114,17 @@ const char *KEYS_ID[KEY_COUNT] = {
 /** default paths used if config file can't be loaded */
 #ifdef PSX
     char *DEFPATH_PSX[] = {
-        "usb:/RESCUE.ELF", // AUTO [0]
-        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
+        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF", // AUTO [0]
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "usb:/RESCUE.ELF",
         "",
         "",
         "",
         "",
         "",
-        "$CDVD_NO_PS2LOGO", // SELECT [CONFIG_KEY_INDEXES * 1]
+        "cdrom", // SELECT [CONFIG_KEY_INDEXES * 1]
         "",
         "",
         "",
@@ -144,8 +144,8 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf", // R3 [CONFIG_KEY_INDEXES * 3]
-        "mmce?:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
+        "mmce?:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf", // R3 [CONFIG_KEY_INDEXES * 3]
+        "usb:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
         "mx4sio:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
         "",
         "",
@@ -154,7 +154,7 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "$CDVD", // START [CONFIG_KEY_INDEXES *4]
+        "cdrom", // START [CONFIG_KEY_INDEXES *4]
         "",
         "",
         "",
@@ -164,9 +164,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/OSDXMB/OSDXMB.ELF", // UP [CONFIG_KEY_INDEXES * 5]
+        "mc?:/APP_OSDXMB/OSDXMB.ELF", // UP [CONFIG_KEY_INDEXES * 5]
         "mmce?:/OSDXMB/OSDXMB.ELF",
-        "mc?:/APP_OSDXMB/OSDXMB.ELF",
+        "usb:/OSDXMB/OSDXMB.ELF",
         "",
         "",
         "",
@@ -174,8 +174,8 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/RETROLauncher/RETROLauncher.elf", // RIGHT [CONFIG_KEY_INDEXES * 6]
-        "mmce?:/RETROLauncher/RETROLauncher.elf",
+        "mmce?:/RETROLauncher/RETROLauncher.elf", // RIGHT [CONFIG_KEY_INDEXES * 6]
+        "usb:/RETROLauncher/RETROLauncher.elf",
         "",
         "",
         "",
@@ -204,19 +204,19 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/RESCUE.ELF", // L2 [CONFIG_KEY_INDEXES * 9]
-        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
+        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF", // L2 [CONFIG_KEY_INDEXES * 9]
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "usb:/RESCUE.ELF",
         "",
         "",
         "",
         "",
         "",
-        "usb:/APPS/APP_OPL/OPL.ELF", // R2 [CONFIG_KEY_INDEXES * 10]
+        "mc?:/APP_OPL/OPL.ELF", // R2 [CONFIG_KEY_INDEXES * 10]
         "mmce?:/APPS/APP_OPL/OPL.ELF",
-        "mc?:/APP_OPL/OPL.ELF",
+        "usb:/APPS/APP_OPL/OPL.ELF",
         "",
         "",
         "",
@@ -234,9 +234,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/NEUTRINO/nhddl.elf", // R1 [CONFIG_KEY_INDEXES * 12]
+        "mc?:/APP_NHDDL/nhddl.elf", // R1 [CONFIG_KEY_INDEXES * 12]
         "mmce?:/NEUTRINO/nhddl.elf",
-        "mc?:/APP_NHDDL/nhddl.elf",
+        "usb:/NEUTRINO/nhddl.elf",
         "",
         "",
         "",
@@ -244,21 +244,21 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/RESCUE.ELF", // TRIANGLE [CONFIG_KEY_INDEXES * 13]
-        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
+        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF", // TRIANGLE [CONFIG_KEY_INDEXES * 13]
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "usb:/RESCUE.ELF",
         "",
         "",
         "",
         "",
         "",
-        "usb:/RESCUE.ELF", // CIRCLE [CONFIG_KEY_INDEXES * 14]
-        "mc?:/BOOT/BOOT2.ELF",
+        "mc?:/BOOT/BOOT2.ELF", // CIRCLE [CONFIG_KEY_INDEXES * 14]
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
+        "usb:/RESCUE.ELF",
         "",
         "",
         "",
@@ -274,10 +274,10 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/APPS/PS1_POPSLOADER/POPSLOADER.ELF", // SQUARE [CONFIG_KEY_INDEXES * 16]
+        "mc?:/PS1_POPSLOADER/POPSLOADER.ELF", // SQUARE [CONFIG_KEY_INDEXES * 16]
         "mmce?:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
-        "mc?:/PS1_POPSLOADER/POPSLOADER.ELF",
-        "",
+        "usb:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
+        "mx4sio:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
         "",
         "",
         "",
@@ -297,7 +297,7 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "$CDVD_NO_PS2LOGO", // SELECT [CONFIG_KEY_INDEXES * 1]
+        "cdrom", // SELECT [CONFIG_KEY_INDEXES * 1]
         "",
         "",
         "",
@@ -317,8 +317,8 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf", // R3 [CONFIG_KEY_INDEXES * 3]
-        "mmce?:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
+        "mmce?:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf", // R3 [CONFIG_KEY_INDEXES * 3]
+        "usb:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
         "mx4sio:/APPS/SYS_R3CONFIGURATOR/r3configurator.elf",
         "",
         "",
@@ -327,7 +327,7 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "$CDVD", // START [CONFIG_KEY_INDEXES * 4]
+        "cdrom", // START [CONFIG_KEY_INDEXES * 4]
         "",
         "",
         "",
@@ -337,9 +337,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/OSDXMB/OSDXMB.ELF", // UP [CONFIG_KEY_INDEXES * 5]
+        "mc?:/APP_OSDXMB/OSDXMB.ELF", // UP [CONFIG_KEY_INDEXES * 5]
         "mmce?:/OSDXMB/OSDXMB.ELF",
-        "mc?:/APP_OSDXMB/OSDXMB.ELF",
+        "usb:/OSDXMB/OSDXMB.ELF",
         "",
         "",
         "",
@@ -347,8 +347,8 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/RETROLauncher/RETROLauncher.elf", // RIGHT [CONFIG_KEY_INDEXES * 6]
-        "mmce?:/RETROLauncher/RETROLauncher.elf",
+        "mmce?:/RETROLauncher/RETROLauncher.elf", // RIGHT [CONFIG_KEY_INDEXES * 6]
+        "usb:/RETROLauncher/RETROLauncher.elf",
         "",
         "",
         "",
@@ -387,9 +387,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/APPS/APP_OPL/OPL.ELF", // R2 [CONFIG_KEY_INDEXES * 10]
+        "mc?:/APP_OPL/OPL.ELF", // R2 [CONFIG_KEY_INDEXES * 10]
         "mmce?:/APPS/APP_OPL/OPL.ELF",
-        "mc?:/APP_OPL/OPL.ELF",
+        "usb:/APPS/APP_OPL/OPL.ELF",
         "",
         "",
         "",
@@ -407,9 +407,9 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/NEUTRINO/nhddl.elf", // R1 [CONFIG_KEY_INDEXES * 12]
+        "mc?:/APP_NHDDL/nhddl.elf", // R1 [CONFIG_KEY_INDEXES * 12]
         "mmce?:/NEUTRINO/nhddl.elf",
-        "mc?:/APP_NHDDL/nhddl.elf",
+        "usb:/NEUTRINO/nhddl.elf",
         "",
         "",
         "",
@@ -417,21 +417,21 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/RESCUE.ELF", // TRIANGLE [CONFIG_KEY_INDEXES * 13]
-        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
+        "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF", // TRIANGLE [CONFIG_KEY_INDEXES * 13]
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/BOOT/BOOT2.ELF",
+        "usb:/RESCUE.ELF",
         "",
         "",
         "",
         "",
         "",
-        "usb:/RESCUE.ELF", // CIRCLE [CONFIG_KEY_INDEXES * 14]
-        "mc?:/BOOT/BOOT2.ELF",
+        "mc?:/BOOT/BOOT2.ELF", // CIRCLE [CONFIG_KEY_INDEXES * 14]
         "mc?:/APP_WLE-ISR-XF/WLE-ISR-XF.ELF",
         "mc?:/APP_WLE-ISR-XF-MX/WLE-ISR-XF-MX.ELF",
         "mc?:/APP_WLE-ISR-XF-MM/WLE-ISR-XF-MM.ELF",
+        "usb:/RESCUE.ELF",
         "",
         "",
         "",
@@ -447,10 +447,10 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "usb:/APPS/PS1_POPSLOADER/POPSLOADER.ELF", // SQUARE [CONFIG_KEY_INDEXES * 16]
+        "mc?:/PS1_POPSLOADER/POPSLOADER.ELF", // SQUARE [CONFIG_KEY_INDEXES * 16]
         "mmce?:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
-        "mc?:/PS1_POPSLOADER/POPSLOADER.ELF",
-        "",
+        "usb:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
+        "mx4sio:/APPS/PS1_POPSLOADER/POPSLOADER.ELF",
         "",
         "",
         "",
@@ -458,4 +458,16 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
     };
+
+#ifdef PSX
+const DefaultLaunchArgEntry DEFAULT_LAUNCH_ARGS_PSX[] = {
+    {SELECT, 0, "-nologo"},
+};
+const int DEFAULT_LAUNCH_ARGS_PSX_COUNT = sizeof(DEFAULT_LAUNCH_ARGS_PSX) / sizeof(DEFAULT_LAUNCH_ARGS_PSX[0]);
+#endif
+
+const DefaultLaunchArgEntry DEFAULT_LAUNCH_ARGS_PS2[] = {
+    {SELECT, 0, "-nologo"},
+};
+const int DEFAULT_LAUNCH_ARGS_PS2_COUNT = sizeof(DEFAULT_LAUNCH_ARGS_PS2) / sizeof(DEFAULT_LAUNCH_ARGS_PS2[0]);
 

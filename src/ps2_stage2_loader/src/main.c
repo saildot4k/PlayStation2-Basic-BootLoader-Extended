@@ -16,6 +16,7 @@
 #include <iopcontrol_special.h>
 #include <kernel.h>
 #include <libcdvd-common.h>
+#include <libcdvd.h>
 #include <loadfile.h>
 #include <ps2sdkapi.h>
 #include <sifrpc.h>
@@ -83,6 +84,8 @@ static char *elfPath = NULL;
 static uint32_t eGSMFlags = 0;
 // Whether app argv should start with argv[1]
 static uint32_t skipArgv0 = 0;
+// Whether disc should be stopped right after target ELF is loaded
+static uint32_t stopDiscAfterElfLoad = 0;
 
 // Resets IOP
 void resetIOP();
@@ -124,6 +127,14 @@ int ensureFileXioReady() {
   return 0;
 }
 
+static void stopDiscIfRequested() {
+  if (!stopDiscAfterElfLoad)
+    return;
+
+  sceCdStop();
+  sceCdSync(0);
+}
+
 // Loads an ELF file from the path specified in argv[0].
 // The loader's behavior can be altered by an optional last command-line argument (argv[argc-1]).
 // This argument should begin with "-la=", followed by one or more letters that modify the loader's behavior:
@@ -133,6 +144,7 @@ int ensureFileXioReady() {
 //   - 'I': The argv[argc-2] argument contains IOPRP image path (for HDD, the path must be a pfs: path on the same partition as the ELF file)
 //   - 'E': The argv[argc-2] argument contains ELF memory location to use instead of argv[0]
 //   - 'A': Do not pass argv[0] to the target ELF and start with argv[1]
+//   - 'S': Stop disc after target ELF has been loaded (before ExecPS2)
 //   - 'G': Force video mode via eGSM. The argv[argc-2] argument contains eGSM arguments:
 //          The argument format is inherited from Neutrino GSM and defined as `v[:c]`, where
 //          v — video mode:
@@ -199,6 +211,9 @@ int main(int argc, char *argv[]) {
         break;
       case 'A':
         skipArgv0 = 1;
+        break;
+      case 'S':
+        stopDiscAfterElfLoad = 1;
         break;
       default:
       }
@@ -298,6 +313,8 @@ int loadEmbeddedELF(int argc, char *argv[]) {
   if (entry < 0)
     return -1;
 
+  stopDiscIfRequested();
+
 #if EGSM_BUILD
   if (eGSMFlags)
     enableGSM(eGSMFlags);
@@ -344,6 +361,7 @@ int loadELFFromFile(int argc, char *argv[]) {
 
   FlushCache(0);
   FlushCache(2);
+  stopDiscIfRequested();
 
   // Shutdown DEV9
   shutdownDEV9(dev9ShutdownType);

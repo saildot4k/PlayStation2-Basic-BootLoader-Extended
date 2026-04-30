@@ -50,6 +50,7 @@ typedef struct
     char *title_override;
     int force_appid;
     int use_patinfo_path;
+    int disc_stop;
     int skip_argv0;
     int dev9_mode;
     uint32_t gsm_flags;
@@ -637,6 +638,7 @@ static void LaunchIntentInit(LaunchIntent *intent, const char *default_launch)
     intent->title_override = NULL;
     intent->force_appid = 0;
     intent->use_patinfo_path = 0;
+    intent->disc_stop = 0;
     intent->skip_argv0 = 0;
     intent->dev9_mode = DEV9_DEFAULT;
     intent->gsm_flags = 0;
@@ -710,6 +712,11 @@ static int ParseLaunchControlArgs(LaunchIntent *intent, int argc, char *argv[])
         }
         if (strcmp(argv[i], "-patinfo") == 0) {
             intent->use_patinfo_path = 1;
+            argc--;
+            continue;
+        }
+        if (strcmp(argv[i], "-disc_stop") == 0) {
+            intent->disc_stop = 1;
             argc--;
             continue;
         }
@@ -928,6 +935,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
                                  const char *ioprp_arg,
                                  const char *elf_mem_arg,
                                  int dev9_mode,
+                                 int disc_stop,
                                  int skip_argv0)
 {
     char loader_args[16] = "-la=";
@@ -992,6 +1000,8 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
 #else
     (void)dev9_mode;
 #endif
+    if (disc_stop)
+        loader_args[i++] = 'S';
     if (skip_argv0)
         loader_args[i++] = 'A';
     loader_args[i] = '\0';
@@ -1354,6 +1364,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                                   NULL,
                                   NULL,
                                   intent.dev9_mode,
+                                  intent.disc_stop,
                                   intent.skip_argv0) == 0) {
             free(launch_argv_owned);
             LaunchIntentRelease(&intent);
@@ -1379,6 +1390,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                                       stage2_ioprp_arg,
                                       stage2_elf_arg,
                                       intent.dev9_mode,
+                                      intent.disc_stop,
                                       intent.skip_argv0) == 0) {
                 free(launch_argv_owned);
                 LaunchIntentRelease(&intent);
@@ -1404,6 +1416,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                                   stage2_ioprp_arg,
                                   stage2_elf_arg,
                                   intent.dev9_mode,
+                                  intent.disc_stop,
                                   intent.skip_argv0) == 0) {
             free(launch_argv_owned);
             LaunchIntentRelease(&intent);
