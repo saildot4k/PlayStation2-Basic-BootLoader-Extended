@@ -11,7 +11,7 @@ export HEADER
 
 
 # ---{BUILD CFG}--- #
-HAS_EMBED_IRX ?= 1# whether to embed or not non vital IRX (wich will be loaded from memcard files)
+HAS_EMBED_IRX ?= 1 # whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
 PSX ?= 0 # PSX DESR support
 HDD ?= 0 # Internal HDD support
