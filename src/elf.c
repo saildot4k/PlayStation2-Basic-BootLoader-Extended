@@ -800,10 +800,25 @@ static int ApplyPatinfoLaunchOverride(LaunchIntent *intent,
 static void apply_dev9_policy(int dev9_mode)
 {
 #if defined(HDD) && defined(FILEXIO)
-    if (dev9_mode == 1) { // NIC
-        fileXioUmount("pfs0:");
-        fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
-        fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+    // Mirror stage2/OSDMenu DEV9 semantics:
+    // - default (ALL): unmount pfs0 + idle HDD + power off DEV9
+    // - NIC (HDD):    unmount pfs0 + idle HDD
+    // - NICHDD (NONE): unmount pfs0 only
+    fileXioUmount("pfs0:");
+
+    switch (dev9_mode) {
+        case DEV9_NIC:
+            fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+            fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+            break;
+        case DEV9_NICHDD:
+            break;
+        case DEV9_DEFAULT:
+        default:
+            fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+            fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+            fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0);
+            break;
     }
 #else
     (void)dev9_mode;
@@ -1096,6 +1111,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #endif
     int i;
     int show_app_id;
+    int launch_is_rom;
     int patinfo_no_history = 0;
     int patinfo_override_used = 0;
 #ifdef HDD
@@ -1315,14 +1331,13 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         }
     }
 
+    launch_is_rom = path_is_rom_binary(intent.launch_filename);
+
 #if EGSM_BUILD
-    // For plain launches (no -gsm), prefer stage2 for standard non-ROM paths and
-    // for mounted HDD pfs: paths when a partition context is available.
-    // If stage2 fails, we still fall back to direct launcher behavior below.
+    // For plain launches (no -gsm), require stage2 for non-ROM paths.
     if (!force_stage2_without_gsm &&
         intent.gsm_flags == 0 &&
-        (effective_party == NULL || path_is_pfs_prefix(intent.launch_filename)) &&
-        !path_is_rom_binary(intent.launch_filename)) {
+        !launch_is_rom) {
         if (RunLoaderElfViaStage2(intent.launch_filename,
                                   effective_party,
                                   launch_argc,
@@ -1339,12 +1354,12 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #endif
             return;
         }
-        DPRINTF("Unable to hand off plain launch to embedded stage2; falling back to direct launch\n");
+        DPRINTF("Unable to hand off plain non-ROM launch to embedded stage2\n");
     }
 #endif
 
     if (intent.gsm_flags != 0) {
-        if (path_is_rom_binary(intent.launch_filename)) {
+        if (launch_is_rom) {
             DPRINTF("Ignoring -gsm for ROM path '%s'\n", intent.launch_filename);
         } else {
 #if EGSM_BUILD
@@ -1364,7 +1379,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #endif
                 return;
             }
-            DPRINTF("Unable to hand off -gsm launch to embedded stage2; continuing without eGSM\n");
+            DPRINTF("Unable to hand off -gsm launch to embedded stage2\n");
 #else
             DPRINTF("Ignoring -gsm (eGSM build disabled): flags 0x%08x\n", (unsigned int)intent.gsm_flags);
 #endif
@@ -1389,18 +1404,25 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #endif
             return;
         }
-        DPRINTF("PATINFO: unable to hand off launch to embedded stage2; continuing with direct launch\n");
+        DPRINTF("PATINFO: unable to hand off launch to embedded stage2\n");
 #else
         DPRINTF("PATINFO: stage2 handoff required but EGSM_BUILD is disabled\n");
 #endif
     }
 
-    if (intent.dev9_mode == DEV9_NIC) {
-        DPRINTF("Applying -dev9=NIC (idle HDD, keep DEV9 on)\n");
-    } else if (intent.dev9_mode == DEV9_NICHDD) {
-        DPRINTF("Applying -dev9=NICHDD (keep HDD and DEV9 on)\n");
+#if EGSM_BUILD
+    // Keep direct launcher usage as emergency-only behavior:
+    // for non-ROM entries, require successful stage2 handoff.
+    if (!launch_is_rom) {
+        DPRINTF("Stage2 handoff failed for non-ROM launch '%s'; aborting direct fallback\n", intent.launch_filename);
+        free(launch_argv_owned);
+        LaunchIntentRelease(&intent);
+#ifdef HDD
+        PatinfoOptionsRelease(&patinfo_opts);
+#endif
+        return;
     }
-    apply_dev9_policy(intent.dev9_mode);
+#endif
 
     if (intent.skip_argv0 && launch_argc > 0 && !force_stage2) {
         launch_argc--;
@@ -1416,6 +1438,17 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         DBGWAIT(2);
         LoadELFFromFileWithPartition(intent.launch_filename, effective_party, launch_argc, launch_argv);
     }
+
+    // Keep direct-fallback launch order safe: unlike stage2, these helpers
+    // combine loading + execution. Apply DEV9 policy only if control returns.
+    if (intent.dev9_mode == DEV9_NIC) {
+        DPRINTF("Applying direct-fallback -dev9=NIC policy (idle HDD, keep DEV9 on)\n");
+    } else if (intent.dev9_mode == DEV9_NICHDD) {
+        DPRINTF("Applying direct-fallback -dev9=NICHDD policy (keep HDD and DEV9 on)\n");
+    } else {
+        DPRINTF("Applying direct-fallback default DEV9 policy (ShutdownType_All)\n");
+    }
+    apply_dev9_policy(intent.dev9_mode);
 
     free(launch_argv_owned);
     LaunchIntentRelease(&intent);

@@ -23,6 +23,9 @@ static int s_boot_config_source_hint = SOURCE_INVALID;
 #ifdef DEV9
 static int dev9_loaded = 0;
 #endif
+#ifdef FILEXIO
+static int s_fio_loaded = 0;
+#endif
 
 static int starts_with(const char *s, const char *prefix)
 {
@@ -542,6 +545,11 @@ static int load_core_modules(void)
         loadUDPTTY();
 #endif
 
+#ifdef FILEXIO
+    if (LoadFIO() < 0)
+        DPRINTF(" [CORE_FIO]: failed to load IOMANX/FILEXIO; will retry when needed\n");
+#endif
+
 #ifdef USE_ROM_SIO2MAN
     j = SifLoadStartModule("rom0:SIO2MAN", 0, NULL, &x);
     DPRINTF(" [SIO2MAN]: ID=%d, ret=%d\n", j, x);
@@ -929,6 +937,9 @@ static int reload_for_family(LoaderPathFamily family,
 #ifdef DEV9
         dev9_loaded = 0;
 #endif
+#ifdef FILEXIO
+        s_fio_loaded = 0;
+#endif
     }
 
     reset_module_flags();
@@ -1269,6 +1280,10 @@ int LookForBDMDevice(void)
 int LoadFIO(void)
 {
     int ID, RET;
+
+    if (s_fio_loaded)
+        return 0;
+
     ID = SifExecModuleBuffer(&iomanX_irx, size_iomanX_irx, 0, NULL, &RET);
     DPRINTF(" [IOMANX]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
@@ -1282,6 +1297,10 @@ int LoadFIO(void)
 
     RET = fileXioInit();
     DPRINTF("fileXioInit: %d\n", RET);
+    if (RET < 0)
+        return -3;
+
+    s_fio_loaded = 1;
     return 0;
 }
 #endif
