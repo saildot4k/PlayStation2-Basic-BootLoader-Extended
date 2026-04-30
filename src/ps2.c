@@ -810,7 +810,9 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
     int deckard_xparam_applied = 0;
     char *args[2];
     char *osdgsm_arg = NULL;
+#if EGSM_BUILD
     uint32_t osdgsm_flags = 0;
+#endif
     const unsigned char *pChar;
     const char *cnf_start, *cnf_end;
     int fd, size, size_remaining, size_read;

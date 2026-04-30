@@ -18,6 +18,7 @@
 #include "OSDHistory.h"
 #include "game_id.h"
 #ifndef EMBED_PS1VN
+#include "loader_path.h"
 #include "util.h"
 #endif
 

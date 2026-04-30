@@ -380,6 +380,7 @@ static int read_patinfo_system_cnf(const char *launch_path, PatinfoCnfOptions *o
     return 0;
 }
 
+#if EGSM_BUILD
 static int read_patinfo_payload(const char *launch_path, int read_ioprp, void *dst_mem, uint32_t *size_out)
 {
     char partition_path[128];
@@ -452,6 +453,7 @@ static int read_patinfo_payload(const char *launch_path, int read_ioprp, void *d
             (unsigned int)payload.size);
     return 0;
 }
+#endif
 #endif
 
 static int arg_eq_ci(const char *a, const char *b)
@@ -1101,8 +1103,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     char **launch_argv_owned = NULL;
     int launch_argv_capacity;
     const char *effective_party = NULL;
+#if EGSM_BUILD
     char *stage2_ioprp_arg = NULL;
     char *stage2_elf_arg = NULL;
+#endif
     int force_stage2 = 0;
     int force_stage2_without_gsm = 0;
 #if EGSM_BUILD && defined(HDD)
@@ -1260,7 +1264,11 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 force_stage2_without_gsm = 1;
 #endif
             } else {
+#if EGSM_BUILD
                 stage2_ioprp_arg = patinfo_opts.ioprp_path;
+#else
+                DPRINTF("PATINFO: IOPRP path requires EGSM_BUILD; stage2 handoff unavailable\n");
+#endif
                 force_stage2 = 1;
                 force_stage2_without_gsm = 1;
             }
