@@ -62,7 +62,7 @@ static void PollEmergencyComboWindow(u64 *window_deadline_ms)
 
 static int StopDiscWithRetry(const char *reason)
 {
-    const int max_attempts = 20;
+    const int max_attempts = 40;
     const useconds_t retry_delay_us = 100000;
     int attempt;
 
