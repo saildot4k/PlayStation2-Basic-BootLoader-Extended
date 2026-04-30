@@ -28,18 +28,18 @@ Edit config file as as needed. Recommended to [R3Configurator](https://github.co
 Config search is now boot-family aware to avoid loading unnecessary drivers at startup:
 
 1. `CONFIG.INI` (CWD: Current Working Directory)
-2. Boot-family config path (if applicable):
+2. When loaded from device:
    - MMCE boot: `mmce?:/PS2BBL/CONFIG.INI`
    - MX4SIO boot: `mx4sio:/PS2BBL/CONFIG.INI`
    - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
-   - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI` / `ilink:/PS2BBL/CONFIG.INI` (based on boot root)
-   - PSX DESR xfrom boot: `xfrom:/PS2BBL/CONFIG.INI`
-3. CD enumerator fallback:
-   - `enumerator:/PS2BBL/CONFIG.INI`
-   - only probed when booting from disc (`cdrom*`/`enumerator*` boot path)
+   - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI`
+3. PSX DESR Specific
+   - `xfrom:/PS2BBL/CONFIG.INI`
 4. Memory card fallback:
    - `mc?:/SYS-CONF/PS2BBL.INI`
-   - `mc?:/SYS-CONF/PSXBBL.INI`
+   - `mc?:/SYS-CONF/PSXBBL.INI` _PSX Specific_
+5. When compiled with `DISC_STOP_AT_BOOT=11
+   - `cdrom0:/PS2BBL/CONFIG.INI`
 
 ### Device path prefixes
 PS2BBL supports these launch/config path prefixes:
@@ -65,8 +65,6 @@ Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<
       NAME_SQUARE = POPSLOADER
       ```
 
-`LOGO_DISPLAY` values `4` and `5` are no longer used in lazy-driver mode.
-
 #### Custom splash logo from CWD
 If a custom logo file (LOGO.BIN) is found in CWD (current working directory), it replaces the embedded PS2BBLE/PSXBBLE logo.
 
@@ -88,13 +86,7 @@ Convert a PNG to the expected raw file:
 - Global key/value: `DISC_STOP = 0/1`
 - `DISC_STOP = 1` stops optical disc after config bootstrap when a config file was found.
 - `DISC_STOP = 0` (or omitted) keeps default behavior.
-- `-disc_stop` can be added per launch entry to stop disc after target ELF is loaded (stage2 handoff path for ELF launches).
-
-### PS2LOGO patching (PS2 discs only)
-- Use `cdrom` as the launch entry path.
-- Add `-nologo` to the entry args to boot PS2 discs directly (skip `rom0:PS2LOGO`).
-- Without `-nologo`, PS2BBL runs disc via PS2LOGO and patches it to always use disc region and bypass logo checksum checks.
-- DECKARD IE 75K and later: XPARAM.IRX is applied automatically when needed for no-logo launches.
+- `-disc_stop` can be added per launch entry to stop disc after target ELF is found.
 
 ### Video Mode
 - `VIDEO_MODE = AUTO, NTSC, PAL, 480P` Will use PS2 default or force either of the other 3 modes.
@@ -107,12 +99,6 @@ Convert a PNG to the expected raw file:
   - `SELECT` save the currently selected mode to the active config file
   - `START` exit selector and continue to hotkey display
 
-### PS1 disc options (per launch)
-These apply per `cdrom` launch entry, not globally.
-- `-ps1fast` enables fast PS1 disc speed.
-- `-ps1smooth` enables texture smoothing.
-- `-ps1vneg` runs PS1DRV via PS1VModeNegator. Useful on setups where console mode and disc mode differ (for example some MechaPwn/modchip cases).
-
 ### CDROM launch args
 For `LK_*_E* = cdrom`, supported args are:
 - `-nologo`
@@ -121,6 +107,18 @@ For `LK_*_E* = cdrom`, supported args are:
 - `-ps1smooth`
 - `-ps1vneg`
 - `-gsm=<v[:c]>`
+
+#### PS2LOGO arguments (PS2 discs only)
+- Use `cdrom` as the launch entry path.
+- Add `-nologo` to the entry args to boot PS2 discs directly (skip `rom0:PS2LOGO`).
+- Without `-nologo`, PS2BBL runs disc via PS2LOGO and patches it to always use disc region and bypass logo checksum checks.
+- DECKARD IE 75K and later: XPARAM.IRX is applied automatically when needed for no-logo launches.
+
+#### PS1 disc arguments (per launch)
+These apply per `cdrom` launch entry, not globally.
+- `-ps1fast` enables fast PS1 disc speed.
+- `-ps1smooth` enables texture smoothing.
+- `-ps1vneg` runs PS1DRV via PS1VModeNegator. Useful on setups where console mode and disc mode differ (for example some MechaPwn/modchip cases).
 
 ### App arguments
 Use `ARG_<BUTTON>_E? =` lines to pass args to an ELF (see INI examples).

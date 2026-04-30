@@ -60,22 +60,66 @@ static void PollEmergencyComboWindow(u64 *window_deadline_ms)
         g_video_mode_selector_requested = 1;
 }
 
+static int StopDiscWithRetry(const char *reason)
+{
+    const int max_attempts = 20;
+    const useconds_t retry_delay_us = 100000;
+    int attempt;
+
+    for (attempt = 0; attempt < max_attempts; attempt++) {
+        int disc_type = sceCdGetDiskType();
+        int drive_status = sceCdStatus();
+
+        // Consider no-disc/open-tray/stopped as already satisfied.
+        if (disc_type == SCECdNODISC ||
+            drive_status == SCECdStatStop ||
+            drive_status == SCECdStatShellOpen) {
+            DPRINTF("%s: disc already stopped on attempt %d (disc_type=%d status=%d)\n",
+                    reason,
+                    attempt + 1,
+                    disc_type,
+                    drive_status);
+            return 1;
+        }
+
+        // sceCdStop returns 0 while CDVD is still not ready/busy.
+        if (sceCdStop()) {
+            sceCdSync(0);
+            drive_status = sceCdStatus();
+            disc_type = sceCdGetDiskType();
+            if (disc_type == SCECdNODISC ||
+                drive_status == SCECdStatStop ||
+                drive_status == SCECdStatShellOpen) {
+                DPRINTF("%s: disc stop confirmed on attempt %d (disc_type=%d status=%d)\n",
+                        reason,
+                        attempt + 1,
+                        disc_type,
+                        drive_status);
+                return 1;
+            }
+        }
+
+        usleep(retry_delay_us); // 100ms backoff while CDVD settles.
+    }
+
+    DPRINTF("%s: disc stop was not confirmed after %d attempts\n", reason, max_attempts);
+    return 0;
+}
+
 static void StopDiscAfterConfigBootstrap(int config_source)
 {
 #ifdef DISC_STOP_AT_BOOT
     // Disc-stop profile: always stop the drive after config bootstrap.
     // Do not depend on argv[0] boot hints, which can be absent on disc boots.
     DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
-    sceCdStop();
-    sceCdSync(0);
+    StopDiscWithRetry("DISC_STOP_AT_BOOT");
 #else
     // Runtime profile: only stop disc when user config exists and enables it.
     if (config_source == SOURCE_INVALID || GLOBCFG.DISC_STOP == 0)
         return;
 
     DPRINTF("DISC_STOP=1: stopping disc after config bootstrap\n");
-    sceCdStop();
-    sceCdSync(0);
+    StopDiscWithRetry("DISC_STOP");
 #endif
 }
 
