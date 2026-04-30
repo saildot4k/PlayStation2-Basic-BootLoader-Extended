@@ -312,6 +312,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
         DPRINTF("Timer starts!\n");
         if (poll_emergency_combo_window != NULL)
             poll_emergency_combo_window(rescue_combo_deadline);
+        LoaderDiscStopPoll();
 
         deadline = Timer() + GLOBCFG.DELAY;
         while (Timer() <= deadline) {
@@ -320,6 +321,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
 
             if (poll_emergency_combo_window != NULL)
                 poll_emergency_combo_window(rescue_combo_deadline);
+            LoaderDiscStopPoll();
 
             if (SplashRenderIsActive()) {
                 const char *render_temp;

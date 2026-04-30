@@ -137,6 +137,7 @@ void SetDefaultSettings(void);
 void TimerInit(void);
 u64 Timer(void);
 void TimerEnd(void);
+void LoaderDiscStopPoll(void);
 
 /// check path for processing pseudo-devices like `mc?:/`
 char *CheckPath(const char *path);

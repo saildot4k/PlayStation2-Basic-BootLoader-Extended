@@ -37,6 +37,8 @@ static int g_video_mode_selector_requested = 0;
 static int g_block_hotkeys_until_release = 0;
 static int g_hotkey_launches_enabled = 1;
 static char g_config_path_in_use[256] = "";
+static int g_disc_stop_pending = 0;
+static u64 g_disc_stop_next_attempt_ms = 0;
 
 #define RESCUE_COMBO_WINDOW_MS 2000
 
@@ -60,68 +62,96 @@ static void PollEmergencyComboWindow(u64 *window_deadline_ms)
         g_video_mode_selector_requested = 1;
 }
 
-static int StopDiscWithRetry(const char *reason)
+static int IsDiscTypeStoppable(int disc_type)
 {
-    const int max_attempts = 40;
-    const useconds_t retry_delay_us = 100000;
-    int attempt;
-    int stop_issued = 0;
-
-    for (attempt = 0; attempt < max_attempts; attempt++) {
-        int disc_type = sceCdGetDiskType();
-        int drive_status;
-
-        // Nothing inserted: treat as already stopped.
-        if (disc_type == SCECdNODISC) {
-            DPRINTF("%s: no disc detected on attempt %d\n",
-                    reason,
-                    attempt + 1);
+    switch (disc_type) {
+        case SCECdPSCD:
+        case SCECdPSCDDA:
+        case SCECdPS2CD:
+        case SCECdPS2CDDA:
+        case SCECdPS2DVD:
+        case SCECdCDDA:
+        case SCECdDVDV:
             return 1;
-        }
+        default:
+            return 0;
+    }
+}
 
-        // sceCdStop returns 0 while CDVD is still not ready/busy.
-        if (sceCdStop()) {
-            stop_issued = 1;
-            sceCdSync(0);
-            drive_status = sceCdStatus();
-            disc_type = sceCdGetDiskType();
-            if (disc_type == SCECdNODISC ||
-                drive_status == SCECdStatStop ||
-                drive_status == SCECdStatShellOpen) {
-                DPRINTF("%s: disc stop confirmed on attempt %d (disc_type=%d status=%d)\n",
-                        reason,
-                        attempt + 1,
-                        disc_type,
-                        drive_status);
-                return 1;
-            }
-        }
+static int StopDiscAttemptOnce(const char *reason)
+{
+    int disc_type = sceCdGetDiskType();
+    int drive_status;
 
-        usleep(retry_delay_us); // 100ms backoff while CDVD settles.
+    if (disc_type == SCECdNODISC) {
+        DPRINTF("%s: no disc detected\n", reason);
+        return 1;
     }
 
-    DPRINTF("%s: disc stop was not confirmed after %d attempts (stop_issued=%d)\n",
+    if (!IsDiscTypeStoppable(disc_type))
+        return 0;
+
+    if (!sceCdStop())
+        return 0;
+
+    sceCdSync(0);
+    drive_status = sceCdStatus();
+    disc_type = sceCdGetDiskType();
+
+    if (disc_type == SCECdNODISC ||
+        drive_status == SCECdStatStop ||
+        drive_status == SCECdStatShellOpen) {
+        DPRINTF("%s: disc stop confirmed (disc_type=%d status=%d)\n",
+                reason,
+                disc_type,
+                drive_status);
+        return 1;
+    }
+
+    DPRINTF("%s: stop command issued, awaiting stop state (disc_type=%d status=%d)\n",
             reason,
-            max_attempts,
-            stop_issued);
+            disc_type,
+            drive_status);
     return 0;
 }
 
-static void StopDiscAfterConfigBootstrap(int config_source)
+void LoaderDiscStopPoll(void)
+{
+    u64 now;
+
+    if (!g_disc_stop_pending)
+        return;
+
+    now = Timer();
+    if (now < g_disc_stop_next_attempt_ms)
+        return;
+
+    if (StopDiscAttemptOnce("DISC_STOP poll")) {
+        g_disc_stop_pending = 0;
+        return;
+    }
+
+    g_disc_stop_next_attempt_ms = now + 100;
+}
+
+static void ArmDiscStopAfterConfigBootstrap(int config_source)
 {
 #ifdef DISC_STOP_AT_BOOT
     // Disc-stop profile: always stop the drive after config bootstrap.
     // Do not depend on argv[0] boot hints, which can be absent on disc boots.
-    DPRINTF("DISC_STOP_AT_BOOT: stopping disc after config bootstrap\n");
-    StopDiscWithRetry("DISC_STOP_AT_BOOT");
+    DPRINTF("DISC_STOP_AT_BOOT: arming disc-stop polling after config bootstrap\n");
+    g_disc_stop_pending = 1;
 #else
     // Runtime profile: only stop disc when user config exists and enables it.
     if (config_source == SOURCE_INVALID || GLOBCFG.DISC_STOP == 0)
         return;
 
-    DPRINTF("DISC_STOP=1: stopping disc after config bootstrap\n");
-    StopDiscWithRetry("DISC_STOP");
+    DPRINTF("DISC_STOP=1: arming disc-stop polling after config bootstrap\n");
+    g_disc_stop_pending = 1;
 #endif
+
+    g_disc_stop_next_attempt_ms = Timer();
+    LoaderDiscStopPoll();
 }
 
 int main(int argc, char *argv[])
@@ -239,7 +269,7 @@ int main(int argc, char *argv[])
                                                    PollEmergencyComboWindow,
                                                    LoaderParseVideoModeValue,
                                                    LoaderApplyVideoMode);
-    StopDiscAfterConfigBootstrap(config_source);
+    ArmDiscStopAfterConfigBootstrap(config_source);
 
     // Optional rescue flow: allow user to adjust VIDEO_MODE before launch dispatch.
     if (g_video_mode_selector_requested) {
