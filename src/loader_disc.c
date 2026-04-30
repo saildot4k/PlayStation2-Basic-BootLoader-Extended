@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "egsm_parse.h"
+#include "game_id.h"
 #include "console_info.h"
 #include "splash_render.h"
 
