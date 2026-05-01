@@ -224,7 +224,7 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "mc:?/APP_PSBBN-FORWARDER/PSBBN-FORWARDER.ELF", // L1 [CONFIG_KEY_INDEXES * 11]
+        "mc?:/APP_PSBBN-FORWARDER/PSBBN-FORWARDER.ELF", // L1 [CONFIG_KEY_INDEXES * 11]
         "",
         "",
         "",
@@ -288,7 +288,7 @@ const char *KEYS_ID[KEY_COUNT] = {
 #endif
     char *DEFPATH_PS2[] = {
         "mc?:/SYS_OSDMENU/osdmenu.elf", // AUTO [0]
-        "mc?:/SYS_FMCBD-1966/FMDBD-1966.ELF",
+        "mc?:/SYS_FMCBD-1966/FMCBD-1966.ELF",
         "mc?:/SYS_FMCBD-1965/FMCBD-1965.ELF",
         "mc?:/SYS_FMCBD-1953/FMCBD-1953.ELF",
         "mc?:/SYS_FMCBD-18C/FMCBD-18C.ELF",
@@ -397,7 +397,7 @@ const char *KEYS_ID[KEY_COUNT] = {
         "",
         "",
         "",
-        "mc:?/APP_PSBBN-FORWARDER/PSBBN-FORWARDER.ELF", // L1 [CONFIG_KEY_INDEXES * 11]
+        "mc?:/APP_PSBBN-FORWARDER/PSBBN-FORWARDER.ELF", // L1 [CONFIG_KEY_INDEXES * 11]
         "",
         "",
         "",

@@ -38,7 +38,7 @@ Config search is now boot-family aware to avoid loading unnecessary drivers at s
 4. Memory card fallback:
    - `mc?:/SYS-CONF/PS2BBL.INI`
    - `mc?:/SYS-CONF/PSXBBL.INI` _PSX Specific_
-5. When compiled with `DISC_STOP_AT_BOOT=11
+5. When compiled with `DISC_STOP_AT_BOOT=1
    - `cdrom0:/PS2BBL/CONFIG.INI`
 
 ### Device path prefixes
@@ -191,7 +191,7 @@ eGSM ARG examples:
 Usage example:
 ```
 LK_TRIANGLE_E1 = mc0:/APP_WLE-ISR/WLE-ISR.ELF
-ARG_TRIANGLE = -gsm=1080ix2
+ARG_TRIANGLE_E1 = -gsm=1080ix2
 ```
 
 ## Deprecated/Removed
