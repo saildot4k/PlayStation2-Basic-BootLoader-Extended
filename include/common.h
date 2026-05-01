@@ -9,7 +9,7 @@
 #define LOGO_DISPLAY_DEFAULT 3      // Default LOGO_DISPLAY when no config is found: 0=off, 1=info, 2=logo+info, 3=banner+NAME
 #define DEFDELAY 30000              // default ammount of time this program will wait for a key press in ms/
 #define CDROM_DISABLE_GAMEID_DEFAULT 0
-#define DISC_STOP_DEFAULT 0
+#define DISC_STOP_DEFAULT 1
 #ifdef PSX
 #define APP_GAMEID_DEFAULT 0
 #else
