@@ -195,7 +195,7 @@ ARG_TRIANGLE_E1 = -gsm=1080ix2
 ```
 
 ## Deprecated/Removed
-- ~~`RUNKELF`~~ PS2BBLE now handles launching elf/kelf internally without user needint to define kelf launch action.
+- ~~`RUNKELF`~~ PS2BBLE now handles launching elf/kelf internally without user needing to define kelf launch action.
 
 
 ## Known bugs/issues
