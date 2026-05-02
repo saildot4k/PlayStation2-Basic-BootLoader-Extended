@@ -33,13 +33,14 @@ Config search is now boot-family aware to avoid loading unnecessary drivers at s
    - MX4SIO boot: `mx4sio:/PS2BBL/CONFIG.INI`
    - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
    - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI`
-3. PSX DESR Specific
+3. Memory card fallback:
+   - PS2 runtime: `mc?:/SYS-CONF/PS2BBL.INI`
+   - PSX-DESR runtime: `mc?:/SYS-CONF/PSXBBL.INI`
+4. PSX runtime final fallback
    - `xfrom:/PS2BBL/CONFIG.INI`
-4. Memory card fallback:
-   - `mc?:/SYS-CONF/PS2BBL.INI`
-   - `mc?:/SYS-CONF/PSXBBL.INI` _PSX Specific_
 5. When compiled with `DISC_STOP_AT_BOOT=1
    - `cdrom0:/PS2BBL/CONFIG.INI`
+   - Memory card fallback as defined by point 3 above.
 
 ### Device path prefixes
 PS2BBL supports these launch/config path prefixes:
@@ -51,7 +52,8 @@ PS2BBL supports these launch/config path prefixes:
 - `mx4sio:/` (preferred), and `massX:/` (legacy)  __MX4SIO builds__
 - `hdd0:partition:pfs:/<path to elf>` __HDD builds__
 - `xfrom:/` paths __PSX DESR builds__
-- `ata:/`, `ilink:/` (BDM mass-storage roots) __not yet implemented__
+- `ata:/` exFAT HDD BDM device
+- `ilink:/` (BDM mass-storage roots) __not yet implemented__
 - `DISC_STOP_AT_BOOT=1` compile-time profile to always stop optical disc after config bootstrap
 
 ### LOGO_DISPLAY
