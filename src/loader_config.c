@@ -1486,6 +1486,9 @@ int LoaderBootstrapConfigAndSplash(int *splash_early_presented_out,
                                              "",
                                              NULL,
                                              "");
+            // Centered status temporarily hides hotkeys; restore visibility for
+            // LOGO_DISPLAY=3 so countdown/hotkey UI keeps the banner image.
+            SplashRenderSetHotkeysVisible(GLOBCFG.LOGO_DISP >= 3);
             splash_early_presented = 1;
             if (show_loading_overlay) {
                 SplashDrawLoadingStatus(GLOBCFG.LOGO_DISP);
