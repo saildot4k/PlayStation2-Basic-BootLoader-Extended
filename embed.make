@@ -8,10 +8,44 @@ $(EE_ASM_DIR)ioprp.c: embed/ioprp.img | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ psx_ioprp
 
 ifeq ($(PSX), 1)
-$(EE_ASM_DIR)extflash_irx.c: thirdparty/wLaunchELF_ISR/iop/__precompiled/extflash.irx | $(EE_ASM_DIR)
+PSX_IOP_CACHE_DIR := $(EE_OBJS_DIR)psx_iop/
+PS2SDK_LOCAL_SRC := $(abspath thirdparty/ps2sdk)
+
+$(PSX_IOP_CACHE_DIR):
+	@mkdir -p $@
+
+$(PSX_IOP_CACHE_DIR)extflash.irx: | $(PSX_IOP_CACHE_DIR)
+	@if [ -f "$(PS2SDK)/iop/irx/extflash.irx" ]; then \
+		cp -f "$(PS2SDK)/iop/irx/extflash.irx" "$@"; \
+	elif [ -n "$(PS2SDKSRC)" ] && [ -f "$(PS2SDKSRC)/iop/dev9/extflash/Makefile" ]; then \
+		$(MAKE) -C "$(PS2SDKSRC)/iop/dev9/extflash" all; \
+		cp -f "$(PS2SDKSRC)/iop/dev9/extflash/irx/extflash.irx" "$@"; \
+	elif [ -f "$(PS2SDK_LOCAL_SRC)/iop/dev9/extflash/Makefile" ]; then \
+		PS2SDKSRC="$(PS2SDK_LOCAL_SRC)" $(MAKE) -C "$(PS2SDK_LOCAL_SRC)/iop/dev9/extflash" all; \
+		cp -f "$(PS2SDK_LOCAL_SRC)/iop/dev9/extflash/irx/extflash.irx" "$@"; \
+	else \
+		echo "ERROR: extflash.irx not found in \$$PS2SDK/iop/irx and no ps2sdk source tree available to build it."; \
+		exit 1; \
+	fi
+
+$(PSX_IOP_CACHE_DIR)xfromman.irx: | $(PSX_IOP_CACHE_DIR)
+	@if [ -f "$(PS2SDK)/iop/irx/xfromman.irx" ]; then \
+		cp -f "$(PS2SDK)/iop/irx/xfromman.irx" "$@"; \
+	elif [ -n "$(PS2SDKSRC)" ] && [ -f "$(PS2SDKSRC)/iop/memorycard/xfromman/Makefile" ]; then \
+		$(MAKE) -C "$(PS2SDKSRC)/iop/memorycard/xfromman" all; \
+		cp -f "$(PS2SDKSRC)/iop/memorycard/xfromman/irx/xfromman.irx" "$@"; \
+	elif [ -f "$(PS2SDK_LOCAL_SRC)/iop/memorycard/xfromman/Makefile" ]; then \
+		PS2SDKSRC="$(PS2SDK_LOCAL_SRC)" $(MAKE) -C "$(PS2SDK_LOCAL_SRC)/iop/memorycard/xfromman" all; \
+		cp -f "$(PS2SDK_LOCAL_SRC)/iop/memorycard/xfromman/irx/xfromman.irx" "$@"; \
+	else \
+		echo "ERROR: xfromman.irx not found in \$$PS2SDK/iop/irx and no ps2sdk source tree available to build it."; \
+		exit 1; \
+	fi
+
+$(EE_ASM_DIR)extflash_irx.c: $(PSX_IOP_CACHE_DIR)extflash.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ extflash_irx
 
-$(EE_ASM_DIR)xfromman_irx.c: thirdparty/wLaunchELF_ISR/iop/__precompiled/xfromman.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)xfromman_irx.c: $(PSX_IOP_CACHE_DIR)xfromman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ xfromman_irx
 endif
 
