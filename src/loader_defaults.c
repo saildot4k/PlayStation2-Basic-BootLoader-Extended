@@ -43,10 +43,6 @@ void SetDefaultSettings(void)
     GLOBCFG.DELAY = DEFDELAY;
     GLOBCFG.TRAYEJECT = 0;
     GLOBCFG.LOGO_DISP = 3;
-#ifdef SCR_PRINT
-    // Text-debug mode: keep splash/UI graphics off so SCR_PRINT output remains readable.
-    GLOBCFG.LOGO_DISP = 0;
-#endif
     GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
     GLOBCFG.CDROM_DISABLE_GAMEID = CDROM_DISABLE_GAMEID_DEFAULT;
 #if defined(PSX)
