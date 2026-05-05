@@ -26,6 +26,10 @@ static int dev9_loaded = 0;
 #ifdef FILEXIO
 static int s_fio_loaded = 0;
 #endif
+#if defined(PSX)
+static int s_xfrom_modules_loaded = 0;
+extern int g_is_psx_desr;
+#endif
 
 static int starts_with(const char *s, const char *prefix)
 {
@@ -522,6 +526,9 @@ static void reset_module_flags(void)
     s_bdm_core_loaded = 0;
     s_bdm_usb_transport_loaded = 0;
     s_bdm_ata_transport_loaded = 0;
+#if defined(PSX)
+    s_xfrom_modules_loaded = 0;
+#endif
 }
 
 static void publish_module_states(void)
@@ -1224,6 +1231,42 @@ int LoaderLoadBdmTransportsForHint(const char *path_hint)
     if (s_bdm_usb_transport_loaded || s_bdm_ata_transport_loaded || s_mx4sio_modules_loaded)
         s_bdm_modules_loaded = 1;
     publish_module_states();
+    return 0;
+}
+
+int LoaderEnsureXFromModulesLoaded(void)
+{
+#if defined(PSX)
+    int ID;
+    int RET;
+
+    if (!g_is_psx_desr)
+        return 0;
+    if (s_xfrom_modules_loaded)
+        return 0;
+
+#ifdef DEV9
+    if (!dev9_loaded) {
+        if (!loadDEV9()) {
+            DPRINTF(" [XFROM]: DEV9 load failed\n");
+            return -1;
+        }
+    }
+#endif
+
+    ID = SifExecModuleBuffer(extflash_irx, size_extflash_irx, 0, NULL, &RET);
+    DPRINTF(" [EXTFLASH]: ID=%d, ret=%d\n", ID, RET);
+    if (ID < 0 || RET == 1)
+        return -2;
+
+    ID = SifExecModuleBuffer(xfromman_irx, size_xfromman_irx, 0, NULL, &RET);
+    DPRINTF(" [XFROMMAN]: ID=%d, ret=%d\n", ID, RET);
+    if (ID < 0 || RET == 1)
+        return -3;
+
+    s_xfrom_modules_loaded = 1;
+#endif
+
     return 0;
 }
 

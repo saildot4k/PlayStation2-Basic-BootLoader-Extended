@@ -45,6 +45,10 @@ static int arg_eq_ci(const char *a, const char *b);
 int LookForBDMDevice(void);
 #endif
 
+#if defined(PSX)
+extern int g_is_psx_desr;
+#endif
+
 typedef struct
 {
     const char *launch_filename;
@@ -1026,6 +1030,12 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         loader_args[i++] = 'N';
     } else if (dev9_mode == DEV9_NICHDD) {
         loader_args[i++] = 'D';
+#if defined(PSX)
+    } else if (g_is_psx_desr) {
+        // PSX-DESR runtime: keep DEV9/HDD powered unless explicitly overridden.
+        // This matches legacy PSX expectations and avoids default shutdown issues.
+        loader_args[i++] = 'D';
+#endif
     }
 #else
     (void)dev9_mode;
@@ -1465,13 +1475,21 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     // Keep direct launcher usage as emergency-only behavior:
     // for non-ROM entries, require successful stage2 handoff.
     if (!launch_is_rom) {
-        DPRINTF("Stage2 handoff failed for non-ROM launch '%s'; aborting direct fallback\n", intent.launch_filename);
-        free(launch_argv_owned);
-        LaunchIntentRelease(&intent);
-#ifdef HDD
-        PatinfoOptionsRelease(&patinfo_opts);
+#if defined(PSX)
+        if (g_is_psx_desr) {
+            DPRINTF("Stage2 handoff failed for PSX non-ROM launch '%s'; continuing with direct fallback\n",
+                    intent.launch_filename);
+        } else
 #endif
-        return;
+        {
+            DPRINTF("Stage2 handoff failed for non-ROM launch '%s'; aborting direct fallback\n", intent.launch_filename);
+            free(launch_argv_owned);
+            LaunchIntentRelease(&intent);
+#ifdef HDD
+            PatinfoOptionsRelease(&patinfo_opts);
+#endif
+            return;
+        }
     }
 #endif
 

@@ -644,6 +644,18 @@ int LoaderFindConfigFile(FILE **fp_out,
 #else
     (void)boot_legacy_mass_unit;
 #endif
+#if defined(PSX)
+    if (g_is_psx_desr) {
+        if (LoaderPathFamilyFromPath(boot_path_hint) == LOADER_PATH_FAMILY_XFROM ||
+            LoaderPathFamilyFromPath(boot_cwd_config) == LOADER_PATH_FAMILY_XFROM ||
+            LoaderPathFamilyFromPath(boot_family_config) == LOADER_PATH_FAMILY_XFROM) {
+            int xfrom_ret;
+
+            xfrom_ret = LoaderEnsureXFromModulesLoaded();
+            DPRINTF("Config probe: PSX xfrom boot preload ret=%d\n", xfrom_ret);
+        }
+    }
+#endif
 
     {
         int mass_late_wait_used = 0;
@@ -726,6 +738,15 @@ int LoaderFindConfigFile(FILE **fp_out,
             } else if (source == 4) {
                 if (!g_is_psx_desr)
                     continue;
+#if defined(PSX)
+                {
+                    int xfrom_ret = LoaderEnsureXFromModulesLoaded();
+                    if (xfrom_ret < 0) {
+                        DPRINTF("Config probe: xfrom fallback unavailable (module load ret=%d)\n", xfrom_ret);
+                        continue;
+                    }
+                }
+#endif
                 config_path = "xfrom:/PS2BBL/CONFIG.INI";
 #ifdef XFROM
                 source_hint = SOURCE_XFROM;

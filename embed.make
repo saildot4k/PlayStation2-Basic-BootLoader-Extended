@@ -7,6 +7,14 @@ IRXTAG = $(notdir $(addsuffix _irx, $(basename $<)))
 $(EE_ASM_DIR)ioprp.c: embed/ioprp.img | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ psx_ioprp
 
+ifeq ($(PSX), 1)
+$(EE_ASM_DIR)extflash_irx.c: thirdparty/wLaunchELF_ISR/iop/__precompiled/extflash.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ extflash_irx
+
+$(EE_ASM_DIR)xfromman_irx.c: thirdparty/wLaunchELF_ISR/iop/__precompiled/xfromman.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ xfromman_irx
+endif
+
 $(EE_ASM_DIR)padman_irx.c: freepad.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
 

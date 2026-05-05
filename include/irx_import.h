@@ -14,6 +14,8 @@ IMPORT_BIN2C(xparam_irx);
 
 #ifdef PSX
 IMPORT_BIN2C(psx_ioprp);
+IMPORT_BIN2C(extflash_irx);
+IMPORT_BIN2C(xfromman_irx);
 #endif
 
 #ifdef MMCE

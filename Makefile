@@ -161,7 +161,7 @@ ifeq ($(PSX), 1)
     BASENAME = PSXBBL
   endif
   EE_CFLAGS += -DPSX=1
-  EE_OBJS += scmd_add.o ioprp.o
+  EE_OBJS += scmd_add.o ioprp.o extflash_irx.o xfromman_irx.o
   EE_LIBS += -lxcdvd -liopreboot
 else
   EE_LIBS += -lcdvd
