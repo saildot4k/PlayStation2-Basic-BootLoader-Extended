@@ -947,7 +947,8 @@ static int ExecEmbeddedStage2(unsigned char *elf, unsigned int elf_size, int arg
     FlushCache(0);
     FlushCache(2);
     ExecPS2((void *)eh->entry, NULL, argc, argv);
-    return 0;
+    DPRINTF("ExecEmbeddedStage2: ExecPS2 returned unexpectedly; stage2 handoff failed\n");
+    return -1;
 }
 
 static int RunLoaderElfViaStage2(const char *launch_filename,

@@ -1120,12 +1120,18 @@ int LoaderEnsurePathFamilyReady(const char *path)
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
-    // MC (and xfrom->MC) is part of the always-loaded core set.
+    if (target_family == LOADER_PATH_FAMILY_XFROM) {
+#if defined(PSX)
+        ret = LoaderEnsureXFromModulesLoaded();
+        if (ret < 0)
+            return ret;
+#endif
+        return 0;
+    }
+    // MC is part of the always-loaded core set.
     // Do not reboot/switch away from another active family just to touch mc paths.
     if (target_family == LOADER_PATH_FAMILY_MC)
         return 0;
-    if (target_family == LOADER_PATH_FAMILY_XFROM)
-        target_family = LOADER_PATH_FAMILY_MC;
     if (s_current_family == target_family) {
         if (target_family == LOADER_PATH_FAMILY_BDM)
             return load_bdm_transports_for_path_with_scope(path, BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY);
@@ -1160,8 +1166,14 @@ int LoaderPrepareFinalLaunch(const char *path)
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
-    if (target_family == LOADER_PATH_FAMILY_XFROM)
-        target_family = LOADER_PATH_FAMILY_MC;
+    if (target_family == LOADER_PATH_FAMILY_XFROM) {
+#if defined(PSX)
+        int xfrom_ret = LoaderEnsureXFromModulesLoaded();
+        if (xfrom_ret < 0)
+            return xfrom_ret;
+#endif
+        return 0;
+    }
 
     if (target_family == LOADER_PATH_FAMILY_MX4SIO)
         reinit_pad_after_reboot = 1;
@@ -1355,7 +1367,9 @@ int loadDEV9(void)
         int ID, RET;
         ID = SifExecModuleBuffer(&ps2dev9_irx, size_ps2dev9_irx, 0, NULL, &RET);
         DPRINTF("[DEV9]: ret=%d, ID=%d\n", RET, ID);
-        if (ID < 0 && RET == 1) // ID smaller than 0: issue reported from modload | RET == 1: driver returned no resident end
+        // Either a modload error (ID < 0) or non-resident return (RET == 1)
+        // means the module is not available for use.
+        if (ID < 0 || RET == 1)
             return 0;
         dev9_loaded = 1;
     }
