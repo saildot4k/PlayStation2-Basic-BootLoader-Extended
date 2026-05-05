@@ -1427,6 +1427,10 @@ int LoaderBootstrapConfigAndSplash(int *splash_early_presented_out,
         }
 #endif
         GLOBCFG.LOGO_DISP = normalize_logo_display(GLOBCFG.LOGO_DISP);
+#ifdef SCR_PRINT
+        // Text-debug mode: keep splash/UI graphics off so SCR_PRINT output remains readable.
+        GLOBCFG.LOGO_DISP = 0;
+#endif
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         // For LOGO_DISPLAY=3 (name mode), show only NAME_* entries that were
         // explicitly present in the loaded config. Missing/commented NAME_*
@@ -1484,6 +1488,10 @@ int LoaderBootstrapConfigAndSplash(int *splash_early_presented_out,
         set_fallback_entry_args(default_args, default_arg_count);
 
         GLOBCFG.LOGO_DISP = normalize_logo_display(LOGO_DISPLAY_DEFAULT);
+#ifdef SCR_PRINT
+        // Text-debug mode: keep splash/UI graphics off so SCR_PRINT output remains readable.
+        GLOBCFG.LOGO_DISP = 0;
+#endif
         GLOBCFG.HOTKEY_DISPLAY = logo_to_hotkey_display(GLOBCFG.LOGO_DISP);
         // No config means no valid VIDEO_MODE was parsed, so apply the default
         // AUTO/native mode now.

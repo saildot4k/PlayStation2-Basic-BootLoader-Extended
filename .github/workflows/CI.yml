@@ -35,7 +35,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       DEBUG: 'DEBUG=1'
-      PRINTF_ARGS: 'PRINTF=PRINTF'
+      PRINTF_ARGS: 'PRINTF=SCR'
     steps:
 
       - name: Install dependencies

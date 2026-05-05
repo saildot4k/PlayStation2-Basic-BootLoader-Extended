@@ -269,6 +269,10 @@ int main(int argc, char *argv[])
                                                    PollEmergencyComboWindow,
                                                    LoaderParseVideoModeValue,
                                                    LoaderApplyVideoMode);
+#ifdef SCR_PRINT
+    // Start launch workflow on a clean text console for SCR_PRINT debugging.
+    scr_clear();
+#endif
     ArmDiscStopAfterConfigBootstrap(config_source);
 
     // Optional rescue flow: allow user to adjust VIDEO_MODE before launch dispatch.
