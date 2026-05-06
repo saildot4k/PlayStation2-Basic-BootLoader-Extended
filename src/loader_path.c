@@ -243,6 +243,51 @@ static int path_prefix_with_optional_unit(const char *path,
     return 1;
 }
 
+static int build_prefixed_path_with_optional_unit(const char *prefix,
+                                                  int unit,
+                                                  const char *suffix,
+                                                  char *out,
+                                                  size_t out_size)
+{
+    if (prefix == NULL || suffix == NULL || out == NULL || out_size == 0 || suffix[0] != ':')
+        return 0;
+
+    if (suffix[1] == '/' || suffix[1] == '\\' || suffix[1] == '\0') {
+        if (unit >= 0)
+            snprintf(out, out_size, "%s%d%s", prefix, unit, suffix);
+        else
+            snprintf(out, out_size, "%s%s", prefix, suffix);
+    } else {
+        if (unit >= 0)
+            snprintf(out, out_size, "%s%d:/%s", prefix, unit, suffix + 1);
+        else
+            snprintf(out, out_size, "%s:/%s", prefix, suffix + 1);
+    }
+
+    return 1;
+}
+
+static int normalize_path_root_slash_if_missing(const char *path,
+                                                const char *prefix,
+                                                size_t prefix_len,
+                                                char *out,
+                                                size_t out_size)
+{
+    int unit = -1;
+    const char *suffix = NULL;
+
+    if (!path_prefix_with_optional_unit(path, prefix, prefix_len, &unit, &suffix))
+        return 0;
+    if (suffix == NULL || suffix[0] != ':')
+        return 0;
+
+    // Already explicit root or empty root.
+    if (suffix[1] == '/' || suffix[1] == '\\' || suffix[1] == '\0')
+        return 0;
+
+    return build_prefixed_path_with_optional_unit(prefix, unit, suffix, out, out_size);
+}
+
 static int build_mass_path(char *out, size_t out_size, const char *suffix, int unit)
 {
     if (out == NULL || out_size == 0 || suffix == NULL || suffix[0] != ':')
@@ -693,6 +738,26 @@ static const char *resolve_path_tokens(const char *path,
         return out;
     }
 #endif
+
+    // Normalize non-APA roots to a canonical form when slash is missing:
+    // e.g. "mmce0:PS2BBL/CONFIG.INI" -> "mmce0:/PS2BBL/CONFIG.INI".
+    if (normalize_path_root_slash_if_missing(path, "mc", 2, out, out_size) ||
+#ifdef MMCE
+        normalize_path_root_slash_if_missing(path, "mmce", 4, out, out_size) ||
+#endif
+        normalize_path_root_slash_if_missing(path, "mass", 4, out, out_size) ||
+        normalize_path_root_slash_if_missing(path, "usb", 3, out, out_size) ||
+#ifdef MX4SIO
+        normalize_path_root_slash_if_missing(path, "mx4sio", 6, out, out_size) ||
+        normalize_path_root_slash_if_missing(path, "massx", 5, out, out_size) ||
+#endif
+#ifdef BDM_ATA
+        normalize_path_root_slash_if_missing(path, "ata", 3, out, out_size) ||
+#endif
+        normalize_path_root_slash_if_missing(path, "ilink", 5, out, out_size) ||
+        normalize_path_root_slash_if_missing(path, "xfrom", 5, out, out_size) ||
+        normalize_path_root_slash_if_missing(path, "host", 4, out, out_size))
+        return out;
 
     return out;
 }

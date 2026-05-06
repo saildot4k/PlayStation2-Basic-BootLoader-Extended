@@ -479,11 +479,18 @@ static FILE *open_first_config_candidate(const char **paths,
     for (i = 0; i < path_count; i++) {
         const char *candidate_path = paths[i];
         char *resolved_path;
+        LoaderPathFamily candidate_family;
         FILE *fp = NULL;
+        int can_attempt_now;
 
         if (candidate_path == NULL || *candidate_path == '\0')
             continue;
-        if (!LoaderPathCanAttemptNow(candidate_path))
+        candidate_family = LoaderPathFamilyFromPath(candidate_path);
+        can_attempt_now = LoaderPathCanAttemptNow(candidate_path);
+
+        // Keep strict readiness gate for APA HDD paths, but for other families
+        // still try direct CheckPath+fopen (same style as LOGO.BIN probing).
+        if (!can_attempt_now && candidate_family == LOADER_PATH_FAMILY_HDD_APA)
             continue;
 
         resolved_path = CheckPath(candidate_path);
