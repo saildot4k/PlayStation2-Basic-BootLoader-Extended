@@ -889,8 +889,8 @@ int LoaderFindConfigFile(FILE **fp_out,
             if (family == LOADER_PATH_FAMILY_BDM ||
                 family == LOADER_PATH_FAMILY_MMCE ||
                 family == LOADER_PATH_FAMILY_MX4SIO) {
-                max_attempts = 2;
-                retry_delay_us = 50000;
+                max_attempts = 3;
+                retry_delay_us = 200000;
             }
         }
 

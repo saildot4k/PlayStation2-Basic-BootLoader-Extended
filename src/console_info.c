@@ -134,6 +134,7 @@ static void format_device_source_name(char *out,
                                       const char *boot_hint)
 {
     int mmce_slot;
+    int mass_unit_from_hint;
 
     if (out == NULL || out_size == 0)
         return;
@@ -175,6 +176,66 @@ static void format_device_source_name(char *out,
         }
     }
 
+    if (boot_hint != NULL && *boot_hint != '\0') {
+        mass_unit_from_hint = parse_mass_unit_from_path(boot_hint);
+
+        if (path_is_disc_root(boot_hint)) {
+            snprintf(out, out_size, "CDROM");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "usb")) {
+            snprintf(out, out_size, "USB");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mass")) {
+            if (mass_unit_from_hint >= 0)
+                snprintf(out, out_size, "MASS%d", mass_unit_from_hint);
+            else
+                snprintf(out, out_size, "MASS");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mx4sio") || ci_starts_with(boot_hint, "massx")) {
+            snprintf(out, out_size, "MX4SIO");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mmce")) {
+            mmce_slot = parse_mmce_slot_from_path(boot_hint);
+            if (mmce_slot >= 0)
+                snprintf(out, out_size, "MMCE%d", mmce_slot);
+            else
+                snprintf(out, out_size, "MMCE");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mc0")) {
+            snprintf(out, out_size, "MC0");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "mc1")) {
+            snprintf(out, out_size, "MC1");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "hdd0")) {
+            snprintf(out, out_size, "HDD0");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "ata")) {
+            snprintf(out, out_size, "ATA");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "ilink")) {
+            snprintf(out, out_size, "ILINK");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "xfrom")) {
+            snprintf(out, out_size, "XFROM");
+            return;
+        }
+        if (ci_starts_with(boot_hint, "host")) {
+            snprintf(out, out_size, "HOST");
+            return;
+        }
+    }
+
     if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL)
         snprintf(out, out_size, "%s", SOURCES[config_source]);
     else
@@ -185,6 +246,9 @@ static void format_cwd_source_name(char *out, size_t out_size)
 {
     const char *boot_hint = LoaderGetBootPathHint();
     const char *resolved_path = LoaderGetResolvedConfigPath();
+    const char *requested_path = LoaderGetRequestedConfigPath();
+    const char *boot_cwd_path = LoaderGetBootCwdConfigPath();
+    int boot_source_hint = LoaderGetBootConfigSourceHint();
     int mass_unit = parse_mass_unit_from_path(resolved_path);
     int mmce_slot = parse_mmce_slot_from_path(resolved_path);
 
@@ -272,7 +336,148 @@ static void format_cwd_source_name(char *out, size_t out_size)
         }
     }
 
-    snprintf(out, out_size, "CWD");
+    if (boot_cwd_path != NULL && *boot_cwd_path != '\0') {
+        if (ci_starts_with(boot_cwd_path, "mmce0")) {
+            snprintf(out, out_size, "MMCE0 CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "mmce1")) {
+            snprintf(out, out_size, "MMCE1 CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "mx4sio") || ci_starts_with(boot_cwd_path, "massx")) {
+            snprintf(out, out_size, "MX4SIO CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "mass")) {
+            int boot_cwd_mass_unit = parse_mass_unit_from_path(boot_cwd_path);
+
+            if (boot_cwd_mass_unit >= 0)
+                snprintf(out, out_size, "MASS%d CWD", boot_cwd_mass_unit);
+            else
+                snprintf(out, out_size, "MASS CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "usb")) {
+            snprintf(out, out_size, "USB CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "mc0")) {
+            snprintf(out, out_size, "MC0 CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "mc1")) {
+            snprintf(out, out_size, "MC1 CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "hdd0")) {
+            snprintf(out, out_size, "HDD0 CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "ata")) {
+            snprintf(out, out_size, "ATA CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "ilink")) {
+            snprintf(out, out_size, "ILINK CWD");
+            return;
+        }
+        if (ci_starts_with(boot_cwd_path, "xfrom")) {
+            snprintf(out, out_size, "XFROM CWD");
+            return;
+        }
+    }
+
+    if (requested_path != NULL && *requested_path != '\0') {
+        if (ci_starts_with(requested_path, "mmce0")) {
+            snprintf(out, out_size, "MMCE0 CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "mmce1")) {
+            snprintf(out, out_size, "MMCE1 CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "mx4sio") || ci_starts_with(requested_path, "massx")) {
+            snprintf(out, out_size, "MX4SIO CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "mass")) {
+            int requested_mass_unit = parse_mass_unit_from_path(requested_path);
+
+            if (requested_mass_unit >= 0)
+                snprintf(out, out_size, "MASS%d CWD", requested_mass_unit);
+            else
+                snprintf(out, out_size, "MASS CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "usb")) {
+            snprintf(out, out_size, "USB CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "mc0")) {
+            snprintf(out, out_size, "MC0 CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "mc1")) {
+            snprintf(out, out_size, "MC1 CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "hdd0")) {
+            snprintf(out, out_size, "HDD0 CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "ata")) {
+            snprintf(out, out_size, "ATA CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "ilink")) {
+            snprintf(out, out_size, "ILINK CWD");
+            return;
+        }
+        if (ci_starts_with(requested_path, "xfrom")) {
+            snprintf(out, out_size, "XFROM CWD");
+            return;
+        }
+    }
+
+    switch (boot_source_hint) {
+        case SOURCE_MC0:
+            snprintf(out, out_size, "MC0 CWD");
+            return;
+        case SOURCE_MC1:
+            snprintf(out, out_size, "MC1 CWD");
+            return;
+        case SOURCE_MASS:
+            snprintf(out, out_size, "MASS CWD");
+            return;
+#ifdef MX4SIO
+        case SOURCE_MX4SIO:
+            snprintf(out, out_size, "MX4SIO CWD");
+            return;
+#endif
+#ifdef HDD
+        case SOURCE_HDD:
+            snprintf(out, out_size, "HDD0 CWD");
+            return;
+#endif
+#ifdef XFROM
+        case SOURCE_XFROM:
+            snprintf(out, out_size, "XFROM CWD");
+            return;
+#endif
+#ifdef MMCE
+        case SOURCE_MMCE0:
+            snprintf(out, out_size, "MMCE0 CWD");
+            return;
+        case SOURCE_MMCE1:
+            snprintf(out, out_size, "MMCE1 CWD");
+            return;
+#endif
+        default:
+            break;
+    }
+
+    snprintf(out, out_size, "BOOT CWD");
 }
 
 static int ReadModelName(char *name)
@@ -380,6 +585,11 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
     if (!config_is_boot_cwd &&
         (resolved_config_path == NULL || *resolved_config_path == '\0') &&
         path_equivalent_for_cwd_label(requested_config_path, boot_cwd_config_path)) {
+        config_is_boot_cwd = 1;
+    }
+    if (!config_is_boot_cwd &&
+        requested_config_path != NULL &&
+        ci_eq(requested_config_path, "CONFIG.INI")) {
         config_is_boot_cwd = 1;
     }
 
