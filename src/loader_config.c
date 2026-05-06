@@ -715,6 +715,8 @@ int LoaderFindConfigFile(FILE **fp_out,
                 config_path = mc_sysconf_config_path;
                 source_hint = SOURCE_MC0;
             } else if (source == 1) {
+                int disc_cdfs_ret = LoaderEnsureDiscBootCdfsReady();
+                DPRINTF("Config probe: DISC_STOP_AT_BOOT cdfs preload ret=%d\n", disc_cdfs_ret);
                 config_path = "cdrom0:\\PS2BBL\\CONFIG.INI;1";
                 source_hint = SOURCE_CWD;
             } else {

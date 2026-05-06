@@ -160,6 +160,7 @@ int LoaderEnsurePathFamilyReady(const char *path);
 int LoaderPrepareFinalLaunch(const char *path);
 int LoaderEnsureXFromModulesLoaded(void);
 int LoaderLoadBdmTransportsForHint(const char *path_hint);
+int LoaderEnsureDiscBootCdfsReady(void);
 void LoaderLoadSystemModules(int *bdm_modules_loaded,
                              int *mx4sio_modules_loaded,
                              int *mmce_modules_loaded,

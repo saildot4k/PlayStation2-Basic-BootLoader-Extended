@@ -26,6 +26,9 @@ static int dev9_loaded = 0;
 #ifdef FILEXIO
 static int s_fio_loaded = 0;
 #endif
+#ifdef DISC_STOP_AT_BOOT
+static int s_disc_boot_cdfs_ready = 0;
+#endif
 #if defined(PSX)
 static int s_xfrom_modules_loaded = 0;
 extern int g_is_psx_desr;
@@ -528,6 +531,9 @@ static void reset_module_flags(void)
     s_bdm_ata_transport_loaded = 0;
 #if defined(PSX)
     s_xfrom_modules_loaded = 0;
+#endif
+#ifdef DISC_STOP_AT_BOOT
+    s_disc_boot_cdfs_ready = 0;
 #endif
 }
 
@@ -1306,6 +1312,36 @@ void LoaderLoadSystemModules(int *bdm_modules_loaded,
         *mmce_modules_loaded = s_mmce_modules_loaded;
     if (hdd_modules_loaded != NULL)
         *hdd_modules_loaded = s_hdd_modules_loaded;
+}
+
+int LoaderEnsureDiscBootCdfsReady(void)
+{
+#ifdef DISC_STOP_AT_BOOT
+    int ID, RET;
+
+    if (s_disc_boot_cdfs_ready)
+        return 0;
+
+#ifdef FILEXIO
+    if (LoadFIO() < 0) {
+        DPRINTF(" [DISC_CDFS]: failed to load IOMANX/FILEXIO\n");
+        return -1;
+    }
+#endif
+
+    // Mirror wLaunchELF's startup order for disc filesystem access:
+    // ensure CDVD is initialized, then register cdfs before probing cdrom0:.
+    sceCdInit(SCECdINoD);
+    ID = SifExecModuleBuffer(cdfs_irx, size_cdfs_irx, 0, NULL, &RET);
+    DPRINTF(" [CDFS]: ret=%d, ID=%d\n", RET, ID);
+    if (ID < 0 || RET == 1)
+        return -2;
+
+    sceCdDiskReady(0);
+    s_disc_boot_cdfs_ready = 1;
+#endif
+
+    return 0;
 }
 
 #ifdef MX4SIO

@@ -27,6 +27,10 @@ IMPORT_BIN2C(iomanX_irx);
 IMPORT_BIN2C(fileXio_irx);
 #endif
 
+#ifdef DISC_STOP_AT_BOOT
+IMPORT_BIN2C(cdfs_irx);
+#endif
+
 #ifdef HDD
 IMPORT_BIN2C(poweroff_irx);
 IMPORT_BIN2C(ps2atad_irx);

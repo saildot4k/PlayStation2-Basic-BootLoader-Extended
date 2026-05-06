@@ -40,9 +40,9 @@ DUMMY_TIMEZONE = 1
 # ---{ VERSIONING }--- #
 
 VERSION = 1
-SUBVERSION = 3
+SUBVERSION = 9
 PATCHLEVEL = 0
-STATUS = Beta
+STATUS = Lazy Loading
 
 # Prefer python3, fall back to python for CI images that don't ship python3 binary name.
 PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
@@ -101,6 +101,8 @@ endif
 ifeq ($(DISC_STOP_AT_BOOT), 1)
   $(info --- disc stop at startup enabled)
   EE_CFLAGS += -DDISC_STOP_AT_BOOT
+  FILEXIO_NEED = 1
+  EE_OBJS += cdfs_irx.o
 endif
 
 ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)

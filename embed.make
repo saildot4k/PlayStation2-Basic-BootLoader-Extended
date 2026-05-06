@@ -58,6 +58,9 @@ $(EE_ASM_DIR)iomanx_irx.c: iomanX.irx | $(EE_ASM_DIR)
 $(EE_ASM_DIR)filexio_irx.c: fileXio.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ fileXio_irx
 
+$(EE_ASM_DIR)cdfs_irx.c: thirdparty/wLaunchELF_ISR/iop/__precompiled/cdfs.irx | $(EE_ASM_DIR)
+	$(BIN2S) $< $@ cdfs_irx
+
 $(EE_ASM_DIR)ps2hdd_irx.c: ps2hdd-osd.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ ps2hdd_irx
 
