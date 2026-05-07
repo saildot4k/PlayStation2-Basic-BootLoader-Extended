@@ -90,15 +90,15 @@ void CleanUp(void)
 static void DrawCreditsSplashFrame(void)
 {
     const char *lines[] = {
-        "PLAYSTATION2 BASIC BOOTLOADER EXTENDED",
+        "PLAYSTATION2 BASIC BOOTLOADER EXTENDED v"VERSION"."SUBVERSION"."PATCHLEVEL" - "STATUS"",
+        "Compiled on "__DATE__" "__TIME__" COMMIT HASH: " COMMIT_HASH "",  
         "BY MATIAS ISRAELSON (EL_ISRA). EXTENDED BY R3Z3N and AI",
         "BASED ON SP193 OSD INIT SAMPLES",
         "THANKS: FJTRUJY, UYJULIAN, ASMBLUR, AKUHAK, PCM720, BERION, RIPTO, NUNO, GHOSTTOWNUS",
-        "v"VERSION"."SUBVERSION"."PATCHLEVEL" - "STATUS"",
-        "Compiled on "__DATE__"",  
         "PRESS START TO RETURN TO LAUNCH KEYS",
     };
     const u32 colors[] = {
+        0x00ffff,
         0x00ffff,
         0xffffff,
         0xffffff,
@@ -163,7 +163,7 @@ int credits(void)
                    "\n"
                    "\tBased on SP193 OSD Init samples.\n"
                    "\t\tall credits go to him\n"
-                   "\tThanks to: fjtrujy, uyjulian, asmblur, AKuHAK, PCM720, BERION, RIPTO\n"
+                   "\tThanks to: fjtrujy, uyjulian, asmblur, AKuHAK, PCM720, BERION, RIPTO, Nuno, GhostTownUS\n"
                    "\tbuild hash [" COMMIT_HASH "]\n"
                    "\t\tcompiled on "__DATE__
                    " "__TIME__
