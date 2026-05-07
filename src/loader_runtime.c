@@ -95,7 +95,7 @@ static void DrawCreditsSplashFrame(void)
         "BASED ON SP193 OSD INIT SAMPLES",
         "THANKS: FJTRUJY, UYJULIAN, ASMBLUR, AKUHAK, PCM720, BERION, RIPTO, NUNO, GHOSTTOWNUS",
         "v"VERSION"."SUBVERSION"."PATCHLEVEL" - "STATUS"",
-        "Compiled on "__DATE__",  
+        "Compiled on "__DATE__"",  
         "PRESS START TO RETURN TO LAUNCH KEYS",
     };
     const u32 colors[] = {
