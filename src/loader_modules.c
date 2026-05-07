@@ -5,7 +5,7 @@
 #define USB_TRANSPORT_POST_USBD_DELAY_MS 1000u
 #define USB_TRANSPORT_ENUMERATION_DELAY_MS 1000u
 #define ATA_TRANSPORT_SETTLE_DELAY_MS 1000u
-#define UDPTTY_POST_LOAD_DELAY_MS 3000u
+#define UDPTTY_POST_LOAD_DELAY_MS 5000u
 
 // Tracks whether the BDM family stack is available for path probing/launch.
 // This is broader than just USB transport readiness.
@@ -625,8 +625,12 @@ static int load_core_modules(void)
     SifExecModuleBuffer(ppctty_irx, size_ppctty_irx, 0, NULL, NULL);
 #endif
 #ifdef UDPTTY
-    if (loadDEV9())
+    if (loadDEV9()) {
+        DPRINTF(" [UDPTTY]: DEV9 ready, loading network TTY stack\n");
         loadUDPTTY();
+    } else {
+        DPRINTF(" [UDPTTY]: skipped, DEV9 unavailable\n");
+    }
 #endif
 
 #ifdef FILEXIO
@@ -1466,6 +1470,8 @@ void loadUDPTTY(void)
     DPRINTF(" [PS2IP]: ret=%d, ID=%d\n", RET, ID);
     ID = SifExecModuleBuffer(&udptty_irx, size_udptty_irx, 0, NULL, &RET);
     DPRINTF(" [UDPTTY]: ret=%d, ID=%d\n", RET, ID);
+    DPRINTF(" [UDPTTY]: waiting %u ms for UDP console settle\n", (unsigned int)UDPTTY_POST_LOAD_DELAY_MS);
     delay_ms(UDPTTY_POST_LOAD_DELAY_MS);
+    DPRINTF(" [UDPTTY]: settle wait complete\n");
 }
 #endif

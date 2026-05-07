@@ -40,6 +40,19 @@ enum {
     DEV9_NICHDD
 };
 
+static const char *dev9_mode_name(int dev9_mode)
+{
+    switch (dev9_mode) {
+        case DEV9_NIC:
+            return "NIC";
+        case DEV9_NICHDD:
+            return "NICHDD";
+        case DEV9_DEFAULT:
+        default:
+            return "DEFAULT";
+    }
+}
+
 static int arg_eq_ci(const char *a, const char *b);
 
 #ifdef MX4SIO
@@ -978,6 +991,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
     int use_ioprp = 0;
     int use_elf = 0;
     int effective_disc_stop;
+    int psx_desr_runtime = 0;
     int i;
 
     if (launch_filename == NULL || *launch_filename == '\0')
@@ -985,9 +999,23 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
     if (size_ps2_stage2_loader_elf < sizeof(embedded_elf_header_t))
         return -1;
 
+#if defined(PSX)
+    psx_desr_runtime = g_is_psx_desr ? 1 : 0;
+#endif
+
     use_gsm = (gsm_arg != NULL && *gsm_arg != '\0');
     use_ioprp = (ioprp_arg != NULL && *ioprp_arg != '\0');
     use_elf = (elf_mem_arg != NULL && *elf_mem_arg != '\0');
+
+    DPRINTF("Stage2 preflight: launch='%s' party='%s' argc=%d dev9=%s(%d) psx_desr=%d disc_stop=%d skip_argv0=%d\n",
+            launch_filename,
+            (party != NULL) ? party : "<null>",
+            argc,
+            dev9_mode_name(dev9_mode),
+            dev9_mode,
+            psx_desr_runtime,
+            disc_stop,
+            skip_argv0);
 
     if (party != NULL && *party != '\0') {
         if (path_is_pfs_prefix(launch_filename)) {
@@ -1048,6 +1076,12 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         loader_args[i++] = 'A';
     loader_args[i] = '\0';
     has_loader_flags = (i > 4);
+    DPRINTF("Stage2 loader flags: '%s' (has_flags=%d use_gsm=%d use_ioprp=%d use_elf=%d)\n",
+            loader_args,
+            has_loader_flags,
+            use_gsm,
+            use_ioprp,
+            use_elf);
 
     if (use_elf) {
         owned_elf = malloc(strlen(elf_mem_arg) + 1);

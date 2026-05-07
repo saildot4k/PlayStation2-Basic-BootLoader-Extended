@@ -16,6 +16,25 @@
 #define LAUNCH_PATH_WAIT_MMCE_MS 2000u
 #define LAUNCH_PATH_WAIT_HDD_MS 5000u
 
+static void DebugPrintLaunchArgs(const char *tag,
+                                 int key_index,
+                                 int entry_index,
+                                 int argc,
+                                 char *argv[])
+{
+    int arg_idx;
+
+    DPRINTF("%s: key=%d entry=%d argc=%d\n", tag, key_index, entry_index, argc);
+    for (arg_idx = 0; arg_idx < argc; arg_idx++) {
+        DPRINTF("%s: key=%d entry=%d argv[%d]='%s'\n",
+                tag,
+                key_index,
+                entry_index,
+                arg_idx,
+                (argv != NULL && argv[arg_idx] != NULL) ? argv[arg_idx] : "<null>");
+    }
+}
+
 static void EnsurePadsReadyForInput(void)
 {
     if (!PadIsInitialized())
@@ -105,6 +124,11 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
             if (candidate != NULL && *candidate != '\0') {
                 if (LoaderAllowVirtualPatinfoEntry(key_index, entry_index, candidate) || exist(candidate)) {
                     *resolved_path = candidate;
+                    DPRINTF("Launch resolve: key=%d entry=%d raw='%s' resolved='%s'\n",
+                            key_index,
+                            entry_index,
+                            entry_path,
+                            candidate);
                     return 0;
                 }
             }
@@ -162,6 +186,12 @@ static int PrepareLaunchPathForExec(const char *entry_path,
         return -1;
 
     prep_result = LoaderPrepareFinalLaunch(entry_path);
+    DPRINTF("Launch sanitize check: key=%d entry=%d raw='%s' resolved='%s' result=%d\n",
+            key_index,
+            entry_index,
+            entry_path,
+            *resolved_path,
+            prep_result);
     if (prep_result < 0)
         return -1;
     if (prep_result == 0)
@@ -174,12 +204,21 @@ static int PrepareLaunchPathForExec(const char *entry_path,
     if (target_family == LOADER_PATH_FAMILY_MC) {
         // Avoid additional MC path probing immediately after sanitize reboot.
         // Launch using the already-resolved mcN path.
-        DPRINTF("Launch sanitize ready (MC): '%s'\n", *resolved_path);
+        DPRINTF("Launch sanitize ready (MC): key=%d entry=%d raw='%s' resolved='%s'\n",
+                key_index,
+                entry_index,
+                entry_path,
+                *resolved_path);
         return 0;
     }
 
     // We just rebooted/reloaded for a clean launch.
     // Resolve and validate the same entry once more before execution.
+    DPRINTF("Launch sanitize recheck: key=%d entry=%d raw='%s' pre='%s'\n",
+            key_index,
+            entry_index,
+            entry_path,
+            *resolved_path);
     if (ResolveLaunchPathForEntry(entry_path, key_index, entry_index, &rechecked_path, 1) < 0) {
         const char *not_found_path = (rechecked_path != NULL && *rechecked_path != '\0') ? rechecked_path : entry_path;
 
@@ -194,6 +233,11 @@ static int PrepareLaunchPathForExec(const char *entry_path,
     }
 
     *resolved_path = rechecked_path;
+    DPRINTF("Launch sanitize resolved: key=%d entry=%d raw='%s' final='%s'\n",
+            key_index,
+            entry_index,
+            entry_path,
+            *resolved_path);
     return 0;
 }
 
@@ -373,7 +417,10 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                     int command_cancelled = 0;
                     int retry_requested = 0;
                     const char *button_name = KEYS_ID[x + 1];
-                    DPRINTF("PAD detected\n");
+                    DPRINTF("PAD detected: state=0x%04x button='%s' key=%d\n",
+                            (unsigned int)(pad_state & PAD_MASK_ANY),
+                            (button_name != NULL) ? button_name : "<null>",
+                            x + 1);
                     // if button detected, copy path to corresponding index
                     for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
                         const char *entry_path = GLOBCFG.KEYPATHS[x + 1][j];
@@ -383,6 +430,13 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         // Skip empty/unset entries (common when config has blank LK_* values)
                         if (entry_path == NULL || *entry_path == '\0')
                             continue;
+
+                        DPRINTF("Launch candidate: key=%d entry=%d raw='%s'\n", x + 1, j, entry_path);
+                        DebugPrintLaunchArgs("Launch candidate args",
+                                             x + 1,
+                                             j,
+                                             GLOBCFG.KEYARGC[x + 1][j],
+                                             GLOBCFG.KEYARGS[x + 1][j]);
 
                         is_command = LoaderPathIsCommandToken(entry_path);
                         if (is_command) {
@@ -444,6 +498,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             if (PrepareLaunchPathForExec(entry_path, x + 1, j, &execpaths[j], 0) < 0)
                                 continue;
                             ShowLaunchStatus(execpaths[j]);
+                            DPRINTF("Launch execute: key=%d entry=%d exec='%s'\n", x + 1, j, execpaths[j]);
+                            DebugPrintLaunchArgs("Launch execute args",
+                                                 x + 1,
+                                                 j,
+                                                 GLOBCFG.KEYARGC[x + 1][j],
+                                                 GLOBCFG.KEYARGS[x + 1][j]);
                             CleanUp();
                             RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         }
@@ -496,6 +556,13 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             if (entry_path == NULL || *entry_path == '\0')
                 continue;
 
+            DPRINTF("AUTO candidate: entry=%d raw='%s'\n", j, entry_path);
+            DebugPrintLaunchArgs("AUTO candidate args",
+                                 0,
+                                 j,
+                                 GLOBCFG.KEYARGC[0][j],
+                                 GLOBCFG.KEYARGS[0][j]);
+
             is_command = LoaderPathIsCommandToken(entry_path);
             if (is_command) {
                 ShowLaunchStatus(entry_path);
@@ -531,6 +598,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1) < 0)
                     continue;
                 ShowLaunchStatus(execpaths[j]);
+                DPRINTF("AUTO execute: entry=%d exec='%s'\n", j, execpaths[j]);
+                DebugPrintLaunchArgs("AUTO execute args",
+                                     0,
+                                     j,
+                                     GLOBCFG.KEYARGC[0][j],
+                                     GLOBCFG.KEYARGS[0][j]);
                 CleanUp();
                 RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[0][j], GLOBCFG.KEYARGS[0][j]);
             }

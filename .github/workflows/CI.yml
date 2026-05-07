@@ -20,7 +20,7 @@ on:
         description: compile with debugging functionality
       printf:
         type: choice
-        description: wich debugging messages variant to use
+        description: which debugging messages variant to use
         options:
         - NONE
         - PRINTF
@@ -35,7 +35,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       DEBUG: 'DEBUG=1'
-      PRINTF_ARGS: 'PRINTF=PRINTF'
+      PRINTF_ARGS: 'UDPTTY=1'
     steps:
 
       - name: Install dependencies
