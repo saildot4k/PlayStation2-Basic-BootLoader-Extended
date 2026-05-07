@@ -94,8 +94,8 @@ static void DrawCreditsSplashFrame(void)
         "BY MATIAS ISRAELSON (EL_ISRA). EXTENDED BY R3Z3N and AI",
         "BASED ON SP193 OSD INIT SAMPLES",
         "THANKS: FJTRUJY, UYJULIAN, ASMBLUR, AKUHAK, PCM720, BERION, RIPTO, NUNO, GHOSTTOWNUS",
-        "v"VERSION"."SUBVERSION"."PATCHLEVEL" - "STATUS",
-        " Compiled on "__DATE__",  
+        "v"VERSION"."SUBVERSION"."PATCHLEVEL" - "STATUS"",
+        "Compiled on "__DATE__",  
         "PRESS START TO RETURN TO LAUNCH KEYS",
     };
     const u32 colors[] = {
