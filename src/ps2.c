@@ -22,8 +22,11 @@
 #include "egsm_parse.h"
 #include "debugprintf.h"
 #include "irx_import.h"
+#include "util.h"
 
 void CleanUp(void);
+
+#define SYSTEM_CNF_ERROR_PAUSE_MS 3000u
 
 #if EGSM_BUILD
 extern unsigned char ps2_stage2_loader_elf[];
@@ -829,7 +832,7 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
     if ((fd = open("cdrom0:\\SYSTEM.CNF;1", O_RDONLY)) < 0) {
         scr_setfontcolor(0x0000ff);
         scr_printf("%s: Can't open SYSTEM.CNF\n", __func__);
-        sleep(3);
+        delay_ms(SYSTEM_CNF_ERROR_PAUSE_MS);
         scr_clear();
         BootError();
     }
@@ -838,7 +841,7 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
     if (size < 0 || lseek(fd, 0, SEEK_SET) < 0) {
         scr_setfontcolor(0x0000ff);
         scr_printf("%s: Can't seek SYSTEM.CNF\n", __func__);
-        sleep(3);
+        delay_ms(SYSTEM_CNF_ERROR_PAUSE_MS);
         scr_clear();
         BootError();
     }
@@ -850,7 +853,7 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
         if ((size_read = read(fd, &system_cnf[size - size_remaining], size_remaining)) <= 0) {
             scr_setfontcolor(0x0000ff);
             scr_printf("%s: Can't read SYSTEM.CNF\n", __func__);
-            sleep(3);
+            delay_ms(SYSTEM_CNF_ERROR_PAUSE_MS);
             scr_clear();
             BootError();
         }

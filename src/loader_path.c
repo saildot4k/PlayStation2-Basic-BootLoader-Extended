@@ -293,10 +293,17 @@ static int build_mass_path(char *out, size_t out_size, const char *suffix, int u
     if (out == NULL || out_size == 0 || suffix == NULL || suffix[0] != ':')
         return 0;
 
-    if (unit >= 0 && unit <= 9)
-        snprintf(out, out_size, "mass%d%s", unit, suffix);
-    else
-        snprintf(out, out_size, "mass0%s", suffix);
+    if (suffix[1] == '/' || suffix[1] == '\\' || suffix[1] == '\0') {
+        if (unit >= 0 && unit <= 9)
+            snprintf(out, out_size, "mass%d%s", unit, suffix);
+        else
+            snprintf(out, out_size, "mass0%s", suffix);
+    } else {
+        if (unit >= 0 && unit <= 9)
+            snprintf(out, out_size, "mass%d:/%s", unit, suffix + 1);
+        else
+            snprintf(out, out_size, "mass0:/%s", suffix + 1);
+    }
 
     return 1;
 }

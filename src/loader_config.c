@@ -7,10 +7,8 @@
 #include "splash_render.h"
 #include "splash_screen.h"
 
-#define MASS_CONFIG_LATE_WAIT_MS 10000u
-#define MASS_CONFIG_STAGE_WAIT_MS 2000u
-#define MASS_CONFIG_STAGE_WAIT_MX4_MS 15000u
-#define MASS_CONFIG_PRIMARY_GRACE_MS 300u
+#define CONFIG_DEVICE_READY_POLL_INTERVAL_MS 200u
+#define CONFIG_FATAL_ERROR_DISPLAY_MS 3000u
 
 extern unsigned char *config_buf;
 extern int g_is_psx_desr;
@@ -258,14 +256,6 @@ static void set_fallback_entry_args(const DefaultLaunchArgEntry *default_args, i
     }
 }
 
-static int path_is_legacy_mass_or_usb(const char *path)
-{
-    if (path == NULL || *path == '\0')
-        return 0;
-
-    return ci_starts_with(path, "mass") || ci_starts_with(path, "usb");
-}
-
 static int path_is_legacy_mass(const char *path)
 {
     if (path == NULL || *path == '\0')
@@ -386,42 +376,6 @@ static int build_mass_mx4_alias(const char *path, char *out, size_t out_size)
 
     return 1;
 }
-
-static int path_is_fixed_mass_slot_0_to_4(const char *path)
-{
-    if (path == NULL || *path == '\0')
-        return 0;
-    if (!ci_starts_with(path, "mass"))
-        return 0;
-    return (path[4] >= '0' && path[4] <= '4' && path[5] == ':');
-}
-
-static int path_is_legacy_mass_mx4_candidate(const char *path)
-{
-    if (path == NULL || *path == '\0')
-        return 0;
-    if (!ci_starts_with(path, "mass"))
-        return 0;
-    if (path[4] == ':')
-        return 1;
-    if (path[4] >= '0' && path[4] <= '4' && path[5] == ':')
-        return 1;
-    return 0;
-}
-
-static int should_try_mx4_probe_for_mass(const char *primary_path,
-                                         const char *secondary_path,
-                                         const char *driver_tag)
-{
-    if (driver_tag != NULL && driver_tag[0] != '\0') {
-        if (ci_starts_with(driver_tag, "sdc"))
-            return 1;
-        return 0;
-    }
-
-    return path_is_legacy_mass_mx4_candidate(primary_path) ||
-           path_is_legacy_mass_mx4_candidate(secondary_path);
-}
 #endif
 
 static int append_unique_candidate(const char **paths,
@@ -445,19 +399,20 @@ static int append_unique_candidate(const char **paths,
     return count + 1;
 }
 
-static int candidate_list_contains(const char **paths, int count, const char *candidate)
+static int config_candidate_should_probe_now(const char *candidate_path)
 {
-    int i;
+    LoaderPathFamily family;
 
-    if (paths == NULL || candidate == NULL || *candidate == '\0')
+    if (candidate_path == NULL || *candidate_path == '\0')
         return 0;
 
-    for (i = 0; i < count; i++) {
-        if (ci_eq(paths[i], candidate))
-            return 1;
-    }
+    family = LoaderPathFamilyFromPath(candidate_path);
 
-    return 0;
+    // Keep strict readiness gating only for APA HDD paths.
+    if (family == LOADER_PATH_FAMILY_HDD_APA)
+        return LoaderPathCanAttemptNow(candidate_path);
+
+    return 1;
 }
 
 static FILE *open_first_config_candidate(const char **paths,
@@ -479,18 +434,12 @@ static FILE *open_first_config_candidate(const char **paths,
     for (i = 0; i < path_count; i++) {
         const char *candidate_path = paths[i];
         char *resolved_path;
-        LoaderPathFamily candidate_family;
         FILE *fp = NULL;
-        int can_attempt_now;
 
         if (candidate_path == NULL || *candidate_path == '\0')
             continue;
-        candidate_family = LoaderPathFamilyFromPath(candidate_path);
-        can_attempt_now = LoaderPathCanAttemptNow(candidate_path);
 
-        // Keep strict readiness gate for APA HDD paths, but for other families
-        // still try direct CheckPath+fopen (same style as LOGO.BIN probing).
-        if (!can_attempt_now && candidate_family == LOADER_PATH_FAMILY_HDD_APA)
+        if (!config_candidate_should_probe_now(candidate_path))
             continue;
 
         resolved_path = CheckPath(candidate_path);
@@ -511,78 +460,42 @@ static FILE *open_first_config_candidate(const char **paths,
     return NULL;
 }
 
-static int candidate_list_has_attemptable_path(const char **paths, int path_count)
+static int should_wait_for_config_device_family(LoaderPathFamily family)
 {
-    int i;
-
-    if (paths == NULL || path_count <= 0)
-        return 0;
-
-    for (i = 0; i < path_count; i++) {
-        const char *candidate_path = paths[i];
-
-        if (candidate_path == NULL || *candidate_path == '\0')
-            continue;
-        if (LoaderPathCanAttemptNow(candidate_path))
-            return 1;
-    }
-
-    return 0;
+    return (family == LOADER_PATH_FAMILY_BDM ||
+            family == LOADER_PATH_FAMILY_MX4SIO ||
+            family == LOADER_PATH_FAMILY_MMCE ||
+            family == LOADER_PATH_FAMILY_HDD_APA);
 }
 
-static FILE *wait_for_config_candidates(const char **paths,
-                                        int path_count,
-                                        const char **matched_path_out,
-                                        char *resolved_path_out,
-                                        size_t resolved_path_out_size,
-                                        unsigned int timeout_ms,
-                                        u64 *rescue_combo_deadline,
-                                        LoaderEmergencyPollFn poll_fn)
+static void wait_for_config_device_ready(const char *ready_path,
+                                         const char *requested_path,
+                                         u64 *rescue_combo_deadline,
+                                         LoaderEmergencyPollFn poll_fn)
 {
-    unsigned int waited_ms = 0;
-    const unsigned int step_ms = 50;
-    const unsigned int idle_probe_interval_ms = 250;
-    FILE *fp = NULL;
-    unsigned int last_probe_ms = 0;
-    int force_probe = 1;
-    int last_any_attemptable = -1;
+    LoaderPathFamily family;
 
-    if (matched_path_out != NULL)
-        *matched_path_out = NULL;
-    if (resolved_path_out != NULL && resolved_path_out_size > 0)
-        resolved_path_out[0] = '\0';
+    if (ready_path == NULL || *ready_path == '\0')
+        return;
 
-    while (waited_ms < timeout_ms) {
-        int any_attemptable;
-        unsigned int probe_interval_ms;
+    family = LoaderPathFamilyFromPath(ready_path);
+    if (!should_wait_for_config_device_family(family))
+        return;
 
+    if (LoaderPathCanAttemptNow(ready_path))
+        return;
+
+    DPRINTF("Config wait: requested='%s' waiting for device readiness path='%s'\n",
+            (requested_path != NULL && *requested_path != '\0') ? requested_path : ready_path,
+            ready_path);
+    while (!LoaderPathCanAttemptNow(ready_path)) {
         if (poll_fn != NULL)
             poll_fn(rescue_combo_deadline);
-
-        any_attemptable = candidate_list_has_attemptable_path(paths, path_count);
-        probe_interval_ms = any_attemptable ? step_ms : idle_probe_interval_ms;
-
-        if (force_probe ||
-            any_attemptable != last_any_attemptable ||
-            (waited_ms - last_probe_ms) >= probe_interval_ms) {
-            fp = open_first_config_candidate(paths,
-                                             path_count,
-                                             matched_path_out,
-                                             resolved_path_out,
-                                             resolved_path_out_size);
-            if (fp != NULL)
-                return fp;
-
-            last_probe_ms = waited_ms;
-            force_probe = 0;
-        }
-        last_any_attemptable = any_attemptable;
-
-        usleep(step_ms * 1000);
-        waited_ms += step_ms;
+        delay_ms(CONFIG_DEVICE_READY_POLL_INTERVAL_MS);
     }
-
-    return NULL;
+    DPRINTF("Config wait ready: requested='%s' path='%s'\n",
+            (requested_path != NULL && *requested_path != '\0') ? requested_path : ready_path,
+            ready_path);
 }
 
 const char *LoaderGetResolvedConfigPath(void)
@@ -604,7 +517,6 @@ int LoaderFindConfigFile(FILE **fp_out,
     const char *boot_cwd_config;
     const char *boot_family_config;
     const char *boot_path_hint;
-    const char *boot_driver_tag;
     int boot_family_source_hint;
     LoaderPathFamily boot_cwd_family;
     int boot_from_legacy_mass = 0;
@@ -630,7 +542,6 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_cwd_config = LoaderGetBootCwdConfigPath();
     boot_family_config = LoaderGetBootConfigPath();
     boot_path_hint = LoaderGetBootPathHint();
-    boot_driver_tag = LoaderGetBootDriverTag();
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
 #ifdef DISC_STOP_AT_BOOT
@@ -665,21 +576,15 @@ int LoaderFindConfigFile(FILE **fp_out,
 #endif
 
     {
-        int mass_late_wait_used = 0;
+        int boot_device_wait_done = 0;
         int legacy_mass_transports_primed = 0;
-#ifdef MX4SIO
-        int mass_mx4_probe_used = 0;
-#else
-        (void)boot_driver_tag;
-#endif
 
         for (source = 0; source < 5; source++) {
         const char *config_path = NULL;
+        const char *ready_path = NULL;
         int source_hint = SOURCE_INVALID;
         int attempt = 0;
-        int max_attempts = 1;
-        unsigned int retry_delay_us = 0;
-        int allow_mass_late_wait = 0;
+        LoaderPathFamily ready_family = LOADER_PATH_FAMILY_NONE;
         int generic_mass_boot_path = 0;
         char generic_config_path_buf[256];
         char usb_config_path_buf[256];
@@ -696,21 +601,17 @@ int LoaderFindConfigFile(FILE **fp_out,
         int primary_count = 0;
         const char *secondary_candidates[8];
         int secondary_count = 0;
-        const char *wait_candidates[16];
-        int wait_count = 0;
-        const char *matched_quick_path = NULL;
-        const char *matched_wait_path = NULL;
-        const char *wait_requested_path = NULL;
+        const char *probe_candidates[16];
+        int probe_count = 0;
+        const char *matched_path = NULL;
         const char *report_requested_path = NULL;
-        char matched_quick_resolved_path[256];
-        char matched_wait_resolved_path[256];
+        char matched_resolved_path[256];
         char resolved_path_from_match[256];
         const char *resolved_path_hint = NULL;
         char *resolved_path;
         FILE *fp = NULL;
 
-        matched_quick_resolved_path[0] = '\0';
-        matched_wait_resolved_path[0] = '\0';
+        matched_resolved_path[0] = '\0';
         resolved_path_from_match[0] = '\0';
 
         if (poll_fn != NULL)
@@ -819,12 +720,6 @@ int LoaderFindConfigFile(FILE **fp_out,
         }
 #endif
 
-        if ((source == 1 || source == 2) &&
-            LoaderPathFamilyFromPath(config_path) == LOADER_PATH_FAMILY_BDM &&
-            path_is_legacy_mass_or_usb(config_path)) {
-            allow_mass_late_wait = 1;
-        }
-
         generic_mass_boot_path = (boot_from_legacy_mass && path_is_generic_legacy_mass(config_path));
         if (!generic_mass_boot_path) {
             primary_count = append_unique_candidate(primary_candidates, primary_count, 8, config_path);
@@ -880,250 +775,58 @@ int LoaderFindConfigFile(FILE **fp_out,
         }
 
         for (attempt = 0; attempt < primary_count; attempt++)
-            wait_count = append_unique_candidate(wait_candidates, wait_count, 16, primary_candidates[attempt]);
+            probe_count = append_unique_candidate(probe_candidates, probe_count, 16, primary_candidates[attempt]);
         for (attempt = 0; attempt < secondary_count; attempt++)
-            wait_count = append_unique_candidate(wait_candidates, wait_count, 16, secondary_candidates[attempt]);
+            probe_count = append_unique_candidate(probe_candidates, probe_count, 16, secondary_candidates[attempt]);
 
-        // Boot-family devices can appear shortly after modules load.
-        // Keep probing CWD/boot-family locations for a while before falling
-        // through to memory-card fallback.
-        if (source == 0 || source == 1 || source == 2) {
-            LoaderPathFamily family = LoaderPathFamilyFromPath(config_path);
+        if (source <= 2 && !boot_device_wait_done) {
+            if (source == 0) {
+                ready_path = boot_cwd_config;
+                ready_family = boot_cwd_family;
+                if ((ready_path == NULL || *ready_path == '\0') &&
+                    boot_family_config != NULL &&
+                    *boot_family_config != '\0') {
+                    ready_path = boot_family_config;
+                    ready_family = LoaderPathFamilyFromPath(ready_path);
+                }
+            } else {
+                ready_path = config_path;
+                ready_family = LoaderPathFamilyFromPath(ready_path);
+            }
 
-            if (family == LOADER_PATH_FAMILY_NONE && source == 0)
-                family = boot_cwd_family;
-
-            if (family == LOADER_PATH_FAMILY_BDM ||
-                family == LOADER_PATH_FAMILY_MMCE ||
-                family == LOADER_PATH_FAMILY_MX4SIO) {
-                max_attempts = 3;
-                retry_delay_us = 200000;
+            if (should_wait_for_config_device_family(ready_family)) {
+                wait_for_config_device_ready(ready_path,
+                                             config_path,
+                                             rescue_combo_deadline,
+                                             poll_fn);
+                boot_device_wait_done = 1;
             }
         }
 
-        for (attempt = 0; attempt < max_attempts; attempt++) {
-            if (poll_fn != NULL)
-                poll_fn(rescue_combo_deadline);
-
-            fp = open_first_config_candidate(primary_candidates,
-                                             primary_count,
-                                             &matched_quick_path,
-                                             matched_quick_resolved_path,
-                                             sizeof(matched_quick_resolved_path));
-            if (fp != NULL)
-                break;
-
-            if (attempt + 1 < max_attempts && retry_delay_us > 0)
-                usleep(retry_delay_us);
-        }
-        if (fp != NULL && matched_quick_path != NULL) {
-            config_path = matched_quick_path;
-            if (matched_quick_resolved_path[0] != '\0') {
+        fp = open_first_config_candidate(probe_candidates,
+                                         probe_count,
+                                         &matched_path,
+                                         matched_resolved_path,
+                                         sizeof(matched_resolved_path));
+        if (fp != NULL && matched_path != NULL) {
+            config_path = matched_path;
+            if (matched_resolved_path[0] != '\0') {
                 snprintf(resolved_path_from_match,
                          sizeof(resolved_path_from_match),
                          "%s",
-                         matched_quick_resolved_path);
+                         matched_resolved_path);
                 resolved_path_hint = resolved_path_from_match;
             }
         }
 
-        // Legacy mass:/ and usb:/ roots can appear shortly after transport load.
-        // Keep startup snappy (2x50ms fast path), then do one short mount wait
-        // before falling back to memory-card config.
-        if (fp == NULL && allow_mass_late_wait && !mass_late_wait_used) {
-#ifdef MX4SIO
-            int mass_wait_timed_out = 0;
-#endif
-
-            mass_late_wait_used = 1;
-            wait_requested_path = config_path;
-            DPRINTF("Config wait: requested='%s' waiting for mass mount\n", config_path);
-
-            fp = wait_for_config_candidates(wait_candidates,
-                                            wait_count,
-                                            &matched_wait_path,
-                                            matched_wait_resolved_path,
-                                            sizeof(matched_wait_resolved_path),
-                                            // One-shot grace period for late USB
-                                            // partition enumeration on legacy mass.
-                                            MASS_CONFIG_LATE_WAIT_MS,
-                                            rescue_combo_deadline,
-                                            poll_fn);
-            if (fp != NULL) {
-                if (source == 1 &&
-                    matched_wait_path != NULL &&
-                    candidate_list_contains(secondary_candidates, secondary_count, matched_wait_path) &&
-                    !candidate_list_contains(primary_candidates, primary_count, matched_wait_path)) {
-                    const char *primary_matched = NULL;
-                    FILE *primary_fp = NULL;
-
-                    // Preserve CWD priority: if family fallback appeared first,
-                    // give CWD a short grace window before accepting fallback.
-                    fclose(fp);
-                    fp = NULL;
-                    primary_fp = wait_for_config_candidates(primary_candidates,
-                                                            primary_count,
-                                                            &primary_matched,
-                                                            matched_wait_resolved_path,
-                                                            sizeof(matched_wait_resolved_path),
-                                                            MASS_CONFIG_PRIMARY_GRACE_MS,
-                                                            rescue_combo_deadline,
-                                                            poll_fn);
-                    if (primary_fp != NULL) {
-                        fp = primary_fp;
-                        matched_wait_path = primary_matched;
-                    } else {
-                        const char *recheck_list[1];
-                        const char *recheck_match = NULL;
-
-                        recheck_list[0] = matched_wait_path;
-                        fp = wait_for_config_candidates(recheck_list,
-                                                        1,
-                                                        &recheck_match,
-                                                        matched_wait_resolved_path,
-                                                        sizeof(matched_wait_resolved_path),
-                                                        50u,
-                                                        rescue_combo_deadline,
-                                                        poll_fn);
-                        if (fp != NULL)
-                            matched_wait_path = recheck_match;
-                    }
-                }
-                if (fp != NULL) {
-                    if (matched_wait_path != NULL)
-                        config_path = matched_wait_path;
-                    if (matched_wait_resolved_path[0] != '\0') {
-                        snprintf(resolved_path_from_match,
-                                 sizeof(resolved_path_from_match),
-                                 "%s",
-                                 matched_wait_resolved_path);
-                        resolved_path_hint = resolved_path_from_match;
-                    }
-                    if (resolved_path_hint != NULL && *resolved_path_hint != '\0')
-                        resolved_path = (char *)resolved_path_hint;
-                    else
-                        resolved_path = CheckPath(config_path);
-                    if (resolved_path == NULL || *resolved_path == '\0')
-                        resolved_path = (char *)config_path;
-                    DPRINTF("Config wait found: requested='%s' matched='%s' resolved='%s'\n",
-                            (wait_requested_path != NULL) ? wait_requested_path : "<null>",
-                            config_path,
-                            resolved_path);
-                } else {
-                    DPRINTF("Config wait timeout: requested='%s'\n", config_path);
-#ifdef MX4SIO
-                    mass_wait_timed_out = 1;
-#endif
-                }
-            } else {
-                DPRINTF("Config wait timeout: requested='%s'\n", config_path);
-#ifdef MX4SIO
-                mass_wait_timed_out = 1;
-#endif
-            }
-
-#ifdef MX4SIO
-            if (fp == NULL &&
-                mass_wait_timed_out &&
-                !mass_mx4_probe_used &&
-                allow_mx4_on_legacy_mass &&
-                should_try_mx4_probe_for_mass(config_path,
-                                              (secondary_count > 0) ? secondary_candidates[0] : NULL,
-                                              boot_driver_tag)) {
-                unsigned int mx4_wait_ms = MASS_CONFIG_STAGE_WAIT_MS;
-                const char *mx4_wait_candidates[16];
-                char mx4_wait_aliases[16][256];
-                int mx4_wait_count = 0;
-                int idx;
-
-                mass_mx4_probe_used = 1;
-                DPRINTF("Config probe: enabling MX4SIO transport for legacy mass fallback\n");
-
-                // If paths are explicit mass0..4 slots (MX4SIO-capable legacy range),
-                // allow a longer post-probe wait. Some MX4SIO stacks take a while to
-                // finish card init and expose mounted filesystems.
-                if (path_is_fixed_mass_slot_0_to_4(config_path) ||
-                    (secondary_count > 0 && path_is_fixed_mass_slot_0_to_4(secondary_candidates[0])))
-                    mx4_wait_ms = MASS_CONFIG_STAGE_WAIT_MX4_MS;
-                DPRINTF("Config probe: MX4SIO wait window=%ums\n", mx4_wait_ms);
-
-                if (LoaderLoadBdmTransportsForHint("mx4sio:/") >= 0) {
-                    for (idx = 0; idx < wait_count; idx++) {
-                        const char *candidate = wait_candidates[idx];
-                        const char *mx4_candidate = candidate;
-
-                        if (candidate != NULL &&
-                            build_mass_mx4_alias(candidate,
-                                                 mx4_wait_aliases[idx],
-                                                 sizeof(mx4_wait_aliases[idx])) &&
-                            !ci_eq(mx4_wait_aliases[idx], candidate)) {
-                            mx4_candidate = mx4_wait_aliases[idx];
-                        }
-
-                        mx4_wait_count = append_unique_candidate(mx4_wait_candidates,
-                                                                 mx4_wait_count,
-                                                                 16,
-                                                                 mx4_candidate);
-                    }
-                    fp = wait_for_config_candidates(mx4_wait_candidates,
-                                                    mx4_wait_count,
-                                                    &matched_wait_path,
-                                                    matched_wait_resolved_path,
-                                                    sizeof(matched_wait_resolved_path),
-                                                    mx4_wait_ms,
-                                                    rescue_combo_deadline,
-                                                    poll_fn);
-                    if (fp != NULL) {
-                        if (matched_wait_path != NULL)
-                            config_path = matched_wait_path;
-                        if (matched_wait_resolved_path[0] != '\0') {
-                            snprintf(resolved_path_from_match,
-                                     sizeof(resolved_path_from_match),
-                                     "%s",
-                                     matched_wait_resolved_path);
-                            resolved_path_hint = resolved_path_from_match;
-                        }
-                        if (resolved_path_hint != NULL && *resolved_path_hint != '\0')
-                            resolved_path = (char *)resolved_path_hint;
-                        else
-                            resolved_path = CheckPath(config_path);
-                        if (resolved_path == NULL || *resolved_path == '\0')
-                            resolved_path = (char *)config_path;
-                        DPRINTF("Config probe found after MX4SIO: matched='%s' resolved='%s'\n",
-                                config_path,
-                                resolved_path);
-                    } else {
-                        DPRINTF("Config probe miss after MX4SIO\n");
-                    }
-                } else {
-                    DPRINTF("Config probe: MX4SIO transport unavailable or failed\n");
-                }
-            }
-#endif
-        }
-
-        if (fp == NULL)
-        {
-            if (source <= 2 && max_attempts > 1) {
-                DPRINTF("Config miss: requested='%s' attempts=%d\n",
-                        config_path,
-                        max_attempts);
-            }
+        if (fp == NULL) {
+            if (source <= 2)
+                DPRINTF("Config miss: requested='%s'\n", config_path);
             continue;
         }
 
         // Keep "requested" aligned with the actual matched candidate path.
-        // This avoids reporting CWD when a later fallback candidate matched.
         report_requested_path = config_path;
-
-        if (source == 1 &&
-            matched_wait_path != NULL &&
-            candidate_list_contains(secondary_candidates, secondary_count, matched_wait_path) &&
-            !candidate_list_contains(primary_candidates, primary_count, matched_wait_path) &&
-            boot_family_config != NULL &&
-            *boot_family_config != '\0') {
-            report_requested_path = boot_family_config;
-        }
 
         if (resolved_path_hint != NULL && *resolved_path_hint != '\0')
             resolved_path = (char *)resolved_path_hint;
@@ -1362,7 +1065,7 @@ fail:
     scr_setbgcolor(0x0000ff);
     scr_clear();
     scr_printf("\tFailed to load config file\n");
-    sleep(3);
+    delay_ms(CONFIG_FATAL_ERROR_DISPLAY_MS);
     scr_setbgcolor(0x000000);
     scr_clear();
 #endif

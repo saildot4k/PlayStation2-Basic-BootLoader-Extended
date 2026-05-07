@@ -27,8 +27,9 @@
 #define PATINFO_MAX_CNF 4096
 #define PATINFO_ELF_MEM_ADDR 0x01000000
 #define PATINFO_IOPRP_MEM_ADDR 0x01F00000
+#define DBGWAIT_LAUNCH_PAUSE_MS 2000u
 #ifdef DEBUG
-#define DBGWAIT(T) sleep(T)
+#define DBGWAIT(T) delay_ms(T)
 #else
 #define DBGWAIT(T)
 #endif
@@ -1501,11 +1502,11 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 
     if (effective_party == NULL) {
         DPRINTF("LoadELFFromFile(%s, %d, %p)\n", intent.launch_filename, launch_argc, launch_argv);
-        DBGWAIT(2);
+        DBGWAIT(DBGWAIT_LAUNCH_PAUSE_MS);
         LoadELFFromFile(intent.launch_filename, launch_argc, launch_argv);
     } else {
         DPRINTF("LoadELFFromFileWithPartition(%s, %s, %d, %p);\n", intent.launch_filename, effective_party, launch_argc, launch_argv);
-        DBGWAIT(2);
+        DBGWAIT(DBGWAIT_LAUNCH_PAUSE_MS);
         LoadELFFromFileWithPartition(intent.launch_filename, effective_party, launch_argc, launch_argv);
     }
 

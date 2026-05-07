@@ -377,24 +377,20 @@ static int build_boot_cwd_logo_path(char *out, size_t out_size)
 
 static void probe_custom_logo_once(void)
 {
-    const char *candidates[2];
     char boot_logo_path[CUSTOM_LOGO_PATH_MAX];
-    unsigned int i;
-    unsigned int candidate_count = 0;
 
     if (g_custom_logo_state != CUSTOM_LOGO_UNCHECKED)
         return;
 
-    // Keep logo discovery fail-fast: CWD only, no retries/timeouts.
-    candidates[candidate_count++] = "LOGO.BIN";
-    if (build_boot_cwd_logo_path(boot_logo_path, sizeof(boot_logo_path)))
-        candidates[candidate_count++] = boot_logo_path;
+    // Keep logo discovery strict: derive LOGO.BIN from boot CWD only.
+    if (!build_boot_cwd_logo_path(boot_logo_path, sizeof(boot_logo_path))) {
+        g_custom_logo_state = CUSTOM_LOGO_UNAVAILABLE;
+        return;
+    }
 
-    for (i = 0; i < candidate_count; i++) {
-        if (load_custom_logo_from_path(candidates[i])) {
-            g_custom_logo_state = CUSTOM_LOGO_READY;
-            return;
-        }
+    if (load_custom_logo_from_path(boot_logo_path)) {
+        g_custom_logo_state = CUSTOM_LOGO_READY;
+        return;
     }
 
     g_custom_logo_state = CUSTOM_LOGO_UNAVAILABLE;

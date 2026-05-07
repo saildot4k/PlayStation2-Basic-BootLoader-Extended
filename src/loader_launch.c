@@ -130,7 +130,7 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
             }
 
             if (sleep_ms > 0)
-                usleep(sleep_ms * 1000u);
+                delay_ms(sleep_ms);
         }
     }
 

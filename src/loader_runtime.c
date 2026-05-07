@@ -5,6 +5,8 @@
 #include "splash_screen.h"
 
 #define ROMVER_MODEL_PREFIX_LEN 5
+#define CREDITS_POLL_INTERVAL_MS 50u
+#define EMERGENCY_RESCUE_POLL_INTERVAL_MS 100u
 
 extern u8 ROMVER[16];
 extern int g_is_psx_desr;
@@ -184,7 +186,7 @@ int credits(void)
             break;
 
         prev_pad = pad;
-        usleep(50000);
+        delay_ms(CREDITS_POLL_INTERVAL_MS);
     }
 
     return 1;
@@ -216,7 +218,7 @@ void LoaderRunEmergencyMode(const char *reason)
     while (1) {
         char *resolved_rescue_path = NULL;
 
-        usleep(100000);
+        delay_ms(EMERGENCY_RESCUE_POLL_INTERVAL_MS);
 
         // Match launch-entry behavior: ensure BDM family is active first.
         // If booted on MC/MMCE/HDD, this may reboot IOP once to load USB stack.

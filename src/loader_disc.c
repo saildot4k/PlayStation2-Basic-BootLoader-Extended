@@ -10,6 +10,8 @@
 
 extern u8 ROMVER[16];
 
+#define LEGACY_CD_QUIRK_TRAY_CLOSE_DELAY_MS 500u
+
 static void AlarmCallback(s32 alarm_id, u16 time, void *common)
 {
     (void)alarm_id;
@@ -44,7 +46,7 @@ static void ApplyLegacyCdLaunchQuirkFast(void)
 
     DPRINTF("%s: applying <70k CDVD quirk (open tray, close after 500ms)\n", __func__);
     sceCdTrayReq(SCECdTrayOpen, &status);
-    usleep(500000);
+    delay_ms(LEGACY_CD_QUIRK_TRAY_CLOSE_DELAY_MS);
     sceCdTrayReq(SCECdTrayClose, &status);
 }
 

@@ -25,16 +25,20 @@ int exist(const char *filepath)
     return 1;
 }
 
-void delay(int count)
+void delay_ms(unsigned int delay_ms)
 {
-    int i;
-    for (i = 0; i < count; i++) {
-        int ret;
+    if (delay_ms == 0)
+        return;
 
-        ret = 0x01000000;
-        while (ret--)
-            asm("nop\nnop\nnop\nnop");
-    }
+    usleep(delay_ms * 1000u);
+}
+
+void delay(int delay_ms_value)
+{
+    if (delay_ms_value <= 0)
+        return;
+
+    delay_ms((unsigned int)delay_ms_value);
 }
 
 

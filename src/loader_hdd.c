@@ -5,6 +5,8 @@
 char PART[128] = "\0";
 int HDD_USABLE = 0;
 
+#define HDD_CHECKER_WAIT_MS 10000u
+
 int CheckHDD(void)
 {
     int ret = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0);
@@ -148,7 +150,7 @@ void HDDChecker(void)
         scr_setfontcolor(0x00FFFF), scr_printf("Skipping test, HDD is not connected\n");
     scr_setfontcolor(0xFFFFFF);
     scr_printf("\t\tWaiting for 10 seconds...\n");
-    sleep(10);
+    delay_ms(HDD_CHECKER_WAIT_MS);
 }
 
 /// @brief poweroff callback function

@@ -6,9 +6,15 @@
 int exist(const char *filepath);
 
 /**
- * @brief waits a specified ammount of time, usually used to provide the famous 'USB delay', wLaunchELF uses 3, KELFBinder used 5?
+ * @brief Sleep for a specified number of milliseconds.
 */
-void delay(int count);
+void delay_ms(unsigned int delay_ms);
+
+/**
+ * @brief Backward-compatible alias for delay_ms.
+ * @param delay_ms milliseconds to sleep.
+ */
+void delay(int delay_ms);
 
 /**
  * @brief load an IRX file into memory from a file

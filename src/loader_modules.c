@@ -2,6 +2,11 @@
 #include "main.h"
 #include "loader_path.h"
 
+#define USB_TRANSPORT_POST_USBD_DELAY_MS 1000u
+#define USB_TRANSPORT_ENUMERATION_DELAY_MS 1000u
+#define ATA_TRANSPORT_SETTLE_DELAY_MS 1000u
+#define UDPTTY_POST_LOAD_DELAY_MS 3000u
+
 // Tracks whether the BDM family stack is available for path probing/launch.
 // This is broader than just USB transport readiness.
 static int s_bdm_modules_loaded = 0;
@@ -360,6 +365,74 @@ static void normalize_disc_separators(char *path)
     }
 }
 
+static int normalize_prefix_root_slash_inplace(char *path,
+                                               size_t path_size,
+                                               const char *prefix,
+                                               size_t prefix_len)
+{
+    size_t colon_index;
+    size_t tail_index;
+    size_t path_len;
+
+    if (path == NULL || path_size == 0 || prefix == NULL)
+        return 0;
+    if (!ci_starts_with(path, prefix))
+        return 0;
+
+    if (path[prefix_len] == ':')
+        colon_index = prefix_len;
+    else if (path[prefix_len] >= '0' &&
+             path[prefix_len] <= '9' &&
+             path[prefix_len + 1] == ':')
+        colon_index = prefix_len + 1;
+    else
+        return 0;
+
+    tail_index = colon_index + 1;
+    if (path[tail_index] == '/' || path[tail_index] == '\\' || path[tail_index] == '\0')
+        return 0;
+
+    path_len = strlen(path);
+    if (path_len + 1 >= path_size)
+        return 0;
+
+    memmove(path + tail_index + 1, path + tail_index, path_len - tail_index + 1);
+    path[tail_index] = '/';
+    return 1;
+}
+
+static void normalize_non_apa_root_slash_inplace(char *path, size_t path_size)
+{
+    if (path == NULL || path_size == 0 || *path == '\0')
+        return;
+
+    if (normalize_prefix_root_slash_inplace(path, path_size, "mc", 2))
+        return;
+#ifdef MMCE
+    if (normalize_prefix_root_slash_inplace(path, path_size, "mmce", 4))
+        return;
+#endif
+    if (normalize_prefix_root_slash_inplace(path, path_size, "mass", 4))
+        return;
+    if (normalize_prefix_root_slash_inplace(path, path_size, "usb", 3))
+        return;
+#ifdef MX4SIO
+    if (normalize_prefix_root_slash_inplace(path, path_size, "mx4sio", 6))
+        return;
+    if (normalize_prefix_root_slash_inplace(path, path_size, "massx", 5))
+        return;
+#endif
+#ifdef BDM_ATA
+    if (normalize_prefix_root_slash_inplace(path, path_size, "ata", 3))
+        return;
+#endif
+    if (normalize_prefix_root_slash_inplace(path, path_size, "ilink", 5))
+        return;
+    if (normalize_prefix_root_slash_inplace(path, path_size, "xfrom", 5))
+        return;
+    (void)normalize_prefix_root_slash_inplace(path, path_size, "host", 4);
+}
+
 static void refine_boot_hint_from_legacy_mass(void)
 {
     int mass_unit;
@@ -449,6 +522,8 @@ static void set_boot_cwd_config_path(const char *boot_path)
         memcpy(s_boot_cwd_config_path + prefix_len, cwd_file_name, strlen(cwd_file_name) + 1);
         if (use_disc_paths)
             normalize_disc_separators(s_boot_cwd_config_path);
+        else
+            normalize_non_apa_root_slash_inplace(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path));
         return;
     }
 
@@ -464,6 +539,8 @@ static void set_boot_cwd_config_path(const char *boot_path)
                strlen(cwd_tail_from_root) + 1);
         if (use_disc_paths)
             normalize_disc_separators(s_boot_cwd_config_path);
+        else
+            normalize_non_apa_root_slash_inplace(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path));
     }
 }
 
@@ -625,7 +702,7 @@ static int load_usb_transport_modules(void)
 #else
     ID = SifLoadStartModule(CheckPath("mc?:/PS2BBL/USBD.IRX"), 0, NULL, &RET);
 #endif
-    delay(3);
+    delay_ms(USB_TRANSPORT_POST_USBD_DELAY_MS);
     DPRINTF(" [USBD]: ret=%d, ID=%d\n", RET, ID);
     if (ID < 0 || RET == 1)
         return -1;
@@ -640,7 +717,7 @@ static int load_usb_transport_modules(void)
         return -2;
 
     // Give USB transport time to enumerate before first filesystem probe.
-    sleep(1);
+    delay_ms(USB_TRANSPORT_ENUMERATION_DELAY_MS);
 
     return 0;
 }
@@ -661,7 +738,7 @@ static int load_ata_transport_modules(void)
         return -2;
 
     // Match OSDMenu launcher behavior: let ata_bd settle briefly before probes.
-    sleep(1);
+    delay_ms(ATA_TRANSPORT_SETTLE_DELAY_MS);
 #endif
 
     return 0;
@@ -1389,6 +1466,6 @@ void loadUDPTTY(void)
     DPRINTF(" [PS2IP]: ret=%d, ID=%d\n", RET, ID);
     ID = SifExecModuleBuffer(&udptty_irx, size_udptty_irx, 0, NULL, &RET);
     DPRINTF(" [UDPTTY]: ret=%d, ID=%d\n", RET, ID);
-    sleep(3);
+    delay_ms(UDPTTY_POST_LOAD_DELAY_MS);
 }
 #endif

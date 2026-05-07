@@ -41,7 +41,6 @@
 void TimerInit(void);
 u64 Timer(void);
 void TimerEnd(void);
-void delay(int delay);
 //________________ From uLaunchELF ______________________
 // Timer Define
 
