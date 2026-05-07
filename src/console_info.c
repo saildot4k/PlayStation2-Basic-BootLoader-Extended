@@ -26,6 +26,126 @@ static int parse_mmce_slot_from_path(const char *path)
     return -1;
 }
 
+typedef enum
+{
+    MASS_TRANSPORT_UNKNOWN = 0,
+    MASS_TRANSPORT_USB,
+    MASS_TRANSPORT_MX4SIO,
+    MASS_TRANSPORT_ATA,
+    MASS_TRANSPORT_OTHER,
+    MASS_TRANSPORT_MIXED
+} MassTransportKind;
+
+static MassTransportKind mass_transport_kind_from_driver_tag(const char *driver_tag)
+{
+    if (driver_tag == NULL || *driver_tag == '\0')
+        return MASS_TRANSPORT_UNKNOWN;
+    if (ci_starts_with(driver_tag, "sdc"))
+        return MASS_TRANSPORT_MX4SIO;
+    if (ci_starts_with(driver_tag, "usb"))
+        return MASS_TRANSPORT_USB;
+    if (ci_starts_with(driver_tag, "ata"))
+        return MASS_TRANSPORT_ATA;
+    return MASS_TRANSPORT_OTHER;
+}
+
+static int format_mass_transport_label(char *out, size_t out_size, MassTransportKind kind, int cwd_suffix)
+{
+    if (out == NULL || out_size == 0)
+        return 0;
+
+    switch (kind) {
+        case MASS_TRANSPORT_USB:
+            snprintf(out, out_size, cwd_suffix ? "USB CWD" : "USB");
+            return 1;
+        case MASS_TRANSPORT_MX4SIO:
+            snprintf(out, out_size, cwd_suffix ? "MX4SIO CWD" : "MX4SIO");
+            return 1;
+        case MASS_TRANSPORT_ATA:
+            snprintf(out, out_size, cwd_suffix ? "ATA CWD" : "ATA");
+            return 1;
+        default:
+            break;
+    }
+
+    return 0;
+}
+
+#ifdef FILEXIO
+static MassTransportKind probe_runtime_mass_transport_kind(void)
+{
+    char mass_path[] = "mass0:";
+    int i;
+    int seen_usb = 0;
+    int seen_mx4 = 0;
+    int seen_ata = 0;
+    int seen_other = 0;
+
+    for (i = 0; i < 10; i++) {
+        int dd;
+        char driver_tag[16];
+        MassTransportKind kind;
+
+        mass_path[4] = (char)('0' + i);
+        dd = fileXioDopen(mass_path);
+        if (dd < 0)
+            continue;
+
+        memset(driver_tag, 0, sizeof(driver_tag));
+        fileXioIoctl(dd, USBMASS_IOCTL_GET_DRIVERNAME, driver_tag);
+        fileXioDclose(dd);
+
+        kind = mass_transport_kind_from_driver_tag(driver_tag);
+        switch (kind) {
+            case MASS_TRANSPORT_MX4SIO:
+                seen_mx4 = 1;
+                break;
+            case MASS_TRANSPORT_USB:
+                seen_usb = 1;
+                break;
+            case MASS_TRANSPORT_ATA:
+                seen_ata = 1;
+                break;
+            case MASS_TRANSPORT_OTHER:
+                seen_other = 1;
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (seen_mx4 + seen_usb + seen_ata + seen_other > 1)
+        return MASS_TRANSPORT_MIXED;
+    if (seen_mx4)
+        return MASS_TRANSPORT_MX4SIO;
+    if (seen_usb)
+        return MASS_TRANSPORT_USB;
+    if (seen_ata)
+        return MASS_TRANSPORT_ATA;
+    if (seen_other)
+        return MASS_TRANSPORT_OTHER;
+
+    return MASS_TRANSPORT_UNKNOWN;
+}
+#endif
+
+static MassTransportKind boot_mass_transport_kind(const char *boot_hint)
+{
+    MassTransportKind tag_kind = mass_transport_kind_from_driver_tag(LoaderGetBootDriverTag());
+
+    if (tag_kind != MASS_TRANSPORT_UNKNOWN)
+        return tag_kind;
+
+    if (boot_hint == NULL || !ci_starts_with(boot_hint, "mass"))
+        return MASS_TRANSPORT_UNKNOWN;
+
+#ifdef FILEXIO
+    return probe_runtime_mass_transport_kind();
+#endif
+
+    return MASS_TRANSPORT_UNKNOWN;
+}
+
 static int parse_mass_alias(const char *path, const char **suffix_out, int *unit_out)
 {
     const char *suffix = NULL;
@@ -93,6 +213,7 @@ static int format_mass_device_name(char *out,
                                    const char *boot_hint)
 {
     int mass_unit = parse_mass_unit_from_path(resolved_path);
+    MassTransportKind boot_mass_kind = boot_mass_transport_kind(boot_hint);
 
     if (out == NULL || out_size == 0)
         return 0;
@@ -101,9 +222,14 @@ static int format_mass_device_name(char *out,
         mass_unit = parse_mass_unit_from_path(boot_hint);
 
     if (mass_unit >= 0) {
+        if (format_mass_transport_label(out, out_size, boot_mass_kind, 0))
+            return 1;
         snprintf(out, out_size, "MASS%d", mass_unit);
         return 1;
     }
+
+    if (format_mass_transport_label(out, out_size, boot_mass_kind, 0))
+        return 1;
 
     if (resolved_path != NULL && *resolved_path != '\0') {
         if (ci_starts_with(resolved_path, "ata")) {
@@ -135,6 +261,7 @@ static void format_device_source_name(char *out,
 {
     int mmce_slot;
     int mass_unit_from_hint;
+    MassTransportKind boot_mass_kind = boot_mass_transport_kind(boot_hint);
 
     if (out == NULL || out_size == 0)
         return;
@@ -188,6 +315,8 @@ static void format_device_source_name(char *out,
             return;
         }
         if (ci_starts_with(boot_hint, "mass")) {
+            if (format_mass_transport_label(out, out_size, boot_mass_kind, 0))
+                return;
             if (mass_unit_from_hint >= 0)
                 snprintf(out, out_size, "MASS%d", mass_unit_from_hint);
             else
@@ -251,6 +380,7 @@ static void format_cwd_source_name(char *out, size_t out_size)
     int boot_source_hint = LoaderGetBootConfigSourceHint();
     int mass_unit = parse_mass_unit_from_path(resolved_path);
     int mmce_slot = parse_mmce_slot_from_path(resolved_path);
+    MassTransportKind boot_mass_kind = boot_mass_transport_kind(boot_hint);
 
     if (out == NULL || out_size == 0)
         return;
@@ -270,6 +400,8 @@ static void format_cwd_source_name(char *out, size_t out_size)
             return;
         }
         if (ci_starts_with(boot_hint, "mass")) {
+            if (format_mass_transport_label(out, out_size, boot_mass_kind, 1))
+                return;
             if (mass_unit >= 0)
                 snprintf(out, out_size, "MASS%d CWD", mass_unit);
             else
@@ -315,6 +447,8 @@ static void format_cwd_source_name(char *out, size_t out_size)
             return;
         }
         if (mass_unit >= 0) {
+            if (format_mass_transport_label(out, out_size, boot_mass_kind, 1))
+                return;
             snprintf(out, out_size, "MASS%d CWD", mass_unit);
             return;
         }
@@ -352,6 +486,8 @@ static void format_cwd_source_name(char *out, size_t out_size)
         if (ci_starts_with(boot_cwd_path, "mass")) {
             int boot_cwd_mass_unit = parse_mass_unit_from_path(boot_cwd_path);
 
+            if (format_mass_transport_label(out, out_size, boot_mass_kind, 1))
+                return;
             if (boot_cwd_mass_unit >= 0)
                 snprintf(out, out_size, "MASS%d CWD", boot_cwd_mass_unit);
             else
@@ -404,6 +540,8 @@ static void format_cwd_source_name(char *out, size_t out_size)
         if (ci_starts_with(requested_path, "mass")) {
             int requested_mass_unit = parse_mass_unit_from_path(requested_path);
 
+            if (format_mass_transport_label(out, out_size, boot_mass_kind, 1))
+                return;
             if (requested_mass_unit >= 0)
                 snprintf(out, out_size, "MASS%d CWD", requested_mass_unit);
             else
@@ -448,6 +586,8 @@ static void format_cwd_source_name(char *out, size_t out_size)
             snprintf(out, out_size, "MC1 CWD");
             return;
         case SOURCE_MASS:
+            if (format_mass_transport_label(out, out_size, boot_mass_kind, 1))
+                return;
             snprintf(out, out_size, "MASS CWD");
             return;
 #ifdef MX4SIO
