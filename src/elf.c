@@ -863,6 +863,12 @@ static void apply_dev9_policy(int dev9_mode)
         default:
             fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
             fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
+#if defined(PSX)
+            if (g_is_psx_desr) {
+                DPRINTF("Skipping direct-fallback DEV9 power-off on PSX runtime\n");
+                break;
+            }
+#endif
             fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0);
             break;
     }

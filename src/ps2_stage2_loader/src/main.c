@@ -126,6 +126,43 @@ int ensureFileXioReady() {
   return 0;
 }
 
+static int isPSXDESRRuntime(void) {
+  static int cached = -1;
+  int fd;
+  int nread;
+  char romver[6] = {0};
+
+  if (cached >= 0)
+    return cached;
+
+  fd = fioOpen("rom0:ROMVER", FIO_O_RDONLY);
+  if (fd >= 0) {
+    nread = fioRead(fd, romver, 5);
+    fioClose(fd);
+  } else {
+    if (ensureFileXioReady() < 0) {
+      cached = 0;
+      return cached;
+    }
+
+    fd = fileXioOpen("rom0:ROMVER", FIO_O_RDONLY);
+    if (fd < 0) {
+      cached = 0;
+      return cached;
+    }
+
+    nread = fileXioRead(fd, romver, 5);
+    fileXioClose(fd);
+  }
+  if (nread < 5) {
+    cached = 0;
+    return cached;
+  }
+
+  cached = (!strncmp(romver, "0180J", 5) || !strncmp(romver, "0210J", 5)) ? 1 : 0;
+  return cached;
+}
+
 static void stopDiscIfRequested() {
   if (!stopDiscAfterElfLoad)
     return;
@@ -493,6 +530,8 @@ int mountPFS(char *path) {
 
 // Puts HDD in idle mode and powers off the dev9 device
 void shutdownDEV9(ShutdownType s) {
+  int is_psx_desr_runtime = isPSXDESRRuntime();
+
   // Unmount the partition (if mounted) before applying HDD power policy.
   fileXioUmount("pfs0:");
   switch (s) {
@@ -505,8 +544,9 @@ void shutdownDEV9(ShutdownType s) {
     // Immediately put HDDs into idle mode
     fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
     fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
-    // Turn off dev9
-    fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0);
+    // On PSX-DESR, keep DEV9 powered to avoid launch instability.
+    if (!is_psx_desr_runtime)
+      fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0);
     break;
   default:
   }

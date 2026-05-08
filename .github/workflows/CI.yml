@@ -35,7 +35,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       DEBUG: 'DEBUG=1'
-      PRINTF_ARGS: 'PPCTTY=1'
+      PRINTF_ARGS: 'UDPTTY=1'
     steps:
 
       - name: Install dependencies
