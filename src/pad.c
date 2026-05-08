@@ -10,7 +10,47 @@
 
 static unsigned char padArea[2][256] ALIGNED(64);
 static unsigned int old_pad[2] = {0, 0};
+static unsigned char analog_mode_ready[2] = {0, 0};
 int pad_inited = 0;
+
+static void TryEnableAnalogMode(int port, int slot)
+{
+    int pad_state;
+    int mode_count;
+    int i;
+
+    if ((unsigned int)port >= (sizeof(analog_mode_ready) / sizeof(analog_mode_ready[0])))
+        return;
+
+    pad_state = padGetState(port, slot);
+    if ((pad_state == PAD_STATE_DISCONN) || (pad_state == PAD_STATE_ERROR)) {
+        analog_mode_ready[port] = 0;
+        return;
+    }
+
+    if (analog_mode_ready[port])
+        return;
+
+    if ((pad_state != PAD_STATE_STABLE) && (pad_state != PAD_STATE_FINDCTP1))
+        return;
+
+    if (padInfoMode(port, slot, PAD_MODECURID, 0) == PAD_TYPE_DUALSHOCK) {
+        analog_mode_ready[port] = 1;
+        return;
+    }
+
+    mode_count = padInfoMode(port, slot, PAD_MODETABLE, -1);
+    for (i = 0; i < mode_count; i++) {
+        if (padInfoMode(port, slot, PAD_MODETABLE, i) == PAD_TYPE_DUALSHOCK) {
+            if (padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK) == 1) {
+                DPRINTF("%s: port %d requested analog mode\n", __FUNCTION__, port);
+            }
+            return;
+        }
+    }
+
+    analog_mode_ready[port] = 1;
+}
 
 void PadInitPads(void)
 {
@@ -23,6 +63,8 @@ void PadInitPads(void)
 
     old_pad[0] = 0;
     old_pad[1] = 0;
+    analog_mode_ready[0] = 0;
+    analog_mode_ready[1] = 0;
     pad_inited = 1;
 }
 
@@ -49,6 +91,7 @@ int ReadPadStatus_raw(int port, int slot)
     u32 paddata;
 
     paddata = 0;
+    TryEnableAnalogMode(port, slot);
     if (padRead(port, slot, &buttons) != 0) {
         paddata = 0xffff ^ buttons.btns;
     }
@@ -67,6 +110,7 @@ int ReadPadStatus(int port, int slot)
     u32 new_pad, paddata;
 
     new_pad = 0;
+    TryEnableAnalogMode(port, slot);
     if (padRead(port, slot, &buttons) != 0) {
         paddata = 0xffff ^ buttons.btns;
 
