@@ -6,6 +6,8 @@
 
 #define CHECKPATH_BUF_SIZE 256
 
+extern int g_is_psx_desr;
+
 enum {
     DEV_UNKNOWN = -1,
     DEV_MC0 = 0,
@@ -394,6 +396,15 @@ int LoaderPathCanAttemptNow(const char *path)
         return 1;
     if (path_prefix_matches(path, "mc", 2))
         return 1;
+    if (path_prefix_matches(path, "xfrom", 5)) {
+#if defined(PSX)
+        if (!g_is_psx_desr)
+            return 0;
+        return (stat("xfrom:", &st) == 0);
+#else
+        return 0;
+#endif
+    }
 
 #ifdef MMCE
     if (path_prefix_matches(path, "mmce", 4))

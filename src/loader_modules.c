@@ -914,7 +914,7 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
 {
     int j, x;
 
-    if (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_MC || family == LOADER_PATH_FAMILY_XFROM)
+    if (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_MC)
         return 0;
 
     switch (family) {
@@ -993,6 +993,12 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
 #else
             return -1;
 #endif
+        case LOADER_PATH_FAMILY_XFROM:
+#if defined(PSX)
+            return LoaderEnsureXFromModulesLoaded();
+#else
+            return -1;
+#endif
 
         default:
             return -1;
@@ -1008,8 +1014,6 @@ static int reload_for_family(LoaderPathFamily family,
     int family_load_result;
 
     if (family == LOADER_PATH_FAMILY_NONE)
-        family = LOADER_PATH_FAMILY_MC;
-    if (family == LOADER_PATH_FAMILY_XFROM)
         family = LOADER_PATH_FAMILY_MC;
 
     if (reboot_iop) {
@@ -1063,7 +1067,7 @@ void LoaderSetBootPathHint(const char *boot_path)
     const char *boot_path_for_ops = boot_path;
     char normalized_mass_path[256];
 
-    s_boot_family = (family == LOADER_PATH_FAMILY_NONE || family == LOADER_PATH_FAMILY_XFROM)
+    s_boot_family = (family == LOADER_PATH_FAMILY_NONE)
                         ? LOADER_PATH_FAMILY_MC
                         : family;
     s_boot_config_path[0] = '\0';
@@ -1186,8 +1190,7 @@ int LoaderPathFamilyReadyWithoutReload(const char *path)
     LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);
 
     if (target_family == LOADER_PATH_FAMILY_NONE ||
-        target_family == LOADER_PATH_FAMILY_MC ||
-        target_family == LOADER_PATH_FAMILY_XFROM)
+        target_family == LOADER_PATH_FAMILY_MC)
         return 1;
 
     return (s_current_family == target_family);
@@ -1201,14 +1204,6 @@ int LoaderEnsurePathFamilyReady(const char *path)
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
-    if (target_family == LOADER_PATH_FAMILY_XFROM) {
-#if defined(PSX)
-        ret = LoaderEnsureXFromModulesLoaded();
-        if (ret < 0)
-            return ret;
-#endif
-        return 0;
-    }
     // MC is part of the always-loaded core set.
     // Do not reboot/switch away from another active family just to touch mc paths.
     if (target_family == LOADER_PATH_FAMILY_MC)
@@ -1247,14 +1242,6 @@ int LoaderPrepareFinalLaunch(const char *path)
 
     if (target_family == LOADER_PATH_FAMILY_NONE)
         return 0;
-    if (target_family == LOADER_PATH_FAMILY_XFROM) {
-#if defined(PSX)
-        int xfrom_ret = LoaderEnsureXFromModulesLoaded();
-        if (xfrom_ret < 0)
-            return xfrom_ret;
-#endif
-        return 0;
-    }
 
     if (target_family == LOADER_PATH_FAMILY_MX4SIO)
         reinit_pad_after_reboot = 1;

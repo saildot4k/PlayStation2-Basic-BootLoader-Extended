@@ -465,7 +465,8 @@ static int should_wait_for_config_device_family(LoaderPathFamily family)
     return (family == LOADER_PATH_FAMILY_BDM ||
             family == LOADER_PATH_FAMILY_MX4SIO ||
             family == LOADER_PATH_FAMILY_MMCE ||
-            family == LOADER_PATH_FAMILY_HDD_APA);
+            family == LOADER_PATH_FAMILY_HDD_APA ||
+            (family == LOADER_PATH_FAMILY_XFROM && g_is_psx_desr));
 }
 
 static void wait_for_config_device_ready(const char *ready_path,
@@ -671,8 +672,18 @@ int LoaderFindConfigFile(FILE **fp_out,
         report_requested_path = config_path;
         if (source == 2 && ci_eq(config_path, boot_cwd_config))
             continue;
-        if (!LoaderPathFamilyReadyWithoutReload(config_path))
-            continue;
+        if (!LoaderPathFamilyReadyWithoutReload(config_path)) {
+            LoaderPathFamily config_family = LoaderPathFamilyFromPath(config_path);
+
+            if (config_family == LOADER_PATH_FAMILY_XFROM) {
+                if (LoaderEnsurePathFamilyReady(config_path) < 0) {
+                    DPRINTF("Config probe: failed to switch to XFROM family for '%s'\n", config_path);
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        }
 
         if (boot_from_legacy_mass &&
             (source == 1 || source == 2) &&

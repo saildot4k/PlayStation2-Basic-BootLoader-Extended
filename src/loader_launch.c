@@ -49,8 +49,6 @@ static unsigned int launch_wait_timeout_for_path(const char *entry_path, int wai
         return 0;
 
     family = LoaderPathFamilyFromPath(entry_path);
-    if (family == LOADER_PATH_FAMILY_XFROM)
-        family = LOADER_PATH_FAMILY_MC;
 
     switch (family) {
         case LOADER_PATH_FAMILY_BDM:
@@ -78,8 +76,6 @@ static unsigned int launch_wait_step_for_path(const char *entry_path, int wait_f
         return LAUNCH_PATH_WAIT_STEP_DEFAULT_MS;
 
     family = LoaderPathFamilyFromPath(entry_path);
-    if (family == LOADER_PATH_FAMILY_XFROM)
-        family = LOADER_PATH_FAMILY_MC;
 
     switch (family) {
         case LOADER_PATH_FAMILY_BDM:
@@ -198,8 +194,6 @@ static int PrepareLaunchPathForExec(const char *entry_path,
         return 0;
 
     target_family = LoaderPathFamilyFromPath(entry_path);
-    if (target_family == LOADER_PATH_FAMILY_XFROM)
-        target_family = LOADER_PATH_FAMILY_MC;
 
     if (target_family == LOADER_PATH_FAMILY_MC) {
         // Avoid additional MC path probing immediately after sanitize reboot.
