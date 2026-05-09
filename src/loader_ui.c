@@ -12,6 +12,47 @@ extern u8 ROMVER[16];
 #define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
 #define PAD_MASK_ANY 0xffff
 
+typedef struct
+{
+    int valid;
+    char model[64];
+    char rom_fmt[8];
+    char dvdver[64];
+    char ps1ver[64];
+    char temp_celsius[16];
+    char source[32];
+    int has_temp;
+} LaunchStatusConsoleInfoOverride;
+
+static LaunchStatusConsoleInfoOverride g_launch_status_console_info;
+
+void SetLaunchStatusConsoleInfoOverride(const char *model,
+                                        const char *rom_fmt,
+                                        const char *dvdver,
+                                        const char *ps1ver,
+                                        const char *temp_celsius,
+                                        const char *source)
+{
+    strip_crlf_copy((model != NULL) ? model : "", g_launch_status_console_info.model, sizeof(g_launch_status_console_info.model));
+    strip_crlf_copy((rom_fmt != NULL) ? rom_fmt : "", g_launch_status_console_info.rom_fmt, sizeof(g_launch_status_console_info.rom_fmt));
+    strip_crlf_copy((dvdver != NULL) ? dvdver : "", g_launch_status_console_info.dvdver, sizeof(g_launch_status_console_info.dvdver));
+    strip_crlf_copy((ps1ver != NULL) ? ps1ver : "", g_launch_status_console_info.ps1ver, sizeof(g_launch_status_console_info.ps1ver));
+    strip_crlf_copy((source != NULL) ? source : "", g_launch_status_console_info.source, sizeof(g_launch_status_console_info.source));
+    if (temp_celsius != NULL && *temp_celsius != '\0') {
+        strip_crlf_copy(temp_celsius, g_launch_status_console_info.temp_celsius, sizeof(g_launch_status_console_info.temp_celsius));
+        g_launch_status_console_info.has_temp = 1;
+    } else {
+        g_launch_status_console_info.temp_celsius[0] = '\0';
+        g_launch_status_console_info.has_temp = 0;
+    }
+    g_launch_status_console_info.valid = 1;
+}
+
+void ClearLaunchStatusConsoleInfoOverride(void)
+{
+    memset(&g_launch_status_console_info, 0, sizeof(g_launch_status_console_info));
+}
+
 static void CaptureLaunchStatusConsoleInfo(ConsoleInfo *info, const char **temp_celsius)
 {
     if (info == NULL)
@@ -31,15 +72,26 @@ static void DrawLaunchStatusConsoleInfoLine(void)
     if (GLOBCFG.LOGO_DISP <= 0)
         return;
 
-    CaptureLaunchStatusConsoleInfo(&info, &temp_celsius);
-    SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
-                                info.model,
-                                info.rom_fmt,
-                                info.dvdver,
-                                info.ps1ver,
-                                temp_celsius,
-                                "",
-                                info.source);
+    if (g_launch_status_console_info.valid) {
+        SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                    g_launch_status_console_info.model,
+                                    g_launch_status_console_info.rom_fmt,
+                                    g_launch_status_console_info.dvdver,
+                                    g_launch_status_console_info.ps1ver,
+                                    g_launch_status_console_info.has_temp ? g_launch_status_console_info.temp_celsius : NULL,
+                                    "",
+                                    g_launch_status_console_info.source);
+    } else {
+        CaptureLaunchStatusConsoleInfo(&info, &temp_celsius);
+        SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                    info.model,
+                                    info.rom_fmt,
+                                    info.dvdver,
+                                    info.ps1ver,
+                                    temp_celsius,
+                                    "",
+                                    info.source);
+    }
 }
 
 #ifndef NO_TEMP_DISP

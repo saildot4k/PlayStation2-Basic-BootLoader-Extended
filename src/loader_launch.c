@@ -412,6 +412,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
     dvdver = "";
     source = "";
     temp_celsius = NULL;
+    ClearLaunchStatusConsoleInfoOverride();
 
     if (!SplashRenderIsActive())
         SplashRenderTextBody(GLOBCFG.LOGO_DISP, is_psx_desr);
@@ -422,6 +423,13 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
         ps1ver = console_info.ps1ver;
         dvdver = console_info.dvdver;
         source = console_info.source;
+        temp_celsius = ConsoleInfoRefreshTemperature(&console_info);
+        SetLaunchStatusConsoleInfoOverride(model,
+                                           console_info.rom_fmt,
+                                           dvdver,
+                                           ps1ver,
+                                           temp_celsius,
+                                           source);
         console_info_ready = 1;
     }
 
@@ -450,6 +458,13 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             ps1ver = console_info.ps1ver;
             dvdver = console_info.dvdver;
             source = console_info.source;
+            temp_celsius = ConsoleInfoRefreshTemperature(&console_info);
+            SetLaunchStatusConsoleInfoOverride(model,
+                                               console_info.rom_fmt,
+                                               dvdver,
+                                               ps1ver,
+                                               temp_celsius,
+                                               source);
             console_info_ready = 1;
         }
 
@@ -496,9 +511,23 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                     ps1ver = console_info.ps1ver;
                     dvdver = console_info.dvdver;
                     source = console_info.source;
+                    temp_celsius = ConsoleInfoRefreshTemperature(&console_info);
+                    SetLaunchStatusConsoleInfoOverride(model,
+                                                       console_info.rom_fmt,
+                                                       dvdver,
+                                                       ps1ver,
+                                                       temp_celsius,
+                                                       source);
                     console_info_ready = 1;
                 }
                 render_temp = ConsoleInfoRefreshTemperature(&console_info);
+                temp_celsius = render_temp;
+                SetLaunchStatusConsoleInfoOverride(model,
+                                                   console_info.rom_fmt,
+                                                   dvdver,
+                                                   ps1ver,
+                                                   temp_celsius,
+                                                   source);
 
                 snprintf(autoboot_text, sizeof(autoboot_text), "%02u.%u", remaining_sec, remaining_tenths);
                 if (GLOBCFG.DELAY > 0)

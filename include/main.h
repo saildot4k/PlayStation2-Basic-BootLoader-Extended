@@ -126,6 +126,13 @@ void RestoreSplashInteractiveUi(int logo_disp,
                                 const char *ps1ver,
                                 const char *temp_celsius,
                                 const char *source);
+void SetLaunchStatusConsoleInfoOverride(const char *model,
+                                        const char *rom_fmt,
+                                        const char *dvdver,
+                                        const char *ps1ver,
+                                        const char *temp_celsius,
+                                        const char *source);
+void ClearLaunchStatusConsoleInfoOverride(void);
 void ShowLaunchStepStatus(const char *text);
 void ShowLaunchStepStatusWithSubline(const char *text, const char *subline);
 void ShowLaunchStatus(const char *path);
