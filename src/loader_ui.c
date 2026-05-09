@@ -1,14 +1,46 @@
 // Splash/console UI prompts and status rendering helpers for interactive flows.
 #include "main.h"
+#include "console_info.h"
 #include "splash_screen.h"
 #include "splash_render.h"
 
 extern int g_is_psx_desr;
 extern int g_native_video_mode;
+extern u8 ROMVER[16];
 
 #define MISSING_PATH_RESCUE_CHORD_WINDOW_MS 250
 #define VIDEO_SELECTOR_HIGHLIGHT_COLOR 0x15d670
 #define PAD_MASK_ANY 0xffff
+
+static void CaptureLaunchStatusConsoleInfo(ConsoleInfo *info, const char **temp_celsius)
+{
+    if (info == NULL)
+        return;
+
+    memset(info, 0, sizeof(*info));
+    ConsoleInfoCapture(info, LoaderGetConfigSource(), ROMVER, sizeof(ROMVER));
+    if (temp_celsius != NULL)
+        *temp_celsius = ConsoleInfoRefreshTemperature(info);
+}
+
+static void DrawLaunchStatusConsoleInfoLine(void)
+{
+    ConsoleInfo info;
+    const char *temp_celsius = NULL;
+
+    if (GLOBCFG.LOGO_DISP <= 0)
+        return;
+
+    CaptureLaunchStatusConsoleInfo(&info, &temp_celsius);
+    SplashRenderConsoleInfoLine(GLOBCFG.LOGO_DISP,
+                                info.model,
+                                info.rom_fmt,
+                                info.dvdver,
+                                info.ps1ver,
+                                temp_celsius,
+                                "",
+                                info.source);
+}
 
 #ifndef NO_TEMP_DISP
 // Query CDVD thermal sensor and return formatted Celsius string when supported.
@@ -91,19 +123,32 @@ static void SplashDrawStatusBelowLogo(const char *text, u32 color)
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
+    DrawLaunchStatusConsoleInfoLine();
     SplashRenderDrawTextPxScaled(x, y, color, text, 1);
     SplashRenderPresent();
 }
 
 static void SplashDrawStatusForLaunch(int logo_disp, const char *text, u32 color)
 {
+    ConsoleInfo info;
+    const char *temp_celsius = NULL;
+
     if (text == NULL || !SplashRenderIsActive())
         return;
 
     if (logo_disp >= 2)
         SplashDrawStatusBelowLogo(text, color);
-    else
-        SplashDrawCenteredStatusWithInfo(text, color, "", "", "", "", NULL, "");
+    else {
+        CaptureLaunchStatusConsoleInfo(&info, &temp_celsius);
+        SplashDrawCenteredStatusWithInfo(text,
+                                         color,
+                                         info.model,
+                                         info.rom_fmt,
+                                         info.dvdver,
+                                         info.ps1ver,
+                                         temp_celsius,
+                                         info.source);
+    }
 }
 
 static void SplashDrawStatusWithSublineForLaunch(int logo_disp,
@@ -136,7 +181,7 @@ static void SplashDrawStatusWithSublineForLaunch(int logo_disp,
     line2_w = (line2 != NULL) ? ((int)strlen(line2) * 6) : 0;
     line2_anchor_w = line2_w;
     if (line2 != NULL && ci_starts_with(line2, "Timeout in ")) {
-        int fixed_timeout_w = (int)strlen("Timeout in 999 seconds") * 6;
+        int fixed_timeout_w = (int)strlen("Timeout in 999 Second(s)") * 6;
 
         if (line2_anchor_w < fixed_timeout_w)
             line2_anchor_w = fixed_timeout_w;
@@ -183,6 +228,7 @@ static void SplashDrawStatusWithSublineForLaunch(int logo_disp,
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
+    DrawLaunchStatusConsoleInfoLine();
     SplashRenderDrawTextPxScaled(x1, y1, line1_color, line1, 1);
     if (line2 != NULL && *line2 != '\0')
         SplashRenderDrawTextPxScaled(x2, y2, line2_color, line2, 1);
