@@ -33,6 +33,79 @@ static void ShowEntryLaunchStepStatus(const char *step, int entry_index, const c
     ShowLaunchStepStatus(status_line);
 }
 
+static const char *LaunchDriverDeviceNameForPath(const char *path)
+{
+    LoaderPathFamily family;
+
+    if (path == NULL || *path == '\0')
+        return "device";
+    if (ci_starts_with(path, "mmce"))
+        return "MMCE";
+    if (ci_starts_with(path, "mx4sio") || ci_starts_with(path, "massX:"))
+        return "MX4SIO";
+    if (ci_starts_with(path, "mass") || ci_starts_with(path, "usb"))
+        return "USB";
+    if (ci_starts_with(path, "hdd0:"))
+        return "HDD0";
+    if (ci_starts_with(path, "ata"))
+        return "ATA";
+    if (ci_starts_with(path, "xfrom:"))
+        return "XFROM";
+    if (ci_starts_with(path, "mc"))
+        return "memory card";
+
+    family = LoaderPathFamilyFromPath(path);
+    switch (family) {
+        case LOADER_PATH_FAMILY_MC:
+            return "memory card";
+        case LOADER_PATH_FAMILY_BDM:
+            return "USB";
+        case LOADER_PATH_FAMILY_MX4SIO:
+            return "MX4SIO";
+        case LOADER_PATH_FAMILY_MMCE:
+            return "MMCE";
+        case LOADER_PATH_FAMILY_HDD_APA:
+            return "HDD0";
+        case LOADER_PATH_FAMILY_XFROM:
+            return "XFROM";
+        default:
+            return "device";
+    }
+}
+
+static void ShowDriverSwitchStatusForPath(const char *entry_path)
+{
+    char status_line[96];
+
+    if (GLOBCFG.LOGO_DISP < 1)
+        return;
+
+    snprintf(status_line,
+             sizeof(status_line),
+             "Switching to %s drivers",
+             LaunchDriverDeviceNameForPath(entry_path));
+    ShowLaunchStepStatus(status_line);
+}
+
+static void ShowEntrySearchStatusWithCountdown(int entry_index,
+                                               const char *entry_path,
+                                               unsigned int seconds_remaining)
+{
+    char line1[320];
+    char line2[80];
+
+    if (GLOBCFG.LOGO_DISP < 1)
+        return;
+
+    snprintf(line1,
+             sizeof(line1),
+             "Searching For E%d = %s",
+             entry_index + 1,
+             (entry_path != NULL) ? entry_path : "");
+    snprintf(line2, sizeof(line2), "Timeout in %u second%s", seconds_remaining, (seconds_remaining == 1) ? "" : "s");
+    ShowLaunchStepStatusWithSubline(line1, line2);
+}
+
 static void DebugPrintLaunchArgs(const char *tag,
                                  int key_index,
                                  int entry_index,
@@ -112,13 +185,15 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
                                      int key_index,
                                      int entry_index,
                                      char **resolved_path,
-                                     int wait_for_mount)
+                                     int wait_for_mount,
+                                     int show_search_status)
 {
     unsigned int timeout_ms;
     unsigned int step_ms;
     u64 wait_deadline_ms = 0;
     char *candidate = NULL;
     int logged_wait = 0;
+    int last_reported_seconds = -1;
 
     if (entry_path == NULL || *entry_path == '\0' || resolved_path == NULL)
         return -1;
@@ -131,7 +206,27 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
     if (step_ms == 0)
         step_ms = LAUNCH_PATH_WAIT_STEP_DEFAULT_MS;
 
+    if (show_search_status && GLOBCFG.LOGO_DISP >= 1) {
+        if (timeout_ms > 0) {
+            last_reported_seconds = (int)((timeout_ms + 999u) / 1000u);
+            ShowEntrySearchStatusWithCountdown(entry_index, entry_path, (unsigned int)last_reported_seconds);
+        } else {
+            ShowEntryLaunchStepStatus("Searching For", entry_index, entry_path);
+        }
+    }
+
     while (1) {
+        if (show_search_status && timeout_ms > 0 && GLOBCFG.LOGO_DISP >= 1) {
+            u64 now_ms = Timer();
+            u64 remaining_ms = (now_ms < wait_deadline_ms) ? (wait_deadline_ms - now_ms) : 0;
+            int remaining_seconds = (int)((remaining_ms + 999u) / 1000u);
+
+            if (remaining_seconds != last_reported_seconds) {
+                last_reported_seconds = remaining_seconds;
+                ShowEntrySearchStatusWithCountdown(entry_index, entry_path, (unsigned int)remaining_seconds);
+            }
+        }
+
         if (LoaderPathCanAttemptNow(entry_path)) {
             candidate = CheckPath(entry_path);
             if (candidate != NULL && *candidate != '\0') {
@@ -236,7 +331,12 @@ static int PrepareLaunchPathForExec(const char *entry_path,
             entry_index,
             entry_path,
             *resolved_path);
-    if (ResolveLaunchPathForEntry(entry_path, key_index, entry_index, &rechecked_path, 1) < 0) {
+    if (ResolveLaunchPathForEntry(entry_path,
+                                  key_index,
+                                  entry_index,
+                                  &rechecked_path,
+                                  1,
+                                  1) < 0) {
         const char *not_found_path = (rechecked_path != NULL && *rechecked_path != '\0') ? rechecked_path : entry_path;
 
         if (show_not_found_line) {
@@ -462,12 +562,13 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             LoaderPathSetPendingCommandAutoMode(0);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         } else {
-                            ShowEntryLaunchStepStatus("Load Driver", j, NULL);
+                            if (!LoaderPathFamilyReadyWithoutReload(entry_path))
+                                ShowDriverSwitchStatusForPath(entry_path);
                             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
                             if (ensure_family_result < 0)
                                 continue;
                             if (ensure_family_result > 0)
-                                ShowEntryLaunchStepStatus("Reboot IOP", j, NULL);
+                                ShowLaunchStepStatus("Reboot IOP");
                         }
 
                         if (!is_command &&
@@ -503,12 +604,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         }
 
                         execpaths[j] = NULL;
-                        ShowEntryLaunchStepStatus("Searching For", j, entry_path);
                         if (ResolveLaunchPathForEntry(entry_path,
                                                       x + 1,
                                                       j,
                                                       &execpaths[j],
-                                                      (ensure_family_result > 0)) < 0) {
+                                                      (ensure_family_result > 0),
+                                                      1) < 0) {
                             const char *not_found_path = (execpaths[j] != NULL && *execpaths[j] != '\0') ? execpaths[j] : entry_path;
                             scr_setfontcolor(0x00ffff);
                             DPRINTF("%s not found\n", not_found_path);
@@ -525,7 +626,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                                                          &prep_rebooted) < 0)
                                 continue;
                             if (prep_rebooted)
-                                ShowEntryLaunchStepStatus("Reboot IOP", j, NULL);
+                                ShowLaunchStepStatus("Reboot IOP");
                             ShowEntryLaunchStepStatus("Launching", j, execpaths[j]);
                             DPRINTF("Launch execute: key=%d entry=%d exec='%s'\n", x + 1, j, execpaths[j]);
                             DebugPrintLaunchArgs("Launch execute args",
@@ -618,7 +719,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                                           0,
                                           j,
                                           &execpaths[j],
-                                          (ensure_family_result > 0)) < 0) {
+                                          (ensure_family_result > 0),
+                                          0) < 0) {
                 const char *not_found_path = (execpaths[j] != NULL && *execpaths[j] != '\0') ? execpaths[j] : entry_path;
                 scr_printf("%s %-15s\r", not_found_path, "not found");
                 continue;

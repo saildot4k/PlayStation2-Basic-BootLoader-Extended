@@ -106,6 +106,89 @@ static void SplashDrawStatusForLaunch(int logo_disp, const char *text, u32 color
         SplashDrawCenteredStatusWithInfo(text, color, "", "", "", "", NULL, "");
 }
 
+static void SplashDrawStatusWithSublineForLaunch(int logo_disp,
+                                                 const char *line1,
+                                                 u32 line1_color,
+                                                 const char *line2,
+                                                 u32 line2_color)
+{
+    int screen_w;
+    int screen_h;
+    int anchor_center_x;
+    int y1;
+    int y2;
+    int line1_w;
+    int line2_w;
+    int line2_anchor_w;
+    int x1;
+    int x2;
+    int logo_x;
+    int logo_y;
+    int logo_w;
+    int logo_h;
+
+    if (!SplashRenderIsActive())
+        return;
+    if (line1 == NULL || *line1 == '\0')
+        return;
+
+    line1_w = (int)strlen(line1) * 6;
+    line2_w = (line2 != NULL) ? ((int)strlen(line2) * 6) : 0;
+    line2_anchor_w = line2_w;
+    if (line2 != NULL && ci_starts_with(line2, "Timeout in ")) {
+        int fixed_timeout_w = (int)strlen("Timeout in 999 seconds") * 6;
+
+        if (line2_anchor_w < fixed_timeout_w)
+            line2_anchor_w = fixed_timeout_w;
+    }
+
+    screen_w = SplashRenderGetScreenWidth();
+    screen_h = SplashRenderGetScreenHeight();
+    if (logo_disp >= 2) {
+        logo_x = SplashRenderGetLogoX();
+        logo_y = SplashRenderGetLogoY();
+        logo_w = SplashRenderGetLogoWidth();
+        logo_h = SplashRenderGetLogoHeight();
+        anchor_center_x = logo_x + (logo_w / 2);
+        y1 = logo_y + logo_h + 4;
+    } else {
+        anchor_center_x = SplashRenderGetScreenCenterX();
+        y1 = SplashRenderGetScreenCenterY() - 12;
+    }
+
+    y2 = y1 + 14;
+    if (y1 > screen_h - 28)
+        y1 = screen_h - 28;
+    if (y2 > screen_h - 14)
+        y2 = screen_h - 14;
+    if (y1 < 0)
+        y1 = 0;
+    if (y2 < 0)
+        y2 = 0;
+
+    x1 = anchor_center_x - (line1_w / 2);
+    x2 = anchor_center_x - (line2_anchor_w / 2);
+    if (x1 < 8)
+        x1 = 8;
+    if (x2 < 8)
+        x2 = 8;
+    if (x1 + line1_w > screen_w - 8)
+        x1 = screen_w - line1_w - 8;
+    if (x2 + line2_anchor_w > screen_w - 8)
+        x2 = screen_w - line2_anchor_w - 8;
+    if (x1 < 8)
+        x1 = 8;
+    if (x2 < 8)
+        x2 = 8;
+
+    SplashRenderSetHotkeysVisible(0);
+    SplashRenderBeginFrame();
+    SplashRenderDrawTextPxScaled(x1, y1, line1_color, line1, 1);
+    if (line2 != NULL && *line2 != '\0')
+        SplashRenderDrawTextPxScaled(x2, y2, line2_color, line2, 1);
+    SplashRenderPresent();
+}
+
 void SplashDrawLoadingStatus(int logo_disp)
 {
     const char *splash_hotkey_lines[KEY_COUNT] = {
@@ -716,6 +799,33 @@ void ShowLaunchStepStatus(const char *text)
 
     scr_setfontcolor(0x00ff00);
     scr_printf("  %s\n", safe_text);
+    scr_setfontcolor(0xffffff);
+}
+
+void ShowLaunchStepStatusWithSubline(const char *text, const char *subline)
+{
+    const char *safe_text = (text != NULL) ? text : "";
+    const char *safe_subline = (subline != NULL) ? subline : "";
+    int launch_status_logo_disp = (GLOBCFG.LOGO_DISP >= 1) ? GLOBCFG.LOGO_DISP : 1;
+
+    if (!SplashRenderIsActive() && GLOBCFG.LOGO_DISP > 0) {
+        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+        SplashRenderTextBody(launch_status_logo_disp, g_is_psx_desr);
+    }
+
+    if (SplashRenderIsActive() && GLOBCFG.LOGO_DISP > 0) {
+        SplashDrawStatusWithSublineForLaunch(GLOBCFG.LOGO_DISP,
+                                             safe_text,
+                                             0x00ff00,
+                                             safe_subline,
+                                             0x00ff00);
+        return;
+    }
+
+    scr_setfontcolor(0x00ff00);
+    scr_printf("  %s\n", safe_text);
+    if (safe_subline[0] != '\0')
+        scr_printf("  %s\n", safe_subline);
     scr_setfontcolor(0xffffff);
 }
 
