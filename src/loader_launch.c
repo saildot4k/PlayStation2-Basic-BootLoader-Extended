@@ -102,7 +102,7 @@ static void ShowEntrySearchStatusWithCountdown(int entry_index,
              "Searching For E%d = %s",
              entry_index + 1,
              (entry_path != NULL) ? entry_path : "");
-    snprintf(line2, sizeof(line2), "Timeout in %u second%s", seconds_remaining, (seconds_remaining == 1) ? "" : "s");
+    snprintf(line2, sizeof(line2), "Timeout in %u Second(s)", seconds_remaining);
     ShowLaunchStepStatusWithSubline(line1, line2);
 }
 
