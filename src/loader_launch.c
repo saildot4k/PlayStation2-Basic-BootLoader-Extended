@@ -16,6 +16,23 @@
 #define LAUNCH_PATH_WAIT_MMCE_MS 2000u
 #define LAUNCH_PATH_WAIT_HDD_MS 5000u
 
+static void ShowEntryLaunchStepStatus(const char *step, int entry_index, const char *path)
+{
+    char status_line[320];
+
+    if (step == NULL || *step == '\0')
+        return;
+    if (GLOBCFG.LOGO_DISP < 1)
+        return;
+
+    if (path != NULL && *path != '\0')
+        snprintf(status_line, sizeof(status_line), "%s E%d = %s", step, entry_index + 1, path);
+    else
+        snprintf(status_line, sizeof(status_line), "%s E%d", step, entry_index + 1);
+
+    ShowLaunchStepStatus(status_line);
+}
+
 static void DebugPrintLaunchArgs(const char *tag,
                                  int key_index,
                                  int entry_index,
@@ -170,11 +187,15 @@ static int PrepareLaunchPathForExec(const char *entry_path,
                                     int key_index,
                                     int entry_index,
                                     char **resolved_path,
-                                    int show_not_found_line)
+                                    int show_not_found_line,
+                                    int *rebooted_iop)
 {
     int prep_result;
     LoaderPathFamily target_family;
     char *rechecked_path = NULL;
+
+    if (rebooted_iop != NULL)
+        *rebooted_iop = 0;
 
     if (entry_path == NULL || *entry_path == '\0' || resolved_path == NULL)
         return -1;
@@ -192,6 +213,8 @@ static int PrepareLaunchPathForExec(const char *entry_path,
         return -1;
     if (prep_result == 0)
         return 0;
+    if (rebooted_iop != NULL)
+        *rebooted_iop = 1;
 
     target_family = LoaderPathFamilyFromPath(entry_path);
 
@@ -420,6 +443,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         const char *entry_path = GLOBCFG.KEYPATHS[x + 1][j];
                         int ensure_family_result = 0;
                         int is_command;
+                        int prep_rebooted = 0;
 
                         // Skip empty/unset entries (common when config has blank LK_* values)
                         if (entry_path == NULL || *entry_path == '\0')
@@ -438,9 +462,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             LoaderPathSetPendingCommandAutoMode(0);
                             LoaderPathSetPendingCommandArgs(GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         } else {
+                            ShowEntryLaunchStepStatus("Load Driver", j, NULL);
                             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
                             if (ensure_family_result < 0)
                                 continue;
+                            if (ensure_family_result > 0)
+                                ShowEntryLaunchStepStatus("Reboot IOP", j, NULL);
                         }
 
                         if (!is_command &&
@@ -476,6 +503,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         }
 
                         execpaths[j] = NULL;
+                        ShowEntryLaunchStepStatus("Searching For", j, entry_path);
                         if (ResolveLaunchPathForEntry(entry_path,
                                                       x + 1,
                                                       j,
@@ -489,9 +517,16 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                         }
 
                         if (execpaths[j] != NULL && *execpaths[j] != '\0') {
-                            if (PrepareLaunchPathForExec(entry_path, x + 1, j, &execpaths[j], 0) < 0)
+                            if (PrepareLaunchPathForExec(entry_path,
+                                                         x + 1,
+                                                         j,
+                                                         &execpaths[j],
+                                                         0,
+                                                         &prep_rebooted) < 0)
                                 continue;
-                            ShowLaunchStatus(execpaths[j]);
+                            if (prep_rebooted)
+                                ShowEntryLaunchStepStatus("Reboot IOP", j, NULL);
+                            ShowEntryLaunchStepStatus("Launching", j, execpaths[j]);
                             DPRINTF("Launch execute: key=%d entry=%d exec='%s'\n", x + 1, j, execpaths[j]);
                             DebugPrintLaunchArgs("Launch execute args",
                                                  x + 1,
@@ -545,6 +580,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             const char *entry_path = GLOBCFG.KEYPATHS[0][j];
             int ensure_family_result = 0;
             int is_command;
+            int prep_rebooted = 0;
 
             // Skip empty/unset AUTO entries too
             if (entry_path == NULL || *entry_path == '\0')
@@ -589,7 +625,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             }
 
             if (execpaths[j] != NULL && *execpaths[j] != '\0') {
-                if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1) < 0)
+                if (PrepareLaunchPathForExec(entry_path, 0, j, &execpaths[j], 1, &prep_rebooted) < 0)
                     continue;
                 ShowLaunchStatus(execpaths[j]);
                 DPRINTF("AUTO execute: entry=%d exec='%s'\n", j, execpaths[j]);

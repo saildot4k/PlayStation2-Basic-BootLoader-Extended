@@ -50,13 +50,6 @@ int QueryTemperatureCelsius(char *temp_buf, size_t temp_buf_size)
 }
 #endif
 
-static int IsCdvdCommandToken(const char *path)
-{
-    if (path == NULL)
-        return 0;
-    return (ci_eq(path, "cdrom") || !strcmp(path, "$CDVD") || !strcmp(path, "$CDVD_NO_PS2LOGO"));
-}
-
 static void SplashDrawStatusBelowLogo(const char *text, u32 color)
 {
     int line_width;
@@ -706,28 +699,31 @@ void RestoreSplashInteractiveUi(int logo_disp,
     }
 }
 
+void ShowLaunchStepStatus(const char *text)
+{
+    const char *safe_text = (text != NULL) ? text : "";
+    int launch_status_logo_disp = (GLOBCFG.LOGO_DISP >= 1) ? GLOBCFG.LOGO_DISP : 1;
+
+    if (!SplashRenderIsActive() && GLOBCFG.LOGO_DISP > 0) {
+        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
+        SplashRenderTextBody(launch_status_logo_disp, g_is_psx_desr);
+    }
+
+    if (SplashRenderIsActive() && GLOBCFG.LOGO_DISP > 0) {
+        SplashDrawStatusForLaunch(GLOBCFG.LOGO_DISP, safe_text, 0x00ff00);
+        return;
+    }
+
+    scr_setfontcolor(0x00ff00);
+    scr_printf("  %s\n", safe_text);
+    scr_setfontcolor(0xffffff);
+}
+
 void ShowLaunchStatus(const char *path)
 {
     char loading_line[160];
     const char *safe_path = (path != NULL) ? path : "";
-    int is_cdvd = IsCdvdCommandToken(safe_path);
-
-    if (!is_cdvd) {
-        scr_setfontcolor(0x00ff00);
-        scr_printf("  Loading %s\n", safe_path);
-        scr_setfontcolor(0xffffff);
-        return;
-    }
-
-    if (!SplashRenderIsActive()) {
-        int launch_status_logo_disp = (GLOBCFG.LOGO_DISP >= 1) ? GLOBCFG.LOGO_DISP : 1;
-
-        SplashRenderSetVideoMode(GLOBCFG.VIDEO_MODE, g_native_video_mode);
-        SplashRenderTextBody(launch_status_logo_disp, g_is_psx_desr);
-    }
-    if (!SplashRenderIsActive())
-        return;
 
     snprintf(loading_line, sizeof(loading_line), "Loading %s", safe_path);
-    SplashDrawStatusForLaunch(GLOBCFG.LOGO_DISP, loading_line, 0x00ff00);
+    ShowLaunchStepStatus(loading_line);
 }

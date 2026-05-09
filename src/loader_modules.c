@@ -1220,8 +1220,10 @@ int LoaderEnsurePathFamilyReady(const char *path)
     if (target_family == LOADER_PATH_FAMILY_MX4SIO)
         reinit_pad_after_reboot = 1;
 
-    DPRINTF("Switching IOP driver family from %d to %d for path '%s'\n",
+    DPRINTF("Rebooting IOP driver family from %s(%d) to %s(%d) for path '%s'\n",
+            boot_family_name(s_current_family),
             (int)s_current_family,
+            boot_family_name(target_family),
             (int)target_family,
             (path != NULL) ? path : "");
     ret = reload_for_family(target_family,
@@ -1280,9 +1282,11 @@ int LoaderPrepareFinalLaunch(const char *path)
     if (!need_reboot)
         return 0;
 
-    DPRINTF("Launch sanitize: rebooting IOP for final path '%s' (from=%d to=%d)\n",
+    DPRINTF("Launch sanitize: rebooting IOP for final path '%s' (from=%s(%d) to=%s(%d))\n",
             (path != NULL) ? path : "",
+            boot_family_name(s_current_family),
             (int)s_current_family,
+            boot_family_name(target_family),
             (int)target_family);
 
     if (reload_for_family(target_family,

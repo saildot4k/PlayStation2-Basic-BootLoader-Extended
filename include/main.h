@@ -126,6 +126,7 @@ void RestoreSplashInteractiveUi(int logo_disp,
                                 const char *ps1ver,
                                 const char *temp_celsius,
                                 const char *source);
+void ShowLaunchStepStatus(const char *text);
 void ShowLaunchStatus(const char *path);
 // Reboot the PS1 CPU and perform additional tasks if building for PSX DESR.
 void LoaderPlatformClearStaleEEDebugState(void);
