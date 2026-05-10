@@ -139,6 +139,7 @@ void ShowLaunchStatus(const char *path);
 // Reboot the PS1 CPU and perform additional tasks if building for PSX DESR.
 void LoaderPlatformClearStaleEEDebugState(void);
 void ResetIOP(void);
+void ResetIOPForLaunchSwitch(void);
 void ReadROMVEROnce(void);
 void LogDetectedPlatform(void);
 void LoaderRunEmergencyMode(const char *reason);

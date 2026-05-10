@@ -1018,7 +1018,7 @@ static int reload_for_family(LoaderPathFamily family,
 
     if (reboot_iop) {
         PadDeinitPads();
-        ResetIOP();
+        ResetIOPForLaunchSwitch();
         SifInitRpc(0);
         SifInitIopHeap();
         SifLoadFileInit();

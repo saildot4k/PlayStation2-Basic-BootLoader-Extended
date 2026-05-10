@@ -74,6 +74,15 @@ void ResetIOP(void)
 #endif
 }
 
+void ResetIOPForLaunchSwitch(void)
+{
+    // Launch-time driver-family switches should use the standard reset path on
+    // all platforms to avoid PSX-specific re-init loops between entry attempts.
+    SifInitRpc(0);
+    while (!SifIopReset("", 0)) {};
+    while (!SifIopSync()) {};
+}
+
 void CDVDBootCertify(u8 romver[16])
 {
     u8 RomName[4];
