@@ -863,12 +863,6 @@ static void apply_dev9_policy(int dev9_mode)
         default:
             fileXioDevctl("hdd0:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
             fileXioDevctl("hdd1:", HDIOC_IDLEIMM, NULL, 0, NULL, 0);
-#if defined(PSX)
-            if (g_is_psx_desr) {
-                DPRINTF("Skipping direct-fallback DEV9 power-off on PSX runtime\n");
-                break;
-            }
-#endif
             fileXioDevctl("dev9x:", DDIOC_OFF, NULL, 0, NULL, 0);
             break;
     }
@@ -1066,12 +1060,6 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
         loader_args[i++] = 'N';
     } else if (dev9_mode == DEV9_NICHDD) {
         loader_args[i++] = 'D';
-#if defined(PSX)
-    } else if (g_is_psx_desr) {
-        // PSX-DESR runtime: keep DEV9/HDD powered unless explicitly overridden.
-        // This matches legacy PSX expectations and avoids default shutdown issues.
-        loader_args[i++] = 'D';
-#endif
     }
 #else
     (void)dev9_mode;
