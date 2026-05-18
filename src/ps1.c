@@ -392,6 +392,7 @@ int PS1DRVBoot(void)
         OSDConfigSetPSConfig(cfg);
         OSDConfigApply();
     }
+    GameIDClearVideoBuffers();
     CleanUp();
 
     SifExitCmd();

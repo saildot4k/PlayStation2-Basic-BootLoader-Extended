@@ -6,6 +6,7 @@ int GameIDAppEnabled(void);
 int GameIDDiscEnabled(void);
 
 void gsDisplayGameID(const char *gameID);
+void GameIDClearVideoBuffers(void);
 int validateTitleID(const char *titleID);
 void GameIDHandleDisc(const char *titleID, int display);
 void GameIDHandleApp(const char *titleID, int showAppID);

@@ -919,6 +919,7 @@ int PS2DiscBoot(int skip_PS2LOGO, uint32_t egsm_override_flags, const char *egsm
     DPRINTF("%s: eGSM build disabled, skipping OSDGSM.CNF lookup\n", __func__);
 #endif
 
+    GameIDClearVideoBuffers();
     CleanUp();
 #if EGSM_BUILD
     if (skip_PS2LOGO) {

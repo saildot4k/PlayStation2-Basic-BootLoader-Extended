@@ -102,6 +102,37 @@ void gsDisplayGameID(const char *gameID)
     gsKit_deinit_global(gsGlobal);
 }
 
+void GameIDClearVideoBuffers(void)
+{
+    GSGLOBAL *gsGlobal;
+    int pass;
+
+    gsGlobal = gsKit_init_global();
+    if (gsGlobal == NULL)
+        return;
+
+    gsGlobal->DoubleBuffering = GS_SETTING_ON;
+
+    dmaKit_init(D_CTRL_RELE_OFF, D_CTRL_MFD_OFF, D_CTRL_STS_UNSPEC, D_CTRL_STD_OFF, D_CTRL_RCYC_8, 1 << DMA_CHANNEL_GIF);
+    if (dmaKit_chan_init(DMA_CHANNEL_GIF)) {
+        gsKit_deinit_global(gsGlobal);
+        return;
+    }
+
+    gsKit_init_screen(gsGlobal);
+    gsKit_display_buffer(gsGlobal);
+    gsKit_mode_switch(gsGlobal, GS_ONESHOT);
+
+    for (pass = 0; pass < 2; pass++) {
+        gsKit_clear(gsGlobal, GS_SETREG_RGBAQ(0x00, 0x00, 0x00, 0x80, 0x00));
+        gsKit_queue_exec(gsGlobal);
+        gsKit_finish();
+        gsKit_sync_flip(gsGlobal);
+    }
+
+    gsKit_deinit_global(gsGlobal);
+}
+
 int validateTitleID(const char *titleID)
 {
     if (titleID == NULL)

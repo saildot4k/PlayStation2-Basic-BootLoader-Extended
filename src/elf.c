@@ -1419,6 +1419,10 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
         }
     }
 
+    // Clear both framebuffers right before handoff so no splash/game-id
+    // remnants leak into the next app's early frames.
+    GameIDClearVideoBuffers();
+
     launch_is_rom = path_is_rom_binary(intent.launch_filename);
 
 #if EGSM_BUILD
