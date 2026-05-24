@@ -39,8 +39,12 @@ static int parse_scalar_int_key(const char *name, const char *value)
         if (ci_eq(name, g_int_keys[i].key)) {
             int *target = (int *)((char *)&GLOBCFG + g_int_keys[i].field_offset);
             const char *safe_value = (value != NULL) ? value : "0";
+            int parsed_value = atoi(safe_value);
 
-            *target = atoi(safe_value);
+            if (ci_eq(name, "KEY_READ_WAIT_TIME") && parsed_value < 500)
+                parsed_value = 500;
+
+            *target = parsed_value;
             return 1;
         }
     }
