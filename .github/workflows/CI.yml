@@ -34,8 +34,8 @@ jobs:
     container: ps2dev/ps2dev:latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-      DEBUG: 'DEBUG=1'
-      PRINTF_ARGS: 'UDPTTY=1'
+      DEBUG: 'DEBUG=0'
+      PRINTF_ARGS: 'PRINTF=NONE'
     steps:
 
       - name: Install dependencies
