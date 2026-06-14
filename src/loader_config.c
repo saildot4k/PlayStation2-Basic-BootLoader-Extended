@@ -529,6 +529,9 @@ int LoaderFindConfigFile(FILE **fp_out,
     const char *mc_sysconf_config_path = g_is_psx_desr
                                              ? "mc?:/SYS-CONF/PSXBBL.INI"
                                              : "mc?:/SYS-CONF/PS2BBL.INI";
+    const char *mc_sysconf_compat_config_path = g_is_psx_desr
+                                                    ? "mc?:/SYS-CONF/PS2BBL.INI"
+                                                    : NULL;
 #ifdef DISC_STOP_AT_BOOT
     int disc_boot_mc_fallback_profile = 0;
 #endif
@@ -738,6 +741,12 @@ int LoaderFindConfigFile(FILE **fp_out,
         generic_mass_boot_path = (boot_from_legacy_mass && path_is_generic_legacy_mass(config_path));
         if (!generic_mass_boot_path) {
             primary_count = append_unique_candidate(primary_candidates, primary_count, 8, config_path);
+            if (mc_sysconf_compat_config_path != NULL &&
+                ci_eq(config_path, mc_sysconf_config_path))
+                primary_count = append_unique_candidate(primary_candidates,
+                                                        primary_count,
+                                                        8,
+                                                        mc_sysconf_compat_config_path);
             primary_count = append_unique_candidate(primary_candidates, primary_count, 8, config_path_generic);
         }
         if (boot_from_legacy_mass && path_is_legacy_mass(config_path)) {
