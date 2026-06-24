@@ -801,6 +801,16 @@ void SplashRenderSetHotkeysVisible(int visible)
     g_hotkeys_visible = (visible != 0);
 }
 
+void SplashRenderSetLogoVisible(int visible)
+{
+    g_logo_visible = (visible != 0);
+}
+
+int SplashRenderGetLogoVisible(void)
+{
+    return g_logo_visible;
+}
+
 void SplashRenderSetLogoShimmerCountdown(u64 remaining_ms, u64 total_ms)
 {
 #if LOGO_SHIMMER_ENABLED

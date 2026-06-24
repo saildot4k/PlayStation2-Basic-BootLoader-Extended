@@ -13,7 +13,10 @@ int HDD_USABLE = 0;
 #define HDD_CHECKER_LINE_LEN 96
 #define HDD_CHECKER_LINE_SPACING 16
 #define HDD_CHECKER_GLYPH_ADVANCE 6
+#define HDD_CHECKER_GLYPH_HEIGHT 7
 #define HDD_CHECKER_MARGIN 8
+#define HDD_CHECKER_PROMPT_GAP 18
+#define HDD_CHECKER_PROMPT_TEXT "PRESS START TO RETURN TO LAUNCH KEYS"
 #define HDD_CHECKER_COLOR_TITLE 0x00ffff
 #define HDD_CHECKER_COLOR_OK 0x00ff00
 #define HDD_CHECKER_COLOR_WARN 0xffff00
@@ -182,13 +185,49 @@ static void hdd_checker_add_line(HDDCheckerLine lines[HDD_CHECKER_MAX_LINES],
 
 static u32 hdd_checker_connection_color(int status)
 {
-    if (status == 0 || status == 1)
+    if (status == 0)
         return HDD_CHECKER_COLOR_OK;
-    if (status == 2)
+    if (status == 1)
         return HDD_CHECKER_COLOR_WARN;
+    if (status == 2)
+        return HDD_CHECKER_COLOR_BAD;
     if (status == 3)
         return HDD_CHECKER_COLOR_INFO;
     return HDD_CHECKER_COLOR_BAD;
+}
+
+static const char *hdd_checker_connection_description(int status)
+{
+    if (status < 0)
+        return "DEVCTL ERROR";
+
+    switch (status) {
+        case 0:
+            return "OK - APA FORMATTED";
+        case 1:
+            return "NOT APA FORMATTED";
+        case 2:
+            return "NOT USABLE";
+        case 3:
+            return "NOT CONNECTED";
+        default:
+            return "UNKNOWN STATUS";
+    }
+}
+
+static const char *hdd_checker_smart_description(int status)
+{
+    if (status < 0)
+        return "DEVCTL ERROR";
+
+    switch (status) {
+        case 0:
+            return "OK";
+        case 1:
+            return "THRESHOLD EXCEEDED";
+        default:
+            return "ATA ERROR";
+    }
 }
 
 static u32 hdd_checker_result_color(int result)
@@ -209,26 +248,38 @@ static void hdd_checker_collect_unit_lines(HDDCheckerLine lines[HDD_CHECKER_MAX_
 
     ret = fileXioDevctl(hdd_root, HDIOC_STATUS, NULL, 0, NULL, 0);
     if (ret < 0) {
-        hdd_checker_add_line(lines, line_count, HDD_CHECKER_COLOR_BAD, "  STATUS ERROR: %d", ret);
+        hdd_checker_add_line(lines,
+                             line_count,
+                             hdd_checker_connection_color(ret),
+                             "  CONNECTION STATUS: %d - %s",
+                             ret,
+                             hdd_checker_connection_description(ret));
         return;
     }
     if (ret == 3) {
-        hdd_checker_add_line(lines, line_count, HDD_CHECKER_COLOR_INFO, "  NOT CONNECTED");
+        hdd_checker_add_line(lines,
+                             line_count,
+                             hdd_checker_connection_color(ret),
+                             "  CONNECTION STATUS: %d - %s",
+                             ret,
+                             hdd_checker_connection_description(ret));
         return;
     }
 
     hdd_checker_add_line(lines,
                          line_count,
                          hdd_checker_connection_color(ret),
-                         "  CONNECTION STATUS: %d",
-                         ret);
+                         "  CONNECTION STATUS: %d - %s",
+                         ret,
+                         hdd_checker_connection_description(ret));
 
     ret = fileXioDevctl(hdd_root, HDIOC_SMARTSTAT, NULL, 0, NULL, 0);
     hdd_checker_add_line(lines,
                          line_count,
                          hdd_checker_result_color(ret),
-                         "  S.M.A.R.T STATUS: %d",
-                         ret);
+                         "  S.M.A.R.T STATUS: %d - %s",
+                         ret,
+                         hdd_checker_smart_description(ret));
 
     ret = fileXioDevctl(hdd_root, HDIOC_GETSECTORERROR, NULL, 0, NULL, 0);
     hdd_checker_add_line(lines,
@@ -260,9 +311,32 @@ static int hdd_checker_collect_lines(HDDCheckerLine lines[HDD_CHECKER_MAX_LINES]
         if (unit == 0)
             hdd_checker_add_line(lines, &line_count, HDD_CHECKER_COLOR_TEXT, "");
     }
-    hdd_checker_add_line(lines, &line_count, HDD_CHECKER_COLOR_TEXT, "");
-    hdd_checker_add_line(lines, &line_count, HDD_CHECKER_COLOR_PROMPT, "PRESS START TO RETURN TO LAUNCH KEYS");
     return line_count;
+}
+
+static void hdd_checker_draw_centered_line(int screen_w,
+                                           int anchor_center_x,
+                                           int y,
+                                           u32 color,
+                                           const char *text)
+{
+    int line_w;
+    int x;
+
+    if (text == NULL)
+        return;
+
+    line_w = (int)strlen(text) * HDD_CHECKER_GLYPH_ADVANCE;
+    x = anchor_center_x - (line_w / 2);
+
+    if (x < HDD_CHECKER_MARGIN)
+        x = HDD_CHECKER_MARGIN;
+    if (x + line_w > screen_w - HDD_CHECKER_MARGIN)
+        x = screen_w - line_w - HDD_CHECKER_MARGIN;
+    if (x < HDD_CHECKER_MARGIN)
+        x = HDD_CHECKER_MARGIN;
+
+    SplashRenderDrawTextPxScaled(x, y, color, text, 1);
 }
 
 static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER_MAX_LINES],
@@ -272,11 +346,11 @@ static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER
     int screen_h;
     int anchor_center_x;
     int y;
+    int content_area_top;
+    int content_area_bottom;
+    int content_area_height;
     int total_height;
-    int logo_x;
-    int logo_y;
-    int logo_w;
-    int logo_h;
+    int prompt_y;
     int i;
 
     if (lines == NULL || line_count <= 0 || !SplashRenderIsActive())
@@ -285,38 +359,41 @@ static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER
     screen_w = SplashRenderGetScreenWidth();
     screen_h = SplashRenderGetScreenHeight();
     anchor_center_x = screen_w / 2;
-    total_height = line_count * HDD_CHECKER_LINE_SPACING;
-    y = (screen_h - total_height) / 2;
+    prompt_y = screen_h - HDD_CHECKER_MARGIN - HDD_CHECKER_GLYPH_HEIGHT;
+    if (prompt_y < HDD_CHECKER_MARGIN)
+        prompt_y = HDD_CHECKER_MARGIN;
 
-    logo_x = SplashRenderGetLogoX();
-    logo_y = SplashRenderGetLogoY();
-    logo_w = SplashRenderGetLogoWidth();
-    logo_h = SplashRenderGetLogoHeight();
-    if (logo_x >= 0 && logo_y >= 0 && logo_w > 0 && logo_h > 0) {
-        anchor_center_x = logo_x + (logo_w / 2);
-        y = logo_y + logo_h + 6;
-    }
+    content_area_top = HDD_CHECKER_MARGIN;
+    content_area_bottom = prompt_y - HDD_CHECKER_PROMPT_GAP;
+    if (content_area_bottom < content_area_top + HDD_CHECKER_GLYPH_HEIGHT)
+        content_area_bottom = prompt_y;
 
-    if (y + total_height > screen_h - HDD_CHECKER_MARGIN)
-        y = screen_h - total_height - HDD_CHECKER_MARGIN;
+    total_height = ((line_count - 1) * HDD_CHECKER_LINE_SPACING) + HDD_CHECKER_GLYPH_HEIGHT;
+    content_area_height = content_area_bottom - content_area_top;
+    if (content_area_height > total_height)
+        y = content_area_top + ((content_area_height - total_height) / 2);
+    else
+        y = content_area_top;
+
+    if (y + total_height > content_area_bottom)
+        y = content_area_bottom - total_height;
     if (y < HDD_CHECKER_MARGIN)
         y = HDD_CHECKER_MARGIN;
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
     for (i = 0; i < line_count; i++) {
-        int line_w = (int)strlen(lines[i].text) * HDD_CHECKER_GLYPH_ADVANCE;
-        int x = anchor_center_x - (line_w / 2);
-
-        if (x < HDD_CHECKER_MARGIN)
-            x = HDD_CHECKER_MARGIN;
-        if (x + line_w > screen_w - HDD_CHECKER_MARGIN)
-            x = screen_w - line_w - HDD_CHECKER_MARGIN;
-        if (x < HDD_CHECKER_MARGIN)
-            x = HDD_CHECKER_MARGIN;
-
-        SplashRenderDrawTextPxScaled(x, y + (i * HDD_CHECKER_LINE_SPACING), lines[i].color, lines[i].text, 1);
+        hdd_checker_draw_centered_line(screen_w,
+                                       anchor_center_x,
+                                       y + (i * HDD_CHECKER_LINE_SPACING),
+                                       lines[i].color,
+                                       lines[i].text);
     }
+    hdd_checker_draw_centered_line(screen_w,
+                                   anchor_center_x,
+                                   prompt_y,
+                                   HDD_CHECKER_COLOR_PROMPT,
+                                   HDD_CHECKER_PROMPT_TEXT);
     SplashRenderPresent();
 }
 
@@ -333,6 +410,8 @@ static void hdd_checker_draw_console(const HDDCheckerLine lines[HDD_CHECKER_MAX_
         else
             scr_printf("\t%s\n", lines[i].text);
     }
+    scr_setfontcolor(HDD_CHECKER_COLOR_PROMPT);
+    scr_printf("\n\t%s\n", HDD_CHECKER_PROMPT_TEXT);
     scr_setfontcolor(0xffffff);
 }
 
@@ -360,13 +439,19 @@ void HDDChecker(void)
     HDDCheckerLine lines[HDD_CHECKER_MAX_LINES];
     int line_count = hdd_checker_collect_lines(lines);
     int use_splash = SplashRenderIsActive();
+    int previous_logo_visible = 0;
 
-    if (use_splash)
+    if (use_splash) {
+        previous_logo_visible = SplashRenderGetLogoVisible();
+        SplashRenderSetLogoVisible(0);
         hdd_checker_draw_splash_frame(lines, line_count);
-    else
+    } else {
         hdd_checker_draw_console(lines, line_count);
+    }
 
     hdd_checker_wait_for_start(lines, line_count, use_splash);
+    if (use_splash)
+        SplashRenderSetLogoVisible(previous_logo_visible);
 }
 
 /// @brief poweroff callback function
