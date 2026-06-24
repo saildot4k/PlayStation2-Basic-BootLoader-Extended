@@ -77,6 +77,26 @@ static int extract_optional_unit_after_prefix(const char *path, const char *pref
     return -2;
 }
 
+static int extract_explicit_dual_unit_after_prefix(const char *path, const char *prefix, size_t prefix_len)
+{
+    if (path == NULL || prefix == NULL)
+        return -2;
+    if (!ci_starts_with(path, prefix))
+        return -2;
+
+    if (path[prefix_len] >= '0' &&
+        path[prefix_len] <= '1' &&
+        path[prefix_len + 1] == ':')
+        return (int)(path[prefix_len] - '0');
+
+    return -2;
+}
+
+static int starts_with_explicit_dual_unit(const char *path, const char *prefix, size_t prefix_len)
+{
+    return (extract_explicit_dual_unit_after_prefix(path, prefix, prefix_len) >= 0);
+}
+
 static int build_mass_unit_path(const char *path, int unit, char *out, size_t out_size)
 {
     const char *suffix;
@@ -779,7 +799,7 @@ static void derive_bdm_transport_needs(const char *path_hint,
     int local_strict_mx4sio = 0;
 
     if (path_hint != NULL && *path_hint != '\0') {
-        if (starts_with(path_hint, "ata")) {
+        if (starts_with_explicit_dual_unit(path_hint, "ata", 3)) {
             local_want_ata = 1;
             local_strict_ata = 1;
         } else if (starts_with(path_hint, "mx4sio") || starts_with(path_hint, "massx")) {
@@ -799,7 +819,7 @@ static void derive_bdm_transport_needs(const char *path_hint,
                 // For PS2BBL boot argv0 mass/massN:
                 // - mass:/ or mass0-4:/ can be USB or MX4SIO
                 // - mass5-9:/ is USB-only
-                // ATA stack is only selected for explicit ata:/ boot hints.
+                // ATA stack is only selected for explicit ata0:/ata1: boot hints.
                 local_want_usb = 1;
                 local_strict_usb = 1;
 #ifdef MX4SIO
@@ -926,7 +946,7 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
 #endif
             // For explicit ATA-BDM paths, bring up DEV9 before BDM core so the
             // sequence is: LoadFIO -> DEV9 -> BDM -> BDMFS -> ATA_BD.
-            if (path_hint != NULL && starts_with(path_hint, "ata")) {
+            if (path_hint != NULL && starts_with_explicit_dual_unit(path_hint, "ata", 3)) {
 #ifdef DEV9
                 if (!dev9_loaded) {
                     if (!loadDEV9())
@@ -986,7 +1006,7 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
             if (LoadFIO() < 0)
                 return -1;
 #endif
-            if (LoadHDDIRX() < 0)
+            if (LoadHDDIRX(path_hint) < 0)
                 return -2;
             s_hdd_modules_loaded = 1;
             return 0;
@@ -1061,6 +1081,7 @@ void LoaderSetBootPathHint(const char *boot_path)
     LoaderPathFamily family = LoaderPathFamilyFromPath(boot_path);
     int legacy_mass_unit = extract_legacy_mass_unit(boot_path);
     int mx4sio_unit = -2;
+    int hdd_unit = -2;
     int ata_unit = -2;
     int ilink_unit = -2;
     int usb_unit = -2;
@@ -1090,7 +1111,8 @@ void LoaderSetBootPathHint(const char *boot_path)
         }
         boot_path_for_ops = s_boot_path_hint;
         mx4sio_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "mx4sio", 6);
-        ata_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "ata", 3);
+        hdd_unit = extract_explicit_dual_unit_after_prefix(boot_path_for_ops, "hdd", 3);
+        ata_unit = extract_explicit_dual_unit_after_prefix(boot_path_for_ops, "ata", 3);
         ilink_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "ilink", 5);
         usb_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "usb", 3);
     }
@@ -1110,17 +1132,19 @@ void LoaderSetBootPathHint(const char *boot_path)
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mx4sio:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_HDD_APA:
-            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI");
+            if (hdd_unit >= 0)
+                snprintf(s_boot_config_path,
+                         sizeof(s_boot_config_path),
+                         "hdd%d:__sysconf:pfs:/PS2BBL/CONFIG.INI",
+                         hdd_unit);
             break;
         case LOADER_PATH_FAMILY_BDM:
-            if (starts_with(boot_path_for_ops, "ata")) {
+            if (starts_with_explicit_dual_unit(boot_path_for_ops, "ata", 3)) {
                 if (ata_unit >= 0)
                     snprintf(s_boot_config_path,
                              sizeof(s_boot_config_path),
                              "ata%d:/PS2BBL/CONFIG.INI",
                              ata_unit);
-                else
-                    snprintf(s_boot_config_path, sizeof(s_boot_config_path), "ata:/PS2BBL/CONFIG.INI");
             } else if (starts_with(boot_path_for_ops, "ilink")) {
                 if (ilink_unit >= 0)
                     snprintf(s_boot_config_path,

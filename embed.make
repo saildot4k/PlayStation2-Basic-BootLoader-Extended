@@ -49,11 +49,11 @@ $(EE_ASM_DIR)xfromman_irx.c: $(PSX_IOP_CACHE_DIR)xfromman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ xfromman_irx
 endif
 
-# Use 1400-era MC/PAD modules for the SIO2 stack used by MMCE/MX4SIO.
-$(EE_ASM_DIR)mcman_irx.c: mcman-1400.irx | $(EE_ASM_DIR)
+# Use MC/PAD modules for the SIO2 stack used by MMCE/MX4SIO.
+$(EE_ASM_DIR)mcman_irx.c: mcman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ mcman_irx
 
-$(EE_ASM_DIR)padman_irx.c: padman-1400.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)padman_irx.c: padman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ padman_irx
 
 $(EE_ASM_DIR)iomanx_irx.c: iomanX.irx | $(EE_ASM_DIR)

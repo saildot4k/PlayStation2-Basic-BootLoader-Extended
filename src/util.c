@@ -144,9 +144,9 @@ char **str_split(char *a_str, const char a_delim)
  * @brief  method returns true if it can extract needed info from path, otherwise false.
  * In case of true, it also updates mountString, mountPoint and newCWD parameters
  * It splits path by ":", and requires a minimum of 3 elements
- * Example: if path = hdd0:__common:pfs:/retroarch/ then
+ * Example: if path = hddN:__common:pfs:/retroarch/ then
  * mountString = "pfs:"
- * mountPoint = "hdd0:__common"
+ * mountPoint = "hddN:__common"
  * newCWD = pfs:/retroarch/
  * return true
 */

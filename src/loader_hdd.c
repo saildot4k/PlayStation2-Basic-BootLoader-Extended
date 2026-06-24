@@ -7,19 +7,43 @@ int HDD_USABLE = 0;
 
 #define HDD_CHECKER_WAIT_MS 10000u
 
-int CheckHDD(void)
+static int hdd_unit_from_path(const char *path)
 {
-    int ret = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0);
+    if (path == NULL || !ci_starts_with(path, "hdd"))
+        return -1;
+    if (path[3] >= '0' && path[3] <= '1' && path[4] == ':')
+        return path[3] - '0';
+    return -1;
+}
+
+static void hdd_unit_root(int unit, char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0)
+        return;
+    snprintf(out, out_size, "hdd%d:", unit);
+}
+
+static int CheckHDDUnit(int unit)
+{
+    char hdd_root[] = "hdd0:";
+    int ret;
+
+    if (unit < 0 || unit > 1)
+        return -1;
+
+    hdd_unit_root(unit, hdd_root, sizeof(hdd_root));
+    ret = fileXioDevctl(hdd_root, HDIOC_STATUS, NULL, 0, NULL, 0);
     /* 0 = HDD connected and formatted, 1 = not formatted, 2 = HDD not usable, 3 = HDD not connected. */
-    DPRINTF("%s: HDD status is %d\n", __func__, ret);
+    DPRINTF("%s: %s status is %d\n", __func__, hdd_root, ret);
     if ((ret >= 3) || (ret < 0))
         return -1;
     return ret;
 }
 
-int LoadHDDIRX(void)
+int LoadHDDIRX(const char *path_hint)
 {
     int ID, RET, HDDSTAT;
+    int hdd_unit = hdd_unit_from_path(path_hint);
     static const char hddarg[] = "-o"
                                  "\0"
                                  "4"
@@ -28,6 +52,12 @@ int LoadHDDIRX(void)
                                  "\0"
                                  "20";
     //static const char pfsarg[] = "-n\0" "24\0" "-o\0" "8";
+
+    if (hdd_unit < 0) {
+        DPRINTF(" [HDD]: explicit hdd0:/hdd1: path required, got '%s'\n",
+                (path_hint != NULL) ? path_hint : "<null>");
+        return -1;
+    }
 
     if (!loadDEV9())
         return -1;
@@ -51,7 +81,7 @@ int LoadHDDIRX(void)
     if (ID < 0 || RET == 1)
         return -4;
 
-    HDDSTAT = CheckHDD();
+    HDDSTAT = CheckHDDUnit(hdd_unit);
     HDD_USABLE = !(HDDSTAT < 0);
 
     /* PS2FS.IRX */
@@ -70,7 +100,7 @@ int MountParty(const char *path)
     int ret = -1;
     DPRINTF("%s: %s\n", __func__, path);
     char *BUF = NULL;
-    BUF = strdup(path); //use strdup, otherwise, path will become `hdd0:`
+    BUF = strdup(path); //use strdup, otherwise, path will become `hddN:`
     char MountPoint[40];
     if (getMountInfo(BUF, NULL, MountPoint, NULL)) {
         mnt(MountPoint);
@@ -114,40 +144,48 @@ void HDDChecker(void)
     char ErrorPartName[64];
     const char *HEADING = "HDD Diagnosis routine";
     int ret = -1;
+    int unit;
     scr_clear();
     scr_printf("\n\n%*s%s\n", ((80 - strlen(HEADING)) / 2), "", HEADING);
-    scr_setfontcolor(0x0000FF);
-    ret = fileXioDevctl("hdd0:", HDIOC_STATUS, NULL, 0, NULL, 0);
-    if (ret == 0 || ret == 1)
-        scr_setfontcolor(0x00FF00);
-    if (ret != 3) {
-        scr_printf("\t\t - HDD CONNECTION STATUS: %d\n", ret);
-        /* Check ATA device S.M.A.R.T. status. */
-        ret = fileXioDevctl("hdd0:", HDIOC_SMARTSTAT, NULL, 0, NULL, 0);
-        if (ret != 0)
-            scr_setfontcolor(0x0000ff);
-        else
+    for (unit = 0; unit <= 1; unit++) {
+        char hdd_root[] = "hdd0:";
+
+        hdd_unit_root(unit, hdd_root, sizeof(hdd_root));
+        scr_setfontcolor(0x0000FF);
+        ret = fileXioDevctl(hdd_root, HDIOC_STATUS, NULL, 0, NULL, 0);
+        if (ret == 0 || ret == 1)
             scr_setfontcolor(0x00FF00);
-        scr_printf("\t\t - S.M.A.R.T STATUS: %d\n", ret);
-        /* Check for unrecoverable I/O errors on sectors. */
-        ret = fileXioDevctl("hdd0:", HDIOC_GETSECTORERROR, NULL, 0, NULL, 0);
-        if (ret != 0)
-            scr_setfontcolor(0x0000ff);
-        else
-            scr_setfontcolor(0x00FF00);
-        scr_printf("\t\t - SECTOR ERRORS: %d\n", ret);
-        /* Check for partitions that have errors. */
-        ret = fileXioDevctl("hdd0:", HDIOC_GETERRORPARTNAME, NULL, 0, ErrorPartName, sizeof(ErrorPartName));
-        if (ret != 0)
-            scr_setfontcolor(0x0000ff);
-        else
-            scr_setfontcolor(0x00FF00);
-        scr_printf("\t\t - CORRUPTED PARTITIONS: %d\n", ret);
-        if (ret != 0) {
-            scr_printf("\t\tpartition: %s\n", ErrorPartName);
+        if (ret != 3) {
+            scr_printf("\t\t - %s CONNECTION STATUS: %d\n", hdd_root, ret);
+            /* Check ATA device S.M.A.R.T. status. */
+            ret = fileXioDevctl(hdd_root, HDIOC_SMARTSTAT, NULL, 0, NULL, 0);
+            if (ret != 0)
+                scr_setfontcolor(0x0000ff);
+            else
+                scr_setfontcolor(0x00FF00);
+            scr_printf("\t\t - %s S.M.A.R.T STATUS: %d\n", hdd_root, ret);
+            /* Check for unrecoverable I/O errors on sectors. */
+            ret = fileXioDevctl(hdd_root, HDIOC_GETSECTORERROR, NULL, 0, NULL, 0);
+            if (ret != 0)
+                scr_setfontcolor(0x0000ff);
+            else
+                scr_setfontcolor(0x00FF00);
+            scr_printf("\t\t - %s SECTOR ERRORS: %d\n", hdd_root, ret);
+            /* Check for partitions that have errors. */
+            ret = fileXioDevctl(hdd_root, HDIOC_GETERRORPARTNAME, NULL, 0, ErrorPartName, sizeof(ErrorPartName));
+            if (ret != 0)
+                scr_setfontcolor(0x0000ff);
+            else
+                scr_setfontcolor(0x00FF00);
+            scr_printf("\t\t - %s CORRUPTED PARTITIONS: %d\n", hdd_root, ret);
+            if (ret != 0) {
+                scr_printf("\t\tpartition: %s\n", ErrorPartName);
+            }
+        } else {
+            scr_setfontcolor(0x00FFFF);
+            scr_printf("\t\t - %s not connected\n", hdd_root);
         }
-    } else
-        scr_setfontcolor(0x00FFFF), scr_printf("Skipping test, HDD is not connected\n");
+    }
     scr_setfontcolor(0xFFFFFF);
     scr_printf("\t\tWaiting for 10 seconds...\n");
     delay_ms(HDD_CHECKER_WAIT_MS);

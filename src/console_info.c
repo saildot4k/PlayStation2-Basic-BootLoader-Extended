@@ -26,6 +26,32 @@ static int parse_mmce_slot_from_path(const char *path)
     return -1;
 }
 
+static int parse_dual_unit_from_path(const char *path, const char *prefix, size_t prefix_len)
+{
+    if (path == NULL || prefix == NULL || !ci_starts_with(path, prefix))
+        return -1;
+    if (path[prefix_len] >= '0' && path[prefix_len] <= '1' && path[prefix_len + 1] == ':')
+        return path[prefix_len] - '0';
+    return -1;
+}
+
+static int format_dual_unit_label(char *out,
+                                  size_t out_size,
+                                  const char *path,
+                                  const char *prefix,
+                                  size_t prefix_len,
+                                  const char *label,
+                                  int cwd_suffix)
+{
+    int unit = parse_dual_unit_from_path(path, prefix, prefix_len);
+
+    if (out == NULL || out_size == 0 || label == NULL || unit < 0)
+        return 0;
+
+    snprintf(out, out_size, "%s%d%s", label, unit, cwd_suffix ? " CWD" : "");
+    return 1;
+}
+
 typedef enum
 {
     MASS_TRANSPORT_UNKNOWN = 0,
@@ -232,10 +258,8 @@ static int format_mass_device_name(char *out,
         return 1;
 
     if (resolved_path != NULL && *resolved_path != '\0') {
-        if (ci_starts_with(resolved_path, "ata")) {
-            snprintf(out, out_size, "ATA");
+        if (format_dual_unit_label(out, out_size, resolved_path, "ata", 3, "ATA", 0))
             return 1;
-        }
         if (ci_starts_with(resolved_path, "ilink")) {
             snprintf(out, out_size, "ILINK");
             return 1;
@@ -289,10 +313,10 @@ static void format_device_source_name(char *out,
             snprintf(out, out_size, "MC1");
             return;
         }
-        if (ci_starts_with(resolved_path, "hdd0")) {
-            snprintf(out, out_size, "HDD0");
+        if (format_dual_unit_label(out, out_size, resolved_path, "hdd", 3, "HDD", 0))
             return;
-        }
+        if (format_dual_unit_label(out, out_size, resolved_path, "ata", 3, "ATA", 0))
+            return;
         if (ci_starts_with(resolved_path, "xfrom")) {
             snprintf(out, out_size, "XFROM");
             return;
@@ -343,14 +367,10 @@ static void format_device_source_name(char *out,
             snprintf(out, out_size, "MC1");
             return;
         }
-        if (ci_starts_with(boot_hint, "hdd0")) {
-            snprintf(out, out_size, "HDD0");
+        if (format_dual_unit_label(out, out_size, boot_hint, "hdd", 3, "HDD", 0))
             return;
-        }
-        if (ci_starts_with(boot_hint, "ata")) {
-            snprintf(out, out_size, "ATA");
+        if (format_dual_unit_label(out, out_size, boot_hint, "ata", 3, "ATA", 0))
             return;
-        }
         if (ci_starts_with(boot_hint, "ilink")) {
             snprintf(out, out_size, "ILINK");
             return;
@@ -419,14 +439,10 @@ static void format_cwd_source_name(char *out, size_t out_size)
                 snprintf(out, out_size, "MMCE CWD");
             return;
         }
-        if (ci_starts_with(boot_hint, "hdd0")) {
-            snprintf(out, out_size, "HDD0 CWD");
+        if (format_dual_unit_label(out, out_size, boot_hint, "hdd", 3, "HDD", 1))
             return;
-        }
-        if (ci_starts_with(boot_hint, "ata")) {
-            snprintf(out, out_size, "ATA CWD");
+        if (format_dual_unit_label(out, out_size, boot_hint, "ata", 3, "ATA", 1))
             return;
-        }
         if (ci_starts_with(boot_hint, "ilink")) {
             snprintf(out, out_size, "ILINK CWD");
             return;
@@ -460,14 +476,10 @@ static void format_cwd_source_name(char *out, size_t out_size)
             snprintf(out, out_size, "MMCE%d CWD", mmce_slot);
             return;
         }
-        if (ci_starts_with(resolved_path, "hdd0")) {
-            snprintf(out, out_size, "HDD0 CWD");
+        if (format_dual_unit_label(out, out_size, resolved_path, "hdd", 3, "HDD", 1))
             return;
-        }
-        if (ci_starts_with(resolved_path, "ata")) {
-            snprintf(out, out_size, "ATA CWD");
+        if (format_dual_unit_label(out, out_size, resolved_path, "ata", 3, "ATA", 1))
             return;
-        }
     }
 
     if (boot_cwd_path != NULL && *boot_cwd_path != '\0') {
@@ -506,14 +518,10 @@ static void format_cwd_source_name(char *out, size_t out_size)
             snprintf(out, out_size, "MC1 CWD");
             return;
         }
-        if (ci_starts_with(boot_cwd_path, "hdd0")) {
-            snprintf(out, out_size, "HDD0 CWD");
+        if (format_dual_unit_label(out, out_size, boot_cwd_path, "hdd", 3, "HDD", 1))
             return;
-        }
-        if (ci_starts_with(boot_cwd_path, "ata")) {
-            snprintf(out, out_size, "ATA CWD");
+        if (format_dual_unit_label(out, out_size, boot_cwd_path, "ata", 3, "ATA", 1))
             return;
-        }
         if (ci_starts_with(boot_cwd_path, "ilink")) {
             snprintf(out, out_size, "ILINK CWD");
             return;
@@ -560,14 +568,10 @@ static void format_cwd_source_name(char *out, size_t out_size)
             snprintf(out, out_size, "MC1 CWD");
             return;
         }
-        if (ci_starts_with(requested_path, "hdd0")) {
-            snprintf(out, out_size, "HDD0 CWD");
+        if (format_dual_unit_label(out, out_size, requested_path, "hdd", 3, "HDD", 1))
             return;
-        }
-        if (ci_starts_with(requested_path, "ata")) {
-            snprintf(out, out_size, "ATA CWD");
+        if (format_dual_unit_label(out, out_size, requested_path, "ata", 3, "ATA", 1))
             return;
-        }
         if (ci_starts_with(requested_path, "ilink")) {
             snprintf(out, out_size, "ILINK CWD");
             return;
@@ -597,7 +601,7 @@ static void format_cwd_source_name(char *out, size_t out_size)
 #endif
 #ifdef HDD
         case SOURCE_HDD:
-            snprintf(out, out_size, "HDD0 CWD");
+            snprintf(out, out_size, "HDD CWD");
             return;
 #endif
 #ifdef XFROM
@@ -750,6 +754,15 @@ void ConsoleInfoCapture(ConsoleInfo *info, int config_source, const u8 *romver, 
                                   resolved_config_path,
                                   boot_hint);
         source_name = source_buf;
+#ifdef HDD
+    } else if (config_source == SOURCE_HDD) {
+        format_device_source_name(source_buf,
+                                  sizeof(source_buf),
+                                  config_source,
+                                  resolved_config_path,
+                                  boot_hint);
+        source_name = source_buf;
+#endif
     } else if (config_source >= SOURCE_MC0 && config_source < SOURCE_COUNT && SOURCES[config_source] != NULL) {
         source_name = SOURCES[config_source];
     }

@@ -177,6 +177,31 @@ static int parse_prefixed_unit(const char *path, const char *prefix, size_t pref
     return 1;
 }
 
+static int parse_explicit_dual_unit_path(const char *path,
+                                         const char *prefix,
+                                         size_t prefix_len,
+                                         int *unit_out,
+                                         const char **suffix_out)
+{
+    int unit;
+
+    if (path == NULL || prefix == NULL)
+        return 0;
+    if (!ci_starts_with(path, prefix))
+        return 0;
+    if (path[prefix_len] < '0' ||
+        path[prefix_len] > '1' ||
+        path[prefix_len + 1] != ':')
+        return 0;
+
+    unit = path[prefix_len] - '0';
+    if (unit_out != NULL)
+        *unit_out = unit;
+    if (suffix_out != NULL)
+        *suffix_out = path + prefix_len + 1;
+    return 1;
+}
+
 LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
 {
     if (path == NULL || *path == '\0')
@@ -189,13 +214,13 @@ LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
         return LOADER_PATH_FAMILY_MX4SIO;
     if (path_prefix_matches(path, "mmce", 4))
         return LOADER_PATH_FAMILY_MMCE;
-    if (path_prefix_matches(path, "hdd", 3))
+    if (parse_explicit_dual_unit_path(path, "hdd", 3, NULL, NULL))
         return LOADER_PATH_FAMILY_HDD_APA;
     if (path_prefix_matches(path, "xfrom", 5))
         return LOADER_PATH_FAMILY_XFROM;
     if (path_prefix_matches(path, "usb", 3) ||
         path_prefix_matches(path, "mass", 4) ||
-        path_prefix_matches(path, "ata", 3) ||
+        parse_explicit_dual_unit_path(path, "ata", 3, NULL, NULL) ||
         path_prefix_matches(path, "ilink", 5))
         return LOADER_PATH_FAMILY_BDM;
     return LOADER_PATH_FAMILY_NONE;
@@ -290,6 +315,26 @@ static int normalize_path_root_slash_if_missing(const char *path,
     return build_prefixed_path_with_optional_unit(prefix, unit, suffix, out, out_size);
 }
 
+static int normalize_explicit_dual_unit_root_slash_if_missing(const char *path,
+                                                              const char *prefix,
+                                                              size_t prefix_len,
+                                                              char *out,
+                                                              size_t out_size)
+{
+    int unit = -1;
+    const char *suffix = NULL;
+
+    if (!parse_explicit_dual_unit_path(path, prefix, prefix_len, &unit, &suffix))
+        return 0;
+    if (suffix == NULL || suffix[0] != ':')
+        return 0;
+
+    if (suffix[1] == '/' || suffix[1] == '\\' || suffix[1] == '\0')
+        return 0;
+
+    return build_prefixed_path_with_optional_unit(prefix, unit, suffix, out, out_size);
+}
+
 static int build_mass_path(char *out, size_t out_size, const char *suffix, int unit)
 {
     if (out == NULL || out_size == 0 || suffix == NULL || suffix[0] != ':')
@@ -360,29 +405,16 @@ static int ata_typed_root_openable(int unit)
     struct stat st;
     char root_with_unit[] = "ata0:";
 
-    if (unit < 0) {
-        if (stat("ata:", &st) == 0)
-            return 1;
-        unit = 0;
-    }
-
-    if (unit < 0 || unit > 9)
+    if (unit < 0 || unit > 1)
         return 0;
 
     root_with_unit[3] = (char)('0' + unit);
     if (stat(root_with_unit, &st) == 0)
         return 1;
 
-    if (unit == 0 && stat("ata:", &st) == 0)
-        return 1;
-
     return 0;
 }
 
-static int ata_typed_root_available(void)
-{
-    return ata_typed_root_openable(-1);
-}
 #endif
 
 int LoaderPathCanAttemptNow(const char *path)
@@ -412,10 +444,20 @@ int LoaderPathCanAttemptNow(const char *path)
 #endif
 
 #ifdef HDD
-    if (path_prefix_matches(path, "hdd", 3) || path_prefix_matches(path, "pfs", 3)) {
+    if (parse_explicit_dual_unit_path(path, "hdd", 3, &unit, NULL)) {
+        char root_with_unit[] = "hdd0:";
+
         if (s_hdd_modules_loaded != 0)
             return 1;
-        return (stat("pfs0:", &st) == 0 || stat("hdd0:", &st) == 0);
+        root_with_unit[3] = (char)('0' + unit);
+        return (stat("pfs0:", &st) == 0 || stat(root_with_unit, &st) == 0);
+    }
+    if (ci_starts_with(path, "hdd"))
+        return 0;
+    if (path_prefix_matches(path, "pfs", 3)) {
+        if (s_hdd_modules_loaded != 0)
+            return 1;
+        return (stat("pfs0:", &st) == 0);
     }
 #endif
 
@@ -444,17 +486,11 @@ int LoaderPathCanAttemptNow(const char *path)
 #endif
 
 #ifdef BDM_ATA
-    if (path_prefix_matches(path, "ata", 3)) {
-        int explicit_unit = -1;
-
-        if (parse_prefixed_unit(path, "ata", 3, &explicit_unit) && explicit_unit >= 0)
-            return ata_typed_root_openable(explicit_unit);
-
-        if (ata_typed_root_available())
-            return 1;
-
-        return 0;
+    if (parse_explicit_dual_unit_path(path, "ata", 3, &unit, NULL)) {
+        return ata_typed_root_openable(unit);
     }
+    if (ci_starts_with(path, "ata"))
+        return 0;
 #endif
 
     if (parse_prefixed_unit(path, "mass", 4, &unit) ||
@@ -564,22 +600,14 @@ static const char *resolve_path_tokens(const char *path,
     }
 
 #ifdef BDM_ATA
-    if (path_prefix_with_optional_unit(path, "ata", 3, &bdm_unit, &bdm_suffix)) {
+    if (parse_explicit_dual_unit_path(path, "ata", 3, &bdm_unit, &bdm_suffix)) {
         int typed_unit = bdm_unit;
         char typed_candidate[CHECKPATH_BUF_SIZE];
-        char typed_candidate_no_unit[CHECKPATH_BUF_SIZE];
-
-        if (typed_unit < 0)
-            typed_unit = 0;
 
         snprintf(typed_candidate, sizeof(typed_candidate), "ata%d%s", typed_unit, bdm_suffix);
-        snprintf(typed_candidate_no_unit, sizeof(typed_candidate_no_unit), "ata%s", bdm_suffix);
 
         if (!require_existing_pairs) {
-            if (bdm_unit >= 0)
-                copy_string_safe(out, out_size, typed_candidate);
-            else
-                copy_string_safe(out, out_size, typed_candidate_no_unit);
+            copy_string_safe(out, out_size, typed_candidate);
             return out;
         }
 
@@ -587,16 +615,9 @@ static const char *resolve_path_tokens(const char *path,
             copy_string_safe(out, out_size, typed_candidate);
             return out;
         }
-        if (bdm_unit < 0 && exist(typed_candidate_no_unit)) {
-            copy_string_safe(out, out_size, typed_candidate_no_unit);
-            return out;
-        }
 
         // Keep typed ATA path intent for retry loops and stage2 argv[0].
-        if (bdm_unit >= 0)
-            copy_string_safe(out, out_size, typed_candidate);
-        else
-            copy_string_safe(out, out_size, typed_candidate_no_unit);
+        copy_string_safe(out, out_size, typed_candidate);
         return out;
     }
 #endif
@@ -622,7 +643,7 @@ static const char *resolve_path_tokens(const char *path,
 #endif
 
 #ifdef HDD
-    if (ci_starts_with(path, "hdd")) {
+    if (parse_explicit_dual_unit_path(path, "hdd", 3, NULL, NULL)) {
         const char *pfs_path;
 
         if (MountParty(path) < 0) {
@@ -770,7 +791,7 @@ static const char *resolve_path_tokens(const char *path,
         normalize_path_root_slash_if_missing(path, "massx", 5, out, out_size) ||
 #endif
 #ifdef BDM_ATA
-        normalize_path_root_slash_if_missing(path, "ata", 3, out, out_size) ||
+        normalize_explicit_dual_unit_root_slash_if_missing(path, "ata", 3, out, out_size) ||
 #endif
         normalize_path_root_slash_if_missing(path, "ilink", 5, out, out_size) ||
         normalize_path_root_slash_if_missing(path, "xfrom", 5, out, out_size) ||

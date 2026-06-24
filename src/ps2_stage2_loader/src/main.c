@@ -227,8 +227,8 @@ int main(int argc, char *argv[]) {
       if (mountPFS(argv[0]))
         return -ENODEV;
 
-      // HDD paths usually look as follows: hdd0:<partition name>:pfs:/<path to ELF>
-      // However, SifLoadElf needs PFS path, not hdd0:
+      // HDD paths usually look as follows: hddN:<partition name>:pfs:/<path to ELF>
+      // However, SifLoadElf needs PFS path, not hddN:
       // Extract PFS path from the argument
       elfPath = (strstr(argv[0], ":pfs"));
       if (!elfPath)

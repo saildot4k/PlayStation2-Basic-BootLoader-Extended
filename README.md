@@ -31,11 +31,11 @@ Config search is now boot-family aware to avoid loading unnecessary drivers at s
 2. When loaded from device:
    - MMCE boot: `mmce?:/PS2BBL/CONFIG.INI`
    - MX4SIO boot: `mx4sio:/PS2BBL/CONFIG.INI`
-   - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
-   - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI`
+   - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI` or `hdd1:__sysconf:pfs:/PS2BBL/CONFIG.INI`
+   - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata0:/PS2BBL/CONFIG.INI` / `ata1:/PS2BBL/CONFIG.INI`
 3. Memory card fallback:
    - PS2 runtime: `mc?:/SYS-CONF/PS2BBL.INI`
-   - PSX-DESR runtime: `mc?:/SYS-CONF/PSXBBL.INI`
+   - PSX-DESR runtime: `mc?:/SYS-CONF/PSXBBL.INI`, then `mc?:/SYS-CONF/PS2BBL.INI`
 4. PSX runtime final fallback
    - `xfrom:/PS2BBL/CONFIG.INI`
 5. When compiled with `DISC_STOP_AT_BOOT=1
@@ -50,11 +50,13 @@ PS2BBL supports these launch/config path prefixes:
 #### Build Specific:  
 - `mmce0:/`, `mmce1:/`, `mmce?:/` __MMCE builds__
 - `mx4sio:/` (preferred), and `massX:/` (legacy)  __MX4SIO builds__
-- `hdd0:partition:pfs:/<path to elf>` __HDD builds__
+- `hdd0:partition:pfs:/<path to elf>`, `hdd1:partition:pfs:/<path to elf>` __HDD builds__
 - `xfrom:/` paths __PSX DESR builds__
-- `ata:/` exFAT HDD BDM device
+- `ata0:/`, `ata1:/` exFAT HDD BDM device roots
 - `ilink:/` (BDM mass-storage roots) __not yet implemented__
 - `DISC_STOP_AT_BOOT=1` compile-time profile to always stop optical disc after config bootstrap
+
+HDD and ATA paths require explicit units. `hdd?`, `ata?`, `hdd:`, and `ata:` are not probed.
 
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.

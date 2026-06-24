@@ -403,11 +403,28 @@ static int append_unique_candidate(const char **paths,
     return count + 1;
 }
 
+static int path_uses_invalid_explicit_unit_root(const char *path)
+{
+    if (path == NULL || *path == '\0')
+        return 0;
+
+    if (ci_starts_with(path, "hdd")) {
+        return !(path[3] >= '0' && path[3] <= '1' && path[4] == ':');
+    }
+    if (ci_starts_with(path, "ata")) {
+        return !(path[3] >= '0' && path[3] <= '1' && path[4] == ':');
+    }
+
+    return 0;
+}
+
 static int config_candidate_should_probe_now(const char *candidate_path)
 {
     LoaderPathFamily family;
 
     if (candidate_path == NULL || *candidate_path == '\0')
+        return 0;
+    if (path_uses_invalid_explicit_unit_root(candidate_path))
         return 0;
 
     family = LoaderPathFamilyFromPath(candidate_path);

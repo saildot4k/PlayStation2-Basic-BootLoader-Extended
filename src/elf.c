@@ -621,7 +621,7 @@ static int normalize_massx_launch_to_mx4sio(const char *path, char *out, size_t 
 }
 
 // For legacy USB aliases in user config, pass argv[0] as mass* paths.
-// New typed paths (ata:/, mx4sio:/, mx4sioN:/) should be preserved.
+// New typed paths (ata0:/, ata1:/, mx4sio:/, mx4sioN:/) should be preserved.
 static int normalize_usb_launch_to_legacy_mass(const char *path, char *out, size_t out_size)
 {
     const char *suffix;
@@ -1385,8 +1385,8 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     // Only pass partition context for paths that actually live on mounted PFS:
     // - "pfs:/..." absolute paths
     // - relative paths without a device prefix
-    // Never pass it for explicit device paths (mc:/, mass:/, hdd0:/, etc.),
-    // otherwise argv[0] can become "hdd0:...:mc1:/..." for non-HDD launches.
+    // Never pass it for explicit device paths (mc:/, mass:/, hddN:/, etc.),
+    // otherwise argv[0] can become "hddN:...:mc1:/..." for non-HDD launches.
     if (party != NULL && *party != '\0') {
         int has_device_prefix = 0;
         int is_pfs_path = 0;

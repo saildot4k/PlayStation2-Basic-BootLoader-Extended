@@ -231,7 +231,10 @@ char *generateTitleID(const char *path)
         }
     }
 
-    if (!strncmp(path, "hdd0:", 5)) {
+    if (!strncmp(path, "hdd", 3) &&
+        path[3] >= '0' &&
+        path[3] <= '1' &&
+        path[4] == ':') {
         valuePtr = &path[5];
 
         if (valuePtr[1] == 'P' && valuePtr[2] == '.') {

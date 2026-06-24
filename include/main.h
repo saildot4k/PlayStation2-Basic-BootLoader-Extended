@@ -198,9 +198,8 @@ extern char PART[128];
 extern int HDD_USABLE;
 #define MPART PART
 
-int CheckHDD(void);
-int LoadHDDIRX(void);             // Load HDD IRXes.
-int MountParty(const char *path); // Process `hdd0:/$PARTITION:pfs:$PATH_TO_FILE/` and mount partition.
+int LoadHDDIRX(const char *path_hint); // Load HDD IRXes.
+int MountParty(const char *path);      // Process `hddN:/$PARTITION:pfs:$PATH_TO_FILE/` and mount partition.
 int mnt(const char *path);        // Mount partition specified on path.
 void HDDChecker(void);
 void poweroffCallback(void *arg);

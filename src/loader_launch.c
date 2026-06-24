@@ -47,8 +47,12 @@ static const char *LaunchDriverDeviceNameForPath(const char *path)
         return "USB";
     if (ci_starts_with(path, "hdd0:"))
         return "HDD0";
-    if (ci_starts_with(path, "ata"))
-        return "ATA";
+    if (ci_starts_with(path, "hdd1:"))
+        return "HDD1";
+    if (ci_starts_with(path, "ata0:"))
+        return "ATA0";
+    if (ci_starts_with(path, "ata1:"))
+        return "ATA1";
     if (ci_starts_with(path, "xfrom:"))
         return "XFROM";
     if (ci_starts_with(path, "mc"))
@@ -65,7 +69,7 @@ static const char *LaunchDriverDeviceNameForPath(const char *path)
         case LOADER_PATH_FAMILY_MMCE:
             return "MMCE";
         case LOADER_PATH_FAMILY_HDD_APA:
-            return "HDD0";
+            return "HDD";
         case LOADER_PATH_FAMILY_XFROM:
             return "XFROM";
         default:
@@ -378,6 +382,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
     ConsoleInfo console_info;
     char autoboot_text[48];
     int console_info_ready = 0;
+    int auto_command_handled;
     const char *model;
     const char *ps1ver;
     const char *dvdver;
@@ -561,6 +566,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             for (x = 0; x < num_buttons; x++) { // check all pad buttons
                 if (pad_state & button) {
                     int command_cancelled = 0;
+                    int command_handled = 0;
                     int retry_requested = 0;
                     const char *button_name = KEYS_ID[x + 1];
                     DPRINTF("PAD detected: state=0x%04x button='%s' key=%d\n",
@@ -629,7 +635,18 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                                 *block_hotkeys_until_release = 1;
                                 break;
                             }
-                            continue;
+                            command_handled = 1;
+                            if (SplashRenderIsActive())
+                                RestoreSplashInteractiveUi(GLOBCFG.LOGO_DISP,
+                                                           hotkey_lines,
+                                                           model,
+                                                           console_info.rom_fmt,
+                                                           dvdver,
+                                                           ps1ver,
+                                                           temp_celsius,
+                                                           source);
+                            *block_hotkeys_until_release = 1;
+                            break;
                         }
 
                         execpaths[j] = NULL;
@@ -667,7 +684,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             RunLoaderElf(execpaths[j], MPART, GLOBCFG.KEYARGC[x + 1][j], GLOBCFG.KEYARGS[x + 1][j]);
                         }
                     }
-                    if (!command_cancelled) {
+                    if (!command_cancelled && !command_handled) {
                         EnsurePadsReadyForInput();
                         retry_requested = WaitForMissingPathAction(button_name,
                                                                    model,
@@ -706,6 +723,8 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             *rescue_combo_deadline = 0;
         TimerEnd();
 
+        auto_command_handled = 0;
+
         for (j = 0; j < CONFIG_KEY_INDEXES; j++) {
             const char *entry_path = GLOBCFG.KEYPATHS[0][j];
             int ensure_family_result = 0;
@@ -733,7 +752,18 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                 LoaderPathSetPendingCommandAutoMode(0);
                 if (LoaderPathConsumeCdvdCancelled())
                     continue;
-                continue;
+                auto_command_handled = 1;
+                if (SplashRenderIsActive())
+                    RestoreSplashInteractiveUi(GLOBCFG.LOGO_DISP,
+                                               hotkey_lines,
+                                               model,
+                                               console_info.rom_fmt,
+                                               dvdver,
+                                               ps1ver,
+                                               temp_celsius,
+                                               source);
+                *block_hotkeys_until_release = 1;
+                break;
             }
             ensure_family_result = LoaderEnsurePathFamilyReady(entry_path);
             if (ensure_family_result < 0)
@@ -770,7 +800,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             }
         }
 
-        {
+        if (!auto_command_handled) {
             int retry_requested;
 
             TimerInit();
