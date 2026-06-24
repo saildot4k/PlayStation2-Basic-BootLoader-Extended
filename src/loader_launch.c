@@ -708,7 +708,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             *block_hotkeys_until_release = 1;
                         }
                     }
-                    if (command_cancelled || retry_requested)
+                    if (command_cancelled || command_handled || retry_requested)
                         deadline = Timer() + GLOBCFG.DELAY;
                     break;
                 }
@@ -800,7 +800,12 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
             }
         }
 
-        if (!auto_command_handled) {
+        if (auto_command_handled) {
+            TimerInit();
+            continue;
+        }
+
+        {
             int retry_requested;
 
             TimerInit();

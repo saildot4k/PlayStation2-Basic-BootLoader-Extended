@@ -77,13 +77,42 @@ static int is_command_token(const char *path)
     if (path == NULL)
         return 0;
 
-    return (path[0] == '$' || ci_eq(path, "cdrom"));
+    if (ci_eq(path, "cdrom"))
+        return 1;
+    if (path[0] != '$')
+        return 0;
+
+    return (!strcmp(path, "$CDVD") ||
+            !strcmp(path, "$CDVD_NO_PS2LOGO") ||
+            !strcmp(path, "$HDDCHECKER") ||
+            !strcmp(path, "$CREDITS") ||
+            !strcmp(path, "$OSDSYS") ||
+            !strncmp(path, "$RUNKELF:", strlen("$RUNKELF:")));
 }
 
 int LoaderPathIsCommandToken(const char *path)
 {
     return is_command_token(path);
 }
+
+#ifndef HDD
+static void show_hddchecker_unavailable(void)
+{
+    int prev_pad = ReadCombinedPadStatus_raw();
+
+    ShowLaunchStepStatusWithSubline("$HDDCHECKER REQUIRES INTERNAL HDD SUPPORT",
+                                    "PRESS START TO RETURN TO LAUNCH KEYS");
+    while (1) {
+        int pad = ReadCombinedPadStatus_raw();
+
+        if (!(prev_pad & PAD_START) && (pad & PAD_START))
+            break;
+
+        prev_pad = pad;
+        delay_ms(50);
+    }
+}
+#endif
 
 static int preferred_mc_slot_char(void)
 {
@@ -925,6 +954,9 @@ char *CheckPath(const char *path)
 #ifdef HDD
         if (!strcmp("$HDDCHECKER", path))
             HDDChecker();
+#else
+        if (!strcmp("$HDDCHECKER", path))
+            show_hddchecker_unavailable();
 #endif
         if (!strcmp("$CREDITS", path))
             s_cdvd_cancelled = credits();
