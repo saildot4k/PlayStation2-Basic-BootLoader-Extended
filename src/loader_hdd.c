@@ -15,8 +15,9 @@ int HDD_USABLE = 0;
 #define HDD_CHECKER_GLYPH_ADVANCE 6
 #define HDD_CHECKER_GLYPH_HEIGHT 7
 #define HDD_CHECKER_MARGIN 8
-#define HDD_CHECKER_PROMPT_GAP 18
-#define HDD_CHECKER_PROMPT_TEXT "PRESS START TO RETURN TO LAUNCH KEYS"
+#define HDD_CHECKER_PROMPT_PREFIX "PRESS "
+#define HDD_CHECKER_PROMPT_WORD "START"
+#define HDD_CHECKER_PROMPT_SUFFIX " TO RETURN TO LAUNCH KEYS"
 #define HDD_CHECKER_COLOR_TITLE 0x00ffff
 #define HDD_CHECKER_COLOR_OK 0x00ff00
 #define HDD_CHECKER_COLOR_WARN 0xffff00
@@ -187,12 +188,6 @@ static u32 hdd_checker_connection_color(int status)
 {
     if (status == 0)
         return HDD_CHECKER_COLOR_OK;
-    if (status == 1)
-        return HDD_CHECKER_COLOR_WARN;
-    if (status == 2)
-        return HDD_CHECKER_COLOR_BAD;
-    if (status == 3)
-        return HDD_CHECKER_COLOR_INFO;
     return HDD_CHECKER_COLOR_BAD;
 }
 
@@ -305,6 +300,7 @@ static int hdd_checker_collect_lines(HDDCheckerLine lines[HDD_CHECKER_MAX_LINES]
     int unit;
 
     hdd_checker_add_line(lines, &line_count, HDD_CHECKER_COLOR_TITLE, "HDD DIAGNOSIS ROUTINE");
+    hdd_checker_add_line(lines, &line_count, HDD_CHECKER_COLOR_WARN, "CHECKS APA FORMATTED DRIVES ONLY!");
     hdd_checker_add_line(lines, &line_count, HDD_CHECKER_COLOR_TEXT, "");
     for (unit = 0; unit <= 1; unit++) {
         hdd_checker_collect_unit_lines(lines, &line_count, unit);
@@ -339,6 +335,26 @@ static void hdd_checker_draw_centered_line(int screen_w,
     SplashRenderDrawTextPxScaled(x, y, color, text, 1);
 }
 
+static void hdd_checker_draw_prompt_line(int screen_w, int anchor_center_x, int y)
+{
+    int prefix_w = (int)strlen(HDD_CHECKER_PROMPT_PREFIX) * HDD_CHECKER_GLYPH_ADVANCE;
+    int word_w = (int)strlen(HDD_CHECKER_PROMPT_WORD) * HDD_CHECKER_GLYPH_ADVANCE;
+    int suffix_w = (int)strlen(HDD_CHECKER_PROMPT_SUFFIX) * HDD_CHECKER_GLYPH_ADVANCE;
+    int line_w = prefix_w + word_w + suffix_w;
+    int x = anchor_center_x - (line_w / 2);
+
+    if (x < HDD_CHECKER_MARGIN)
+        x = HDD_CHECKER_MARGIN;
+    if (x + line_w > screen_w - HDD_CHECKER_MARGIN)
+        x = screen_w - line_w - HDD_CHECKER_MARGIN;
+    if (x < HDD_CHECKER_MARGIN)
+        x = HDD_CHECKER_MARGIN;
+
+    SplashRenderDrawTextPxScaled(x, y, HDD_CHECKER_COLOR_TEXT, HDD_CHECKER_PROMPT_PREFIX, 1);
+    SplashRenderDrawTextPxScaled(x + prefix_w, y, HDD_CHECKER_COLOR_PROMPT, HDD_CHECKER_PROMPT_WORD, 1);
+    SplashRenderDrawTextPxScaled(x + prefix_w + word_w, y, HDD_CHECKER_COLOR_TEXT, HDD_CHECKER_PROMPT_SUFFIX, 1);
+}
+
 static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER_MAX_LINES],
                                           int line_count)
 {
@@ -346,9 +362,7 @@ static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER
     int screen_h;
     int anchor_center_x;
     int y;
-    int content_area_top;
-    int content_area_bottom;
-    int content_area_height;
+    int max_y;
     int total_height;
     int prompt_y;
     int i;
@@ -359,26 +373,15 @@ static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER
     screen_w = SplashRenderGetScreenWidth();
     screen_h = SplashRenderGetScreenHeight();
     anchor_center_x = screen_w / 2;
-    prompt_y = screen_h - HDD_CHECKER_MARGIN - HDD_CHECKER_GLYPH_HEIGHT;
-    if (prompt_y < HDD_CHECKER_MARGIN)
-        prompt_y = HDD_CHECKER_MARGIN;
+    total_height = (line_count * HDD_CHECKER_LINE_SPACING) + HDD_CHECKER_GLYPH_HEIGHT;
+    y = (screen_h - total_height) / 2;
 
-    content_area_top = HDD_CHECKER_MARGIN;
-    content_area_bottom = prompt_y - HDD_CHECKER_PROMPT_GAP;
-    if (content_area_bottom < content_area_top + HDD_CHECKER_GLYPH_HEIGHT)
-        content_area_bottom = prompt_y;
-
-    total_height = ((line_count - 1) * HDD_CHECKER_LINE_SPACING) + HDD_CHECKER_GLYPH_HEIGHT;
-    content_area_height = content_area_bottom - content_area_top;
-    if (content_area_height > total_height)
-        y = content_area_top + ((content_area_height - total_height) / 2);
-    else
-        y = content_area_top;
-
-    if (y + total_height > content_area_bottom)
-        y = content_area_bottom - total_height;
+    max_y = screen_h - total_height - HDD_CHECKER_MARGIN;
+    if (y > max_y)
+        y = max_y;
     if (y < HDD_CHECKER_MARGIN)
         y = HDD_CHECKER_MARGIN;
+    prompt_y = y + (line_count * HDD_CHECKER_LINE_SPACING);
 
     SplashRenderSetHotkeysVisible(0);
     SplashRenderBeginFrame();
@@ -389,11 +392,7 @@ static void hdd_checker_draw_splash_frame(const HDDCheckerLine lines[HDD_CHECKER
                                        lines[i].color,
                                        lines[i].text);
     }
-    hdd_checker_draw_centered_line(screen_w,
-                                   anchor_center_x,
-                                   prompt_y,
-                                   HDD_CHECKER_COLOR_PROMPT,
-                                   HDD_CHECKER_PROMPT_TEXT);
+    hdd_checker_draw_prompt_line(screen_w, anchor_center_x, prompt_y);
     SplashRenderPresent();
 }
 
@@ -410,8 +409,12 @@ static void hdd_checker_draw_console(const HDDCheckerLine lines[HDD_CHECKER_MAX_
         else
             scr_printf("\t%s\n", lines[i].text);
     }
+    scr_setfontcolor(HDD_CHECKER_COLOR_TEXT);
+    scr_printf("\t%s", HDD_CHECKER_PROMPT_PREFIX);
     scr_setfontcolor(HDD_CHECKER_COLOR_PROMPT);
-    scr_printf("\n\t%s\n", HDD_CHECKER_PROMPT_TEXT);
+    scr_printf("%s", HDD_CHECKER_PROMPT_WORD);
+    scr_setfontcolor(HDD_CHECKER_COLOR_TEXT);
+    scr_printf("%s\n", HDD_CHECKER_PROMPT_SUFFIX);
     scr_setfontcolor(0xffffff);
 }
 
