@@ -95,13 +95,12 @@ int LoaderPathIsCommandToken(const char *path)
     return is_command_token(path);
 }
 
-#ifndef HDD
-static void show_hddchecker_unavailable(void)
+static void show_command_message_wait_start(const char *line1, const char *line2)
 {
     int prev_pad = ReadCombinedPadStatus_raw();
 
-    ShowLaunchStepStatusWithSubline("$HDDCHECKER REQUIRES INTERNAL HDD SUPPORT",
-                                    "PRESS START TO RETURN TO LAUNCH KEYS");
+    ShowLaunchStepStatusWithSubline(line1,
+                                    (line2 != NULL) ? line2 : "PRESS START TO RETURN TO LAUNCH KEYS");
     while (1) {
         int pad = ReadCombinedPadStatus_raw();
 
@@ -111,6 +110,13 @@ static void show_hddchecker_unavailable(void)
         prev_pad = pad;
         delay_ms(50);
     }
+}
+
+#ifndef HDD
+static void show_hddchecker_unavailable(void)
+{
+    show_command_message_wait_start("$HDDCHECKER REQUIRES INTERNAL HDD SUPPORT",
+                                    "PRESS START TO RETURN TO LAUNCH KEYS");
 }
 #endif
 
@@ -952,8 +958,13 @@ char *CheckPath(const char *path)
                                             s_pending_command_argv,
                                             (s_pending_command_auto_mode == 0)) < 0);
 #ifdef HDD
-        if (!strcmp("$HDDCHECKER", path))
-            HDDChecker();
+        if (!strcmp("$HDDCHECKER", path)) {
+            if (LoaderEnsureHDDCheckerReady() < 0)
+                show_command_message_wait_start("HDD CHECKER FAILED TO LOAD HDD DRIVERS",
+                                                "PRESS START TO RETURN TO LAUNCH KEYS");
+            else
+                HDDChecker();
+        }
 #else
         if (!strcmp("$HDDCHECKER", path))
             show_hddchecker_unavailable();

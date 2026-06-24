@@ -1260,6 +1260,26 @@ int LoaderEnsurePathFamilyReady(const char *path)
     return 1;
 }
 
+#ifdef HDD
+int LoaderEnsureHDDCheckerReady(void)
+{
+    if (s_current_family == LOADER_PATH_FAMILY_HDD_APA && s_hdd_modules_loaded) {
+        if (!PadIsInitialized())
+            PadInitPads();
+        return 0;
+    }
+
+    DPRINTF("HDD checker: rebooting IOP driver family from %s(%d) to HDD_APA\n",
+            boot_family_name(s_current_family),
+            (int)s_current_family);
+    return reload_for_family(LOADER_PATH_FAMILY_HDD_APA,
+                             1,
+                             1,
+                             "hdd0:",
+                             BDM_TRANSPORT_SCOPE_LAUNCH_ENTRY);
+}
+#endif
+
 int LoaderPrepareFinalLaunch(const char *path)
 {
     LoaderPathFamily target_family = LoaderPathFamilyFromPath(path);

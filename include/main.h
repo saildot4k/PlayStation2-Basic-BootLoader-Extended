@@ -201,6 +201,7 @@ extern int HDD_USABLE;
 int LoadHDDIRX(const char *path_hint); // Load HDD IRXes.
 int MountParty(const char *path);      // Process `hddN:/$PARTITION:pfs:$PATH_TO_FILE/` and mount partition.
 int mnt(const char *path);        // Mount partition specified on path.
+int LoaderEnsureHDDCheckerReady(void);
 void HDDChecker(void);
 void poweroffCallback(void *arg);
 #else
