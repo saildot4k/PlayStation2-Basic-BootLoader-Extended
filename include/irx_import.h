@@ -32,6 +32,7 @@ IMPORT_BIN2C(poweroff_irx);
 IMPORT_BIN2C(ps2atad_irx);
 IMPORT_BIN2C(ps2hdd_irx);
 IMPORT_BIN2C(ps2fs_irx);
+IMPORT_BIN2C(secrsif_irx);
 #endif
 
 #ifdef UDPTTY

@@ -37,6 +37,10 @@ PS2_DISABLE_AUTOSTART_PTHREAD();
 
 #define USER_MEM_START_ADDR 0x100000
 #define USER_MEM_END_ADDR 0x2000000
+#define RAW_PAYLOAD_MEM_ADDR 0x01000000
+#define RAW_PAYLOAD_MAX_SIZE (USER_MEM_END_ADDR - RAW_PAYLOAD_MEM_ADDR)
+#define OSDMENU_XFROM_MBR_PATH "xfrom:/BIEXEC-SYSTEM/xosdmenu.elf"
+#define XOSD_XFROM_MBR_PATH "xfrom:/BIEXEC-SYSTEM/xosdmain.elf"
 
 typedef enum { ShutdownType_None, ShutdownType_HDD, ShutdownType_All } ShutdownType;
 
@@ -107,6 +111,12 @@ int loadEmbeddedELF(int argc, char *argv[]);
 
 // Loads and executes the ELF elfPath points to.
 int loadELFFromFile(int argc, char *argv[]);
+
+// Returns nonzero when the failed ELF path may be a raw MBR-style payload.
+int isRawPayloadCandidate(const char *path);
+
+// Loads a raw payload file into the high memory handoff buffer.
+int loadRawPayloadFile(const char *path, void *dst, int maxSize);
 
 // Parses the loader eGSM argument into eGSM flags
 uint32_t parseGSMFlags(char *gsmArg);
@@ -301,17 +311,21 @@ int loadEmbeddedELF(int argc, char *argv[]) {
   // Parse the address
   if (sscanf(elfPath, "mem:%08X:%08X", &elfMem, &elfSize) < 2)
     return -ENOENT;
+  if (elfMem < USER_MEM_START_ADDR || elfMem >= USER_MEM_END_ADDR || elfSize <= 0 || elfSize > (USER_MEM_END_ADDR - elfMem))
+    return -EINVAL;
 
   // Clear the memory
-  if (elfMem >= USER_MEM_START_ADDR) {
-    memset((void *)USER_MEM_START_ADDR, 0, elfMem - USER_MEM_START_ADDR);
-    memset((void *)(elfMem + elfSize), 0, USER_MEM_END_ADDR - (elfMem + elfSize));
-    FlushCache(0);
-  }
+  memset((void *)USER_MEM_START_ADDR, 0, elfMem - USER_MEM_START_ADDR);
+  memset((void *)(elfMem + elfSize), 0, USER_MEM_END_ADDR - (elfMem + elfSize));
+  FlushCache(0);
 
   int entry = loadELF(elfMem);
-  if (entry < 0)
-    return -1;
+  if (entry < 0) {
+    memmove((void *)USER_MEM_START_ADDR, (void *)elfMem, elfSize);
+    FlushCache(0);
+    FlushCache(2);
+    entry = USER_MEM_START_ADDR;
+  }
 
   stopDiscIfRequested();
 
@@ -355,8 +369,21 @@ int loadELFFromFile(int argc, char *argv[]) {
 
   SifLoadFileInit();
   int ret = SifLoadElf(elfPath, &elfdata);
-  if (ret && (ret = SifLoadElfEncrypted(elfPath, &elfdata)))
-    return ret;
+  if (ret && (ret = SifLoadElfEncrypted(elfPath, &elfdata))) {
+    int load_ret = ret;
+    SifLoadFileExit();
+    if (isRawPayloadCandidate(elfPath)) {
+      char memPath[32];
+      int rawSize = loadRawPayloadFile(elfPath, (void *)RAW_PAYLOAD_MEM_ADDR, RAW_PAYLOAD_MAX_SIZE);
+
+      if (rawSize > 0) {
+        snprintf(memPath, sizeof(memPath), "mem:%08X:%08X", RAW_PAYLOAD_MEM_ADDR, rawSize);
+        elfPath = memPath;
+        return loadEmbeddedELF(argc, argv);
+      }
+    }
+    return load_ret;
+  }
   SifLoadFileExit();
 
   FlushCache(0);
@@ -395,6 +422,71 @@ int loadELFFromFile(int argc, char *argv[]) {
     enableGSM(eGSMFlags);
 #endif
   return ExecPS2((void *)elfdata.epc, (void *)elfdata.gp, argc, argv);
+}
+
+static int char_upper(int c) {
+  if (c >= 'a' && c <= 'z')
+    return c - ('a' - 'A');
+  return c;
+}
+
+static int strEqCI(const char *a, const char *b) {
+  if (!a || !b)
+    return 0;
+  while (*a && *b) {
+    if (char_upper((unsigned char)*a) != char_upper((unsigned char)*b))
+      return 0;
+    a++;
+    b++;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
+static int endsWithCI(const char *s, const char *suffix) {
+  int sLen;
+  int suffixLen;
+
+  if (!s || !suffix)
+    return 0;
+  sLen = strlen(s);
+  suffixLen = strlen(suffix);
+  if (suffixLen > sLen)
+    return 0;
+  return strEqCI(s + sLen - suffixLen, suffix);
+}
+
+int isRawPayloadCandidate(const char *path) {
+  return endsWithCI(path, ".mbr") ||
+         strEqCI(path, OSDMENU_XFROM_MBR_PATH) ||
+         strEqCI(path, XOSD_XFROM_MBR_PATH);
+}
+
+int loadRawPayloadFile(const char *path, void *dst, int maxSize) {
+  int fd;
+  int size;
+  int readSize;
+
+  if (!path || !dst || maxSize <= 0)
+    return -EINVAL;
+
+  fd = fioOpen(path, FIO_O_RDONLY);
+  if (fd < 0)
+    return fd;
+
+  size = fioLseek(fd, 0, FIO_SEEK_END);
+  if (size <= 0 || size > maxSize) {
+    fioClose(fd);
+    return -EIO;
+  }
+  fioLseek(fd, 0, FIO_SEEK_SET);
+
+  readSize = fioRead(fd, dst, size);
+  fioClose(fd);
+  if (readSize < size)
+    return -EIO;
+
+  FlushCache(0);
+  return size;
 }
 
 // Attempts to reboot IOP with IOPRP image

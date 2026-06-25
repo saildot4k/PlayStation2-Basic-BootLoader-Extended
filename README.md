@@ -51,6 +51,7 @@ PS2BBL supports these launch/config path prefixes:
 - `mmce0:/`, `mmce1:/`, `mmce?:/` __MMCE builds__
 - `mx4sio:/` (preferred), and `massX:/` (legacy)  __MX4SIO builds__
 - `hdd0:partition:pfs:/<path to elf>`, `hdd1:partition:pfs:/<path to elf>` __HDD builds__
+- `$HDDMBR` boots the OSD MBR payload installed in `hdd0:__mbr` __HDD builds__
 - `xfrom:/` paths __PSX DESR builds__
 - `ata0:/`, `ata1:/` exFAT HDD BDM device roots
 - `ilink:/` (BDM mass-storage roots) __not yet implemented__

@@ -31,9 +31,16 @@ static int dev9_loaded = 0;
 #ifdef FILEXIO
 static int s_fio_loaded = 0;
 #endif
+#ifdef HDD
+static int s_secrsif_loaded = 0;
+#endif
 #if defined(PSX)
 static int s_xfrom_modules_loaded = 0;
 extern int g_is_psx_desr;
+#endif
+
+#ifdef HDD
+static int LoadSecrSif(void);
 #endif
 
 static int starts_with(const char *s, const char *prefix)
@@ -623,6 +630,9 @@ static void reset_module_flags(void)
     s_bdm_core_loaded = 0;
     s_bdm_usb_transport_loaded = 0;
     s_bdm_ata_transport_loaded = 0;
+#ifdef HDD
+    s_secrsif_loaded = 0;
+#endif
 #if defined(PSX)
     s_xfrom_modules_loaded = 0;
 #endif
@@ -1006,6 +1016,8 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
             if (LoadFIO() < 0)
                 return -1;
 #endif
+            if (LoadSecrSif() < 0)
+                return -1;
             if (LoadHDDIRX(path_hint) < 0)
                 return -2;
             s_hdd_modules_loaded = 1;
@@ -1472,6 +1484,24 @@ int LoadFIO(void)
         return -3;
 
     s_fio_loaded = 1;
+    return 0;
+}
+#endif
+
+#ifdef HDD
+static int LoadSecrSif(void)
+{
+    int ID, RET;
+
+    if (s_secrsif_loaded)
+        return 0;
+
+    ID = SifExecModuleBuffer(&secrsif_irx, size_secrsif_irx, 0, NULL, &RET);
+    DPRINTF(" [SECRSIF]: ret=%d, ID=%d\n", RET, ID);
+    if (ID < 0 || RET == 1)
+        return -1;
+
+    s_secrsif_loaded = 1;
     return 0;
 }
 #endif

@@ -222,8 +222,8 @@ endif
 
 ifeq ($(HDD), 1)
   $(info --- compiling with HDD support)
-  EE_LIBS += -lpoweroff
-  EE_OBJS += ps2fs_irx.o ps2hdd_irx.o ps2atad_irx.o poweroff_irx.o
+  EE_LIBS += -lpoweroff -lsecr
+  EE_OBJS += ps2fs_irx.o ps2hdd_irx.o ps2atad_irx.o poweroff_irx.o secrsif_irx.o
   EE_CFLAGS += -DHDD
   FILEXIO_NEED = 1
   DEV9_NEED = 1

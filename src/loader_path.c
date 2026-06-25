@@ -5,6 +5,9 @@
 #include "loader_path.h"
 
 #define CHECKPATH_BUF_SIZE 256
+#define HDDMBR_TOKEN "$HDDMBR"
+#define HDDMBR_PATH "hdd0:__mbr"
+#define OSDMENU_XFROM_PATH "xfrom:/BIEXEC-SYSTEM/xosdmenu.elf"
 
 extern int g_is_psx_desr;
 
@@ -241,6 +244,10 @@ LoaderPathFamily LoaderPathFamilyFromPath(const char *path)
 {
     if (path == NULL || *path == '\0')
         return LOADER_PATH_FAMILY_NONE;
+    if (!strcmp(path, "$OSDMENU"))
+        return LOADER_PATH_FAMILY_XFROM;
+    if (!strcmp(path, HDDMBR_TOKEN))
+        return LOADER_PATH_FAMILY_HDD_APA;
     if (path[0] == '$')
         return LOADER_PATH_FAMILY_NONE;
     if (path_prefix_matches(path, "mc", 2))
@@ -579,6 +586,16 @@ static const char *resolve_path_tokens(const char *path,
     if (!copy_string_safe(out, out_size, path))
         return NULL;
 
+    if (!strcmp(path, "$OSDMENU")) {
+        copy_string_safe(out, out_size, OSDMENU_XFROM_PATH);
+        return out;
+    }
+
+    if (!strcmp(path, HDDMBR_TOKEN)) {
+        copy_string_safe(out, out_size, HDDMBR_PATH);
+        return out;
+    }
+
     if (ci_starts_with(path, "mc?")) {
         if (!resolve_pair_path_copy(path,
                                     2,
@@ -680,6 +697,9 @@ static const char *resolve_path_tokens(const char *path,
 #ifdef HDD
     if (parse_explicit_dual_unit_path(path, "hdd", 3, NULL, NULL)) {
         const char *pfs_path;
+
+        if (ci_eq(path, HDDMBR_PATH))
+            return out;
 
         if (MountParty(path) < 0) {
             DPRINTF("-{%s}-\n", path);

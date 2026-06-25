@@ -18,6 +18,7 @@
 #if defined(HDD) && defined(FILEXIO)
 #include <fileXio_rpc.h>
 #include <hdd-ioctl.h>
+#include <libsecr.h>
 #endif
 #ifdef HDD
 #include <fileio.h>
@@ -27,6 +28,7 @@
 #define PATINFO_MAX_CNF 4096
 #define PATINFO_ELF_MEM_ADDR 0x01000000
 #define PATINFO_IOPRP_MEM_ADDR 0x01F00000
+#define MBR_PAYLOAD_MEM_CAPACITY (PATINFO_IOPRP_MEM_ADDR - PATINFO_ELF_MEM_ADDR)
 #define DBGWAIT_LAUNCH_PAUSE_MS 2000u
 #ifdef DEBUG
 #define DBGWAIT(T) delay_ms(T)
@@ -472,6 +474,191 @@ static int read_patinfo_payload(const char *launch_path, int read_ioprp, void *d
             dst_mem,
             (unsigned int)payload.size);
     return 0;
+}
+#endif
+
+#if EGSM_BUILD && defined(HDD) && defined(FILEXIO)
+#define APA_MBR_OSD_START_OFFSET 304u
+#define APA_MBR_OSD_SIZE_OFFSET 308u
+#define MBR_READ_SECTORS_PER_CHUNK 32u
+#define PS2_ELF_MAGIC 0x464c457fu
+
+static uint16_t load_u16_le(const uint8_t *p)
+{
+    return (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
+}
+
+static uint32_t load_u32_le(const uint8_t *p)
+{
+    return ((uint32_t)p[0]) |
+           ((uint32_t)p[1] << 8) |
+           ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
+static int payload_looks_like_kelf(const uint8_t *payload, uint32_t size)
+{
+    uint32_t elf_size;
+    uint16_t header_size;
+    uint16_t bit_count;
+
+    if (payload == NULL || size < 32)
+        return 0;
+
+    elf_size = load_u32_le(payload + 16);
+    header_size = load_u16_le(payload + 20);
+    bit_count = load_u16_le(payload + 26);
+
+    return (elf_size > 0 &&
+            header_size >= 32 &&
+            header_size < size &&
+            bit_count <= 63);
+}
+
+static int prepare_disk_boot_payload(void *payload_mem,
+                                     uint32_t raw_size,
+                                     uintptr_t *payload_addr_out,
+                                     uint32_t *payload_size_out)
+{
+    uint8_t *payload = (uint8_t *)payload_mem;
+    void *decrypted;
+    uintptr_t decrypted_addr;
+    uintptr_t payload_addr;
+    uint32_t decrypted_offset;
+    int res;
+
+    if (payload == NULL || raw_size == 0 ||
+        payload_addr_out == NULL || payload_size_out == NULL)
+        return -1;
+
+    *payload_addr_out = (uintptr_t)payload;
+    *payload_size_out = raw_size;
+
+    if (raw_size >= 4 && load_u32_le(payload) == PS2_ELF_MAGIC)
+        return 0;
+
+    if (!payload_looks_like_kelf(payload, raw_size)) {
+        DPRINTF("MBR: payload is not ELF/KELF; using raw binary payload\n");
+        return 0;
+    }
+
+    DPRINTF("MBR: decrypting disk boot payload via SECRMAN\n");
+    res = SecrInit();
+    if (!res) {
+        DPRINTF("MBR: failed to initialize libsecr\n");
+        return -1;
+    }
+
+    decrypted = SecrDiskBootFile(payload);
+    SecrDeinit();
+    if (decrypted == NULL) {
+        DPRINTF("MBR: failed to decrypt disk boot payload\n");
+        return -1;
+    }
+
+    payload_addr = (uintptr_t)payload;
+    decrypted_addr = (uintptr_t)decrypted;
+    if (decrypted_addr < payload_addr ||
+        decrypted_addr >= payload_addr + raw_size) {
+        DPRINTF("MBR: decrypted payload pointer out of range\n");
+        return -1;
+    }
+
+    decrypted_offset = (uint32_t)(decrypted_addr - payload_addr);
+    *payload_addr_out = decrypted_addr;
+    *payload_size_out = raw_size - decrypted_offset;
+    DPRINTF("MBR: decrypted payload @ 0x%08x size=0x%08x\n",
+            (unsigned int)*payload_addr_out,
+            (unsigned int)*payload_size_out);
+    return 0;
+}
+
+static int read_hdd0_osd_mbr_payload(void *dst_mem,
+                                     uint32_t dst_capacity,
+                                     uintptr_t *payload_addr_out,
+                                     uint32_t *payload_size_out)
+{
+    uint8_t header_buf[512] __attribute__((aligned(64)));
+    hddAtaTransfer_t transfer;
+    iox_stat_t mbr_stat;
+    uint32_t osd_start;
+    uint32_t osd_size;
+    uint32_t remaining;
+    uint32_t lba;
+    uint32_t offset = 0;
+    int ret;
+
+    if (dst_mem == NULL || payload_addr_out == NULL || payload_size_out == NULL)
+        return -1;
+
+    ret = fileXioGetStat("hdd0:__mbr", &mbr_stat);
+    if (ret < 0) {
+        DPRINTF("MBR: failed to stat hdd0:__mbr: %d\n", ret);
+        return -1;
+    }
+
+    memset(header_buf, 0, sizeof(header_buf));
+    memset(&transfer, 0, sizeof(transfer));
+    transfer.lba = (uint32_t)mbr_stat.private_5;
+    transfer.size = 1;
+    ret = fileXioDevctl("hdd0:",
+                        HDIOC_READSECTOR,
+                        &transfer,
+                        sizeof(transfer),
+                        header_buf,
+                        sizeof(header_buf));
+    if (ret < 0) {
+        DPRINTF("MBR: failed to read APA MBR sector %u: %d\n",
+                (unsigned int)transfer.lba,
+                ret);
+        return -1;
+    }
+
+    osd_start = load_u32_le(header_buf + APA_MBR_OSD_START_OFFSET);
+    osd_size = load_u32_le(header_buf + APA_MBR_OSD_SIZE_OFFSET);
+    if (osd_start == 0 || osd_size == 0) {
+        DPRINTF("MBR: hdd0:__mbr has no OSD MBR payload (start=%u size=%u)\n",
+                (unsigned int)osd_start,
+                (unsigned int)osd_size);
+        return -1;
+    }
+    if (osd_size > (dst_capacity / 512u)) {
+        DPRINTF("MBR: OSD MBR payload too large (%u sectors, cap=%u bytes)\n",
+                (unsigned int)osd_size,
+                (unsigned int)dst_capacity);
+        return -1;
+    }
+
+    remaining = osd_size;
+    lba = osd_start;
+    while (remaining > 0) {
+        uint32_t chunk = (remaining > MBR_READ_SECTORS_PER_CHUNK) ? MBR_READ_SECTORS_PER_CHUNK : remaining;
+
+        transfer.lba = lba;
+        transfer.size = chunk;
+        ret = fileXioDevctl("hdd0:",
+                            HDIOC_READSECTOR,
+                            &transfer,
+                            sizeof(transfer),
+                            (uint8_t *)dst_mem + offset,
+                            (int)(chunk * 512u));
+        if (ret < 0) {
+            DPRINTF("MBR: failed to read payload sector %u: %d\n",
+                    (unsigned int)lba,
+                    ret);
+            return -1;
+        }
+
+        lba += chunk;
+        offset += chunk * 512u;
+        remaining -= chunk;
+    }
+
+    DPRINTF("MBR: loaded hdd0:__mbr payload start=%u sectors=%u bytes=%u\n",
+            (unsigned int)osd_start,
+            (unsigned int)osd_size,
+            (unsigned int)offset);
+    return prepare_disk_boot_payload(dst_mem, offset, payload_addr_out, payload_size_out);
 }
 #endif
 #endif
@@ -1193,6 +1380,9 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     char patinfo_mem_elf[MAX_PATH];
     char patinfo_mem_ioprp[MAX_PATH];
 #endif
+#if EGSM_BUILD && defined(HDD) && defined(FILEXIO)
+    char mbr_mem_elf[MAX_PATH];
+#endif
     int i;
     int show_app_id;
     int launch_is_rom;
@@ -1210,6 +1400,9 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
 #if EGSM_BUILD && defined(HDD)
     patinfo_mem_elf[0] = '\0';
     patinfo_mem_ioprp[0] = '\0';
+#endif
+#if EGSM_BUILD && defined(HDD) && defined(FILEXIO)
+    mbr_mem_elf[0] = '\0';
 #endif
 #ifdef HDD
     PatinfoOptionsInit(&patinfo_opts);
@@ -1381,6 +1574,43 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
                 intent.launch_filename);
         intent.launch_filename = legacy_launch_path;
     }
+
+#ifdef HDD
+    if (arg_eq_ci(intent.launch_filename, "hdd0:__mbr")) {
+#if EGSM_BUILD && defined(FILEXIO)
+        uintptr_t mbr_payload_addr = 0;
+        uint32_t mbr_payload_size = 0;
+
+        if (read_hdd0_osd_mbr_payload((void *)PATINFO_ELF_MEM_ADDR,
+                                      MBR_PAYLOAD_MEM_CAPACITY,
+                                      &mbr_payload_addr,
+                                      &mbr_payload_size) != 0) {
+            DPRINTF("MBR: unable to load hdd0:__mbr payload\n");
+            free(launch_argv_owned);
+            LaunchIntentRelease(&intent);
+#ifdef HDD
+            PatinfoOptionsRelease(&patinfo_opts);
+#endif
+            return;
+        }
+
+        snprintf(mbr_mem_elf,
+                 sizeof(mbr_mem_elf),
+                 "mem:%08X:%08X",
+                 (unsigned int)mbr_payload_addr,
+                 (unsigned int)mbr_payload_size);
+        stage2_elf_arg = mbr_mem_elf;
+        force_stage2 = 1;
+        force_stage2_without_gsm = 1;
+#else
+        DPRINTF("MBR: hdd0:__mbr launch requires EGSM_BUILD and FILEXIO\n");
+        free(launch_argv_owned);
+        LaunchIntentRelease(&intent);
+        PatinfoOptionsRelease(&patinfo_opts);
+        return;
+#endif
+    }
+#endif
 
     // Only pass partition context for paths that actually live on mounted PFS:
     // - "pfs:/..." absolute paths

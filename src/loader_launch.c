@@ -234,7 +234,11 @@ static int ResolveLaunchPathForEntry(const char *entry_path,
         if (LoaderPathCanAttemptNow(entry_path)) {
             candidate = CheckPath(entry_path);
             if (candidate != NULL && *candidate != '\0') {
-                if (LoaderAllowVirtualPatinfoEntry(key_index, entry_index, candidate) || exist(candidate)) {
+                if (LoaderAllowVirtualPatinfoEntry(key_index, entry_index, candidate) ||
+#ifdef HDD
+                    ci_eq(candidate, "hdd0:__mbr") ||
+#endif
+                    exist(candidate)) {
                     *resolved_path = candidate;
                     DPRINTF("Launch resolve: key=%d entry=%d raw='%s' resolved='%s'\n",
                             key_index,
