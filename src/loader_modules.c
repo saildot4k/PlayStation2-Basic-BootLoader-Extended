@@ -295,6 +295,7 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
         int mounted = 0;
         char driver_tag[16];
 #endif
+        int candidate_len;
         char candidate[256];
 
 #ifdef FILEXIO
@@ -310,12 +311,16 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
         }
 #endif
 
-        snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
-        if (exist(candidate))
+        candidate_len = snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
+        if (candidate_len > 0 &&
+            (size_t)candidate_len < sizeof(candidate) &&
+            exist(candidate))
             found = 1;
         if (!found && suffix[1] != '\0' && suffix[1] != '/') {
-            snprintf(candidate, sizeof(candidate), "mass%d:/%s", i, suffix + 1);
-            if (exist(candidate))
+            candidate_len = snprintf(candidate, sizeof(candidate), "mass%d:/%s", i, suffix + 1);
+            if (candidate_len > 0 &&
+                (size_t)candidate_len < sizeof(candidate) &&
+                exist(candidate))
                 found = 1;
         }
         if (found) {
@@ -347,10 +352,12 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
     return -1;
 }
 
+#ifndef NO_DPRINTF
 static const char *classify_mass_driver_tag(const char *driver_tag)
 {
     return mass_class_name(mass_class_from_driver_tag(driver_tag));
 }
+#endif
 
 static void normalize_disc_separators(char *path)
 {
@@ -572,6 +579,7 @@ static int source_hint_for_family(LoaderPathFamily family)
     return SOURCE_INVALID;
 }
 
+#ifndef NO_DPRINTF
 static const char *boot_family_name(LoaderPathFamily family)
 {
     switch (family) {
@@ -593,6 +601,7 @@ static const char *boot_family_name(LoaderPathFamily family)
             return "UNKNOWN";
     }
 }
+#endif
 
 static void reset_module_flags(void)
 {
@@ -668,6 +677,7 @@ static int load_core_modules(void)
 
     j = SifLoadModule("rom0:ADDDRV", 0, NULL); // Load ADDDRV. The OSD has it listed in rom0:OSDCNF/IOPBTCONF, but it is otherwise not loaded automatically.
     DPRINTF(" [ADDDRV]: %d\n", j);
+    (void)j;
 
     return 0;
 }

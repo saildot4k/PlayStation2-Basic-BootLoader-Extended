@@ -40,17 +40,19 @@ SECTIONS {
 		KEEP(*ee_exception_l2.o(.rodata))
 		KEEP(*ee_exception_l2.o(.rodata.*))
 	} >kram
+	.data ALIGN(128): {
+		KEEP(*egsm.o(.data))
+		KEEP(*egsm.o(.sdata))
+		KEEP(*ee_exception_l2.o(.data))
+		KEEP(*ee_exception_l2.o(.sdata))
+	} >kram
 	.bss ALIGN(128) : {
 		KEEP(*egsm.o(.bss))
 		KEEP(*egsm.o(.bss.*))
 		KEEP(*egsm.o(.sbss))
-		KEEP(*egsm.o(.data))
-		KEEP(*egsm.o(.sdata))
 		KEEP(*ee_exception_l2.o(.bss))
 		KEEP(*ee_exception_l2.o(.bss.*))
 		KEEP(*ee_exception_l2.o(.sbss))
-		KEEP(*ee_exception_l2.o(.data))
-		KEEP(*ee_exception_l2.o(.sdata))
 	} >kram
 
 	.text : {

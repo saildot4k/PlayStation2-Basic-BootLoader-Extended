@@ -40,6 +40,7 @@ enum {
     DEV9_NICHDD
 };
 
+#ifndef NO_DPRINTF
 static const char *dev9_mode_name(int dev9_mode)
 {
     switch (dev9_mode) {
@@ -52,6 +53,7 @@ static const char *dev9_mode_name(int dev9_mode)
             return "DEFAULT";
     }
 }
+#endif
 
 static int arg_eq_ci(const char *a, const char *b);
 
@@ -1016,6 +1018,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
             psx_desr_runtime,
             disc_stop,
             skip_argv0);
+    (void)psx_desr_runtime;
 
     if (party != NULL && *party != '\0') {
         if (path_is_pfs_prefix(launch_filename)) {

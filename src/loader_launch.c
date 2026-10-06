@@ -642,6 +642,7 @@ int LoaderRunLaunchWorkflow(int splash_early_presented,
                             const char *not_found_path = (execpaths[j] != NULL && *execpaths[j] != '\0') ? execpaths[j] : entry_path;
                             scr_setfontcolor(0x00ffff);
                             DPRINTF("%s not found\n", not_found_path);
+                            (void)not_found_path;
                             scr_setfontcolor(0xffffff);
                             continue;
                         }

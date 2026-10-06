@@ -579,6 +579,7 @@ int LoaderFindConfigFile(FILE **fp_out,
 
             xfrom_ret = LoaderEnsureXFromModulesLoaded();
             DPRINTF("Config probe: PSX xfrom boot preload ret=%d\n", xfrom_ret);
+            (void)xfrom_ret;
         }
     }
 #endif
@@ -708,6 +709,7 @@ int LoaderFindConfigFile(FILE **fp_out,
                 DPRINTF("Config probe: legacy mass boot transport prime usb=%d mx4=%d\n",
                         usb_ret,
                         mx4_ret);
+                (void)mx4_ret;
             } else {
                 DPRINTF("Config probe: legacy mass boot transport prime usb=%d mx4=skipped(unit=%d)\n",
                         usb_ret,
@@ -716,6 +718,7 @@ int LoaderFindConfigFile(FILE **fp_out,
 #else
             DPRINTF("Config probe: legacy mass boot transport prime usb=%d\n", usb_ret);
 #endif
+            (void)usb_ret;
             legacy_mass_transports_primed = 1;
         }
 

@@ -301,6 +301,11 @@ ifeq ($(PROHBIT_DVD_0100),1)
   EE_CFLAGS += -DPROHBIT_DVD_0100=1
 endif
 
+# Recent PS2SDK libpatches members depend on earlier members from the same
+# archive. Repeat the archive after profile-specific libraries so ld can
+# resolve those internal dependencies in its normal left-to-right scan.
+EE_LIBS += -lpatches
+
 # ---{ RECIPES }--- #
 .PHONY: greeting debug all clean clean-subprojects kelf packed release rebuild banner analyze clean
 
