@@ -255,6 +255,11 @@ int main(int argc, char *argv[])
     DPRINTF("load default settings\n");
     SetDefaultSettings();
 
+#ifdef PS2BBL_MBR
+    if (LoaderMbrHandleArgs(argc, argv))
+        return 0;
+#endif
+
     // Config bootstrap: locate CNF, apply defaults/fallbacks, and render early splash status.
     config_source = LoaderBootstrapConfigAndSplash(&splash_early_presented,
                                                    g_config_path_in_use,

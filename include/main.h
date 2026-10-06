@@ -148,6 +148,9 @@ void TimerInit(void);
 u64 Timer(void);
 void TimerEnd(void);
 void LoaderDiscStopPoll(void);
+#ifdef PS2BBL_MBR
+int LoaderMbrHandleArgs(int argc, char *argv[]);
+#endif
 
 /// check path for processing pseudo-devices like `mc?:/`
 char *CheckPath(const char *path);

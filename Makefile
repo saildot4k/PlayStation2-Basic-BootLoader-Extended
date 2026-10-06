@@ -15,6 +15,7 @@ HAS_EMBED_IRX ?= 1                  # whether to embed or not non vital IRX (wic
 DEBUG ?= 0
 PSX ?= 0                            # PSX DESR support
 HDD ?= 0                            # Internal HDD support
+MBR ?= 0                            # HDD __mbr boot payload variant
 MMCE ?= 0
 MX4SIO ?= 0
 PROHBIT_DVD_0100 ?= 0               # prohibit the DVD Players v1.00 and v1.01 from being booted.
@@ -46,6 +47,7 @@ STATUS = Beta
 
 # Prefer python3, fall back to python for CI images that don't ship python3 binary name.
 PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
+EE_OBJCOPY ?= $(EE_PREFIX)objcopy
 
 # ---{ EXECUTABLES }--- #
 
@@ -54,6 +56,7 @@ BASENAME ?= PS2BBL
 EE_BIN = $(BINDIR)$(BASENAME).ELF
 EE_BIN_STRIPPED = $(BINDIR)stripped_$(BASENAME).ELF
 EE_BIN_PACKED = $(BINDIR)COMPRESSED_$(BASENAME).ELF
+EE_BIN_RAW = $(BINDIR)$(BASENAME).BIN
 KELFTYPE ?= MC
 EE_BIN_ENCRYPTED = $(BINDIR)$(BASENAME)_$(KELFTYPE).KELF
 
@@ -101,6 +104,23 @@ endif
 ifeq ($(DISC_STOP_AT_BOOT), 1)
   $(info --- disc stop at startup enabled)
   EE_CFLAGS += -DDISC_STOP_AT_BOOT
+endif
+
+ifeq ($(MBR), 1)
+  $(info --- building HDD MBR boot variant)
+  ifeq ($(PSX), 1)
+    $(error MBR=1 is an HDD __mbr payload; do not combine it with PSX=1)
+  endif
+  ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
+    $(error MBR=1 is an HDD __mbr payload; do not combine it with PSX_ALL_DRIVERS_LAZY_LOADING=1)
+  endif
+  HDD = 1
+  BASENAME = PS2BBL_MBR
+  KELFTYPE = MBR
+  EE_BIN_ENCRYPTED = $(BINDIR)$(BASENAME).KELF
+  EE_CFLAGS += -DPS2BBL_MBR
+  EE_LDFLAGS += -Tsrc/ps2_mbr/linkfile
+  EE_OBJS += mbr_entry.o mbr_args.o mbr_crypto.o
 endif
 
 ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
@@ -227,7 +247,9 @@ ifeq ($(HDD), 1)
   EE_CFLAGS += -DHDD
   FILEXIO_NEED = 1
   DEV9_NEED = 1
-  KELFTYPE = HDD
+  ifneq ($(MBR), 1)
+    KELFTYPE = HDD
+  endif
 endif
 
 ifeq ($(UDPTTY), 1)
@@ -307,7 +329,7 @@ endif
 EE_LIBS += -lpatches
 
 # ---{ RECIPES }--- #
-.PHONY: greeting debug all clean clean-subprojects kelf packed release rebuild banner analyze clean
+.PHONY: greeting debug all clean clean-subprojects kelf mbr packed release rebuild banner analyze clean
 
 all: $(EE_BIN)
 ifeq ($(DEBUG), 1)
@@ -323,7 +345,11 @@ rebuild:
 
 packed: $(EE_BIN_PACKED)
 
+ifeq ($(MBR), 1)
+RELEASE_TARGET = $(EE_BIN_ENCRYPTED)
+else
 RELEASE_TARGET = $(EE_BIN_PACKED)
+endif
 
 greeting:
 	@echo built PS2BBL PSX=$(PSX), LOCAL_IRX=$(HAS_EMBED_IRX), DEBUG=$(DEBUG)
@@ -344,7 +370,7 @@ clean-subprojects:
 	@if [ -f src/ps2_stage2_loader/Makefile ]; then $(MAKE) -C src/ps2_stage2_loader clean; fi
 
 clean:
-	@rm -rf $(EE_BIN) $(EE_BIN_STRIPPED) $(EE_BIN_ENCRYPTED) $(EE_BIN_PACKED)
+	@rm -rf $(EE_BIN) $(EE_BIN_STRIPPED) $(EE_BIN_ENCRYPTED) $(EE_BIN_PACKED) $(EE_BIN_RAW)
 	@rm -rf $(EE_OBJS_DIR) $(EE_ASM_DIR)
 	@$(MAKE) clean-subprojects
 
@@ -360,6 +386,17 @@ else
 	ps2-packer -v $< $@
 endif
 
+$(EE_BIN_RAW): $(EE_BIN)
+	@echo " -- Creating raw MBR payload"
+	$(EE_OBJCOPY) -O binary -v $< $@
+	@bytes=$$(wc -c < $@); sectors=$$((($$bytes + 511) / 512)); echo " -- MBR raw size: $$bytes bytes ($$sectors sectors)"
+
+ifeq ($(KELFTYPE), MBR)
+$(EE_BIN_ENCRYPTED): $(EE_BIN_RAW)
+	@echo " -- Encrypting ($(KELFTYPE))"
+	tools/kelftool encrypt mbr $< $@
+	@bytes=$$(wc -c < $@); sectors=$$((($$bytes + 511) / 512)); echo " -- MBR KELF size: $$bytes bytes ($$sectors sectors)"
+else
 $(EE_BIN_ENCRYPTED): $(EE_BIN_PACKED)
 	@echo " -- Encrypting ($(KELFTYPE))"
 ifeq ($(KELFTYPE), MC)
@@ -368,6 +405,7 @@ else ifeq ($(KELFTYPE), HDD)
 	tools/kelftool encrypt fhdb $< $@
 else
 	$(error UNKNOWN KELF TYPE: '$(KELFTYPE)')
+endif
 endif
 # move OBJ to folder and search source on src/, borrowed from OPL makefile
 
@@ -413,6 +451,9 @@ analize:
 
 celan: clean # a repetitive typo when quicktyping
 kelf: $(EE_BIN_ENCRYPTED) # alias of KELF creation
+mbr:
+	$(MAKE) clean MBR=1
+	$(MAKE) kelf MBR=1
 
 
 banner:

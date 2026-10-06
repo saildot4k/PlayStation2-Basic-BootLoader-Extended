@@ -85,6 +85,10 @@ jobs:
         run: |
           make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PSX-ALL-DRIVERS-LAZY-LOADING/ PSX_ALL_DRIVERS_LAZY_LOADING=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
 
+      - name: Compile PS2 MBR build
+        run: |
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=${{ env.OUT_ROOT }}PS2BBL-MBR/ MBR=1 EGSM_BUILD=1 EMBED_PS1VN=1 ${{ env.DEBUG }} ${{ env.PRINTF_ARGS }}
+
       - name: list
         run: |
           git ls-files -i --exclude-standard -c
@@ -97,6 +101,7 @@ jobs:
           cp README.md "${{ env.REL_DIR }}/README.md"
           cp tools/png_to_logo_rbga.py "${{ env.REL_DIR }}/png_to_logo_rbga.py"
           mv "${{ env.OUT_ROOT }}PSX-ALL-DRIVERS-LAZY-LOADING/" "${{ env.REL_DIR }}/PSX-ALL-DRIVERS-LAZY-LOADING/"
+          mv "${{ env.OUT_ROOT }}PS2BBL-MBR/" "${{ env.REL_DIR }}/PS2BBL-MBR/"
 
       - name: pack release
         if: env.USE_RELEASE == '1'

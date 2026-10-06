@@ -24,6 +24,12 @@ make clean kelf HDD=1 $* --silent
 mv bin/PS2BBL_HDD.KELF kelf/HSYSTEM.XLF
 make clean HDD=1 $* --silent
 
+echo -- PS2 + HDD MBR
+mkdir -p kelf/MBR
+make clean kelf MBR=1 $* --silent
+mv bin/PS2BBL_MBR.KELF kelf/MBR/PS2BBL_MBR.KELF
+make clean MBR=1 $* --silent
+
 echo -- PS2 + MX4SIO
 make clean kelf MX4SIO=1 $* --silent
 mv bin/PS2BBL_MC.KELF kelf/MX4SIO/SYSTEM.XLF

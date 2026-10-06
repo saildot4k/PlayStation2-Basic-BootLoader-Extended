@@ -56,6 +56,10 @@ PS2BBL supports these launch/config path prefixes:
 - `ilink:/` (BDM mass-storage roots) __not yet implemented__
 - `DISC_STOP_AT_BOOT=1` compile-time profile to always stop optical disc after config bootstrap
 
+### HDD MBR build
+
+`make mbr` builds `bin/PS2BBL_MBR.KELF`, an HDD `__mbr` payload variant linked as a raw EE binary at `0x00100000` and signed with the `mbr` KELF header. It follows the PS2 HDD MBR boot convention used by HDD-OSD/PSBBN, decrypts PSBBN `rom0:MBRBOOT` arguments, and handles `rom0:HDDBOOT`/MBR arguments for browser/error pass-through, disc/DVD boot requests, `BootHddApp`, and DNAS loader handoff.
+
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.
   - `0` No Logo/Console info

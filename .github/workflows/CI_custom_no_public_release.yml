@@ -43,6 +43,10 @@ jobs:
         run: |
           make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2BBL_CUSTOM_BUILD/ PSX=1 ${{ github.event.inputs.make_args }} ${{ env.DISC_STOP_ARG }}
 
+      - name: Compile PS2 MBR build
+        run: |
+          make release COMMIT_HASH=${GITHUB_SHA::7} BINDIR=PS2BBL_CUSTOM_BUILD/ MBR=1 ${{ env.DISC_STOP_ARG }}
+
       - name: list
         run: |
           git ls-files -i --exclude-standard -c
