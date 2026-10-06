@@ -5,9 +5,9 @@ EE_INCS = -I../../include/ps2_stage2_loader -I../../include -I$(PS2SDK)/ee/inclu
 EE_LINKFILE = linkfile
 
 ifeq ($(EGSM_BUILD), 1)
-EE_OBJS = main.o ps2logo.o egsm.o ee_exception_l2.o
+EE_OBJS = main.o ps2logo.o filexio_buffers.o egsm.o ee_exception_l2.o
 else
-EE_OBJS = main.o ps2logo.o egsm_stub.o
+EE_OBJS = main.o ps2logo.o filexio_buffers.o egsm_stub.o
 endif
 EE_OBJS_DIR = obj/
 EE_OBJS := $(EE_OBJS:%=$(EE_OBJS_DIR)%)
