@@ -18,7 +18,7 @@ void LoaderPlatformClearStaleEEDebugState(void)
     _ee_sync_p();
 }
 
-#ifdef PSX
+#if defined(PSX) || defined(PSX_IOP_BOOT)
 static void InitPSX(void)
 {
     int result;
@@ -54,7 +54,7 @@ static void InitPSX(void)
 void ResetIOP(void)
 {
     SifInitRpc(0); // Initialize SIFCMD & SIFRPC
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
     if (g_is_psx_desr) {
         /* sp193: We need some of the PSX's CDVDMAN facilities, but we do not want to use its (too-)new FILEIO module.
            This special IOPRP image contains a IOPBTCONF list that lists PCDVDMAN instead of CDVDMAN.
@@ -68,7 +68,7 @@ void ResetIOP(void)
     }
     while (!SifIopSync()) {};
 
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
     if (g_is_psx_desr)
         InitPSX();
 #endif

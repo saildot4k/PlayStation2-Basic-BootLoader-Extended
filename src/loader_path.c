@@ -397,10 +397,10 @@ int LoaderPathCanAttemptNow(const char *path)
     if (path_prefix_matches(path, "mc", 2))
         return 1;
     if (path_prefix_matches(path, "xfrom", 5)) {
-#if defined(PSX)
+#if defined(XFROM)
         if (!g_is_psx_desr)
             return 0;
-        return (stat("xfrom:", &st) == 0);
+        return (stat("xfrom0:", &st) == 0 || stat("xfrom:", &st) == 0);
 #else
         return 0;
 #endif
@@ -597,6 +597,49 @@ static const char *resolve_path_tokens(const char *path,
             copy_string_safe(out, out_size, typed_candidate);
         else
             copy_string_safe(out, out_size, typed_candidate_no_unit);
+        return out;
+    }
+#endif
+
+#ifdef XFROM
+    if (path_prefix_with_optional_unit(path, "xfrom", 5, &bdm_unit, &bdm_suffix)) {
+        char unit_candidate[CHECKPATH_BUF_SIZE];
+        char unitless_candidate[CHECKPATH_BUF_SIZE];
+
+        if (!build_prefixed_path_with_optional_unit("xfrom",
+                                                    bdm_unit,
+                                                    bdm_suffix,
+                                                    unit_candidate,
+                                                    sizeof(unit_candidate)))
+            return NULL;
+        if (!build_prefixed_path_with_optional_unit("xfrom",
+                                                    -1,
+                                                    bdm_suffix,
+                                                    unitless_candidate,
+                                                    sizeof(unitless_candidate)))
+            return NULL;
+
+        if (!require_existing_pairs) {
+            if (bdm_unit >= 0)
+                copy_string_safe(out, out_size, unit_candidate);
+            else
+                copy_string_safe(out, out_size, unitless_candidate);
+            return out;
+        }
+
+        if (bdm_unit >= 0 && exist(unit_candidate)) {
+            copy_string_safe(out, out_size, unit_candidate);
+            return out;
+        }
+        if (exist(unitless_candidate)) {
+            copy_string_safe(out, out_size, unitless_candidate);
+            return out;
+        }
+
+        if (bdm_unit >= 0)
+            copy_string_safe(out, out_size, unit_candidate);
+        else
+            copy_string_safe(out, out_size, unitless_candidate);
         return out;
     }
 #endif

@@ -31,9 +31,14 @@ static int dev9_loaded = 0;
 #ifdef FILEXIO
 static int s_fio_loaded = 0;
 #endif
-#if defined(PSX)
+#if defined(XFROM)
 static int s_xfrom_modules_loaded = 0;
 extern int g_is_psx_desr;
+#endif
+
+#ifdef PS2BBL_MBR
+#define MBR_HDD_CONFIG_PATH "hdd0:__sysconf:pfs:/PS2BBL/PS2BBL.INI"
+#define MBR_XFROM_CONFIG_PATH "xfrom0:/PS2BBL/CONFIG.INI"
 #endif
 
 static int starts_with(const char *s, const char *prefix)
@@ -77,9 +82,34 @@ static int extract_optional_unit_after_prefix(const char *path, const char *pref
     return -2;
 }
 
+static int write_path3(char *out, size_t out_size, const char *a, const char *b, const char *c)
+{
+    size_t a_len;
+    size_t b_len;
+    size_t c_len;
+
+    if (out == NULL || out_size == 0 || a == NULL || b == NULL || c == NULL)
+        return 0;
+
+    a_len = strlen(a);
+    b_len = strlen(b);
+    c_len = strlen(c);
+    if (a_len + b_len + c_len >= out_size) {
+        out[0] = '\0';
+        return 0;
+    }
+
+    memcpy(out, a, a_len);
+    memcpy(out + a_len, b, b_len);
+    memcpy(out + a_len + b_len, c, c_len);
+    out[a_len + b_len + c_len] = '\0';
+    return 1;
+}
+
 static int build_mass_unit_path(const char *path, int unit, char *out, size_t out_size)
 {
     const char *suffix;
+    char prefix[] = "mass0";
 
     if (path == NULL || out == NULL || out_size == 0 || unit < 0 || unit > 9)
         return 0;
@@ -93,11 +123,10 @@ static int build_mass_unit_path(const char *path, int unit, char *out, size_t ou
     else
         return 0;
 
+    prefix[4] = '0' + unit;
     if (suffix[1] == '/' || suffix[1] == '\0')
-        snprintf(out, out_size, "mass%d%s", unit, suffix);
-    else
-        snprintf(out, out_size, "mass%d:/%s", unit, suffix + 1);
-    return 1;
+        return write_path3(out, out_size, prefix, "", suffix);
+    return write_path3(out, out_size, prefix, ":/", suffix + 1);
 }
 
 static int normalize_mass_path_to_unit_or_generic(const char *path, int unit, char *out, size_t out_size)
@@ -123,10 +152,8 @@ static int normalize_mass_path_to_unit_or_generic(const char *path, int unit, ch
         return 0;
 
     if (suffix[1] == '/' || suffix[1] == '\0')
-        snprintf(out, out_size, "mass%s", suffix);
-    else
-        snprintf(out, out_size, "mass:/%s", suffix + 1);
-    return 1;
+        return write_path3(out, out_size, "mass", "", suffix);
+    return write_path3(out, out_size, "mass", ":/", suffix + 1);
 }
 
 typedef enum
@@ -272,7 +299,6 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
 {
     int unit = extract_legacy_mass_unit(boot_path);
     int i;
-    const char *suffix;
     int found_slots[10];
     MassClass found_classes[10];
     int found_count = 0;
@@ -287,7 +313,6 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
     if (boot_path == NULL || !ci_starts_with(boot_path, "mass") || boot_path[4] != ':')
         return -1;
 
-    suffix = boot_path + 4;
     for (i = 0; i < 10; i++) {
         int found = 0;
         MassClass mass_class = MASS_CLASS_UNKNOWN;
@@ -295,7 +320,6 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
         int mounted = 0;
         char driver_tag[16];
 #endif
-        int candidate_len;
         char candidate[256];
 
 #ifdef FILEXIO
@@ -311,18 +335,9 @@ static int resolve_legacy_mass_boot_unit(const char *boot_path)
         }
 #endif
 
-        candidate_len = snprintf(candidate, sizeof(candidate), "mass%d%s", i, suffix);
-        if (candidate_len > 0 &&
-            (size_t)candidate_len < sizeof(candidate) &&
+        if (build_mass_unit_path(boot_path, i, candidate, sizeof(candidate)) &&
             exist(candidate))
             found = 1;
-        if (!found && suffix[1] != '\0' && suffix[1] != '/') {
-            candidate_len = snprintf(candidate, sizeof(candidate), "mass%d:/%s", i, suffix + 1);
-            if (candidate_len > 0 &&
-                (size_t)candidate_len < sizeof(candidate) &&
-                exist(candidate))
-                found = 1;
-        }
         if (found) {
 #ifdef FILEXIO
             if (mass_class == MASS_CLASS_UNKNOWN) {
@@ -612,7 +627,7 @@ static void reset_module_flags(void)
     s_bdm_core_loaded = 0;
     s_bdm_usb_transport_loaded = 0;
     s_bdm_ata_transport_loaded = 0;
-#if defined(PSX)
+#if defined(XFROM)
     s_xfrom_modules_loaded = 0;
 #endif
 }
@@ -1004,7 +1019,7 @@ static int load_family_modules(LoaderPathFamily family, const char *path_hint, B
             return -1;
 #endif
         case LOADER_PATH_FAMILY_XFROM:
-#if defined(PSX)
+#if defined(XFROM)
             return LoaderEnsureXFromModulesLoaded();
 #else
             return -1;
@@ -1076,6 +1091,24 @@ void LoaderSetBootPathHint(const char *boot_path)
     int usb_unit = -2;
     const char *boot_path_for_ops = boot_path;
     char normalized_mass_path[256];
+#ifdef PS2BBL_MBR
+    const char *mbr_boot_config_path = NULL;
+#endif
+
+#ifdef PS2BBL_MBR
+    if (boot_path != NULL) {
+        if (ci_eq(boot_path, "rom0:HDDBOOT") ||
+            ci_eq(boot_path, "rom0:MBRBOOT")) {
+            family = LOADER_PATH_FAMILY_HDD_APA;
+            mbr_boot_config_path = MBR_HDD_CONFIG_PATH;
+            boot_path_for_ops = mbr_boot_config_path;
+        } else if (ci_eq(boot_path, "xfrom:XFROMBOOT")) {
+            family = LOADER_PATH_FAMILY_XFROM;
+            mbr_boot_config_path = MBR_XFROM_CONFIG_PATH;
+            boot_path_for_ops = mbr_boot_config_path;
+        }
+    }
+#endif
 
     s_boot_family = (family == LOADER_PATH_FAMILY_NONE)
                         ? LOADER_PATH_FAMILY_MC
@@ -1098,13 +1131,24 @@ void LoaderSetBootPathHint(const char *boot_path)
             }
             snprintf(s_boot_path_hint, sizeof(s_boot_path_hint), "%s", normalized_mass_path);
         }
-        boot_path_for_ops = s_boot_path_hint;
+#ifdef PS2BBL_MBR
+        if (mbr_boot_config_path == NULL)
+#endif
+            boot_path_for_ops = s_boot_path_hint;
         mx4sio_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "mx4sio", 6);
         ata_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "ata", 3);
         ilink_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "ilink", 5);
         usb_unit = extract_optional_unit_after_prefix(boot_path_for_ops, "usb", 3);
     }
-    set_boot_cwd_config_path(boot_path_for_ops);
+#ifdef PS2BBL_MBR
+    if (mbr_boot_config_path != NULL)
+        snprintf(s_boot_cwd_config_path, sizeof(s_boot_cwd_config_path), "%s", mbr_boot_config_path);
+    else {
+#endif
+        set_boot_cwd_config_path(boot_path_for_ops);
+#ifdef PS2BBL_MBR
+    }
+#endif
 
     switch (family) {
         case LOADER_PATH_FAMILY_MMCE:
@@ -1120,7 +1164,14 @@ void LoaderSetBootPathHint(const char *boot_path)
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mx4sio:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_HDD_APA:
-            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI");
+#ifdef PS2BBL_MBR
+            if (mbr_boot_config_path != NULL) {
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "%s", mbr_boot_config_path);
+            } else
+#endif
+            {
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI");
+            }
             break;
         case LOADER_PATH_FAMILY_BDM:
             if (starts_with(boot_path_for_ops, "ata")) {
@@ -1156,7 +1207,14 @@ void LoaderSetBootPathHint(const char *boot_path)
                 snprintf(s_boot_config_path, sizeof(s_boot_config_path), "mass:/PS2BBL/CONFIG.INI");
             break;
         case LOADER_PATH_FAMILY_XFROM:
-            snprintf(s_boot_config_path, sizeof(s_boot_config_path), "xfrom:/PS2BBL/CONFIG.INI");
+#ifdef PS2BBL_MBR
+            if (mbr_boot_config_path != NULL) {
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "%s", mbr_boot_config_path);
+            } else
+#endif
+            {
+                snprintf(s_boot_config_path, sizeof(s_boot_config_path), "xfrom:/PS2BBL/CONFIG.INI");
+            }
             break;
         default:
             break;
@@ -1330,12 +1388,12 @@ int LoaderLoadBdmTransportsForHint(const char *path_hint)
 
 int LoaderEnsureXFromModulesLoaded(void)
 {
-#if defined(PSX)
+#if defined(XFROM)
     int ID;
     int RET;
 
     if (!g_is_psx_desr)
-        return 0;
+        return -1;
     if (s_xfrom_modules_loaded)
         return 0;
 
@@ -1359,9 +1417,11 @@ int LoaderEnsureXFromModulesLoaded(void)
         return -3;
 
     s_xfrom_modules_loaded = 1;
-#endif
 
     return 0;
+#else
+    return -1;
+#endif
 }
 
 void LoaderLoadSystemModules(int *bdm_modules_loaded,

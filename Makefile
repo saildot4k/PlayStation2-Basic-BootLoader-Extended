@@ -14,8 +14,10 @@ export HEADER
 HAS_EMBED_IRX ?= 1                  # whether to embed or not non vital IRX (wich will be loaded from memcard files)
 DEBUG ?= 0
 PSX ?= 0                            # PSX DESR support
+PSX_IOP_BOOT ?= 0                   # compile DESR IOP reboot support; used only when ROMVER detects PSX/DESR
 HDD ?= 0                            # Internal HDD support
 MBR ?= 0                            # HDD __mbr boot payload variant
+XFROM ?= 0                          # PSX XFROM support without the full PSX boot profile
 MMCE ?= 0
 MX4SIO ?= 0
 PROHBIT_DVD_0100 ?= 0               # prohibit the DVD Players v1.00 and v1.01 from being booted.
@@ -109,15 +111,27 @@ endif
 ifeq ($(MBR), 1)
   $(info --- building HDD MBR boot variant)
   ifeq ($(PSX), 1)
-    $(error MBR=1 is an HDD __mbr payload; do not combine it with PSX=1)
+    $(error MBR=1 already enables the PSX IOP boot path; do not combine it with the full PSX=1 profile)
   endif
   ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
-    $(error MBR=1 is an HDD __mbr payload; do not combine it with PSX_ALL_DRIVERS_LAZY_LOADING=1)
+    ifneq ($(origin PSX_ALL_DRIVERS_LAZY_LOADING), file)
+      $(error MBR=1 is an HDD __mbr payload; do not combine it with PSX_ALL_DRIVERS_LAZY_LOADING=1)
+    endif
   endif
-  HDD = 1
-  BASENAME = PS2BBL_MBR
-  KELFTYPE = MBR
-  EE_BIN_ENCRYPTED = $(BINDIR)$(BASENAME).KELF
+  override PSX_ALL_DRIVERS_LAZY_LOADING = 0
+  override HDD = 1
+  override MMCE = 1
+  override MX4SIO = 1
+  override BDM_ATA = 1
+  override XFROM = 1
+  override PSX_IOP_BOOT = 1
+  override HAS_EMBED_IRX = 1
+  override HOMEBREW_IRX = 1
+  override FILEXIO_NEED = 1
+  override DEV9_NEED = 1
+  override BASENAME = PS2BBL_MBR
+  override KELFTYPE = MBR
+  override EE_BIN_ENCRYPTED = $(BINDIR)$(BASENAME).KELF
   EE_CFLAGS += -DPS2BBL_MBR
   EE_LDFLAGS += -Tsrc/ps2_mbr/linkfile
   EE_OBJS += mbr_entry.o mbr_args.o mbr_crypto.o
@@ -156,7 +170,9 @@ ifeq ($(MMCE), 1)
   endif
   ifeq ($(MX4SIO), 1)
     ifneq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
-      $(error MX4SIO cant coexist with MMCE)
+      ifneq ($(MBR), 1)
+        $(error MX4SIO cant coexist with MMCE)
+      endif
     endif
   endif
 endif
@@ -175,16 +191,30 @@ endif
 
 ifeq ($(PSX), 1)
    $(info --- building with PSX-DESR support)
+  override XFROM = 1
+  override PSX_IOP_BOOT = 1
   ifeq ($(PSX_ALL_DRIVERS_LAZY_LOADING), 1)
     BASENAME = PSX-ALL-DRIVERS-LAZY-LOADING
   else
     BASENAME = PSXBBL
   endif
   EE_CFLAGS += -DPSX=1
-  EE_OBJS += scmd_add.o ioprp.o extflash_irx.o xfromman_irx.o
+endif
+
+ifeq ($(PSX_IOP_BOOT), 1)
+  $(info --- compiling with PSX/DESR IOP boot support)
+  EE_CFLAGS += -DPSX_IOP_BOOT=1
+  EE_OBJS += scmd_add.o ioprp.o
   EE_LIBS += -lxcdvd -liopreboot
 else
   EE_LIBS += -lcdvd
+endif
+
+ifeq ($(XFROM), 1)
+  $(info --- compiling with XFROM support)
+  EE_CFLAGS += -DXFROM=1
+  EE_OBJS += extflash_irx.o xfromman_irx.o
+  DEV9_NEED = 1
 endif
 
 ifeq ($(DEBUG), 1)
@@ -323,10 +353,10 @@ ifeq ($(PROHBIT_DVD_0100),1)
   EE_CFLAGS += -DPROHBIT_DVD_0100=1
 endif
 
-# Recent PS2SDK libpatches members depend on earlier members from the same
-# archive. Repeat the archive after profile-specific libraries so ld can
-# resolve those internal dependencies in its normal left-to-right scan.
-EE_LIBS += -lpatches
+# Recent PS2SDK libpatches members can be pulled in by later libraries such as
+# libiopreboot, and then need earlier members from the same archive. Group this
+# late pass so ld can rescan libpatches until its internal references settle.
+EE_LIBS += -Wl,--start-group -lpatches -Wl,--end-group
 
 # ---{ RECIPES }--- #
 .PHONY: greeting debug all clean clean-subprojects kelf mbr packed release rebuild banner analyze clean
@@ -352,7 +382,7 @@ RELEASE_TARGET = $(EE_BIN_PACKED)
 endif
 
 greeting:
-	@echo built PS2BBL PSX=$(PSX), LOCAL_IRX=$(HAS_EMBED_IRX), DEBUG=$(DEBUG)
+	@echo built PS2BBL PSX=$(PSX), PSX_IOP_BOOT=$(PSX_IOP_BOOT), MBR=$(MBR), LOCAL_IRX=$(HAS_EMBED_IRX), DEBUG=$(DEBUG)
 	@echo PROHBIT_DVD_0100=$(PROHBIT_DVD_0100), XCDVD_READKEY=$(XCDVD_READKEY)
 	@echo KERNEL_NOPATCH=$(KERNEL_NOPATCH), NEWLIB_NANO=$(NEWLIB_NANO)
 	@echo binaries dispatched to $(BINDIR)

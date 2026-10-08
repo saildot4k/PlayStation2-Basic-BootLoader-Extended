@@ -99,8 +99,16 @@ int LoaderMbrHandleArgs(int argc, char *argv[])
     if (ci_eq(cmd, "DnasPs1Emu") ||
         ci_eq(cmd, "DnasPs2Native") ||
         ci_eq(cmd, "DnasPs2Hdd")) {
+        int dnas_argc = argc - cmd_index - 2;
+
+        if (dnas_argc < 0)
+            dnas_argc = 0;
+
         CleanUp();
-        RunLoaderElf(DNASLOAD_PATH, NULL, argc - cmd_index - 1, &argv[cmd_index + 1]);
+        RunLoaderElf(DNASLOAD_PATH,
+                     NULL,
+                     dnas_argc,
+                     (dnas_argc > 0) ? &argv[cmd_index + 2] : NULL);
         return 1;
     }
 

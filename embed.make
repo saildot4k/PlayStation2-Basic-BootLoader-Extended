@@ -7,14 +7,14 @@ IRXTAG = $(notdir $(addsuffix _irx, $(basename $<)))
 $(EE_ASM_DIR)ioprp.c: embed/ioprp.img | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ psx_ioprp
 
-ifeq ($(PSX), 1)
-PSX_IOP_CACHE_DIR := $(EE_OBJS_DIR)psx_iop/
+ifeq ($(XFROM), 1)
+XFROM_IOP_CACHE_DIR := $(EE_OBJS_DIR)xfrom_iop/
 PS2SDK_LOCAL_SRC := $(abspath thirdparty/ps2sdk)
 
-$(PSX_IOP_CACHE_DIR):
+$(XFROM_IOP_CACHE_DIR):
 	@mkdir -p $@
 
-$(PSX_IOP_CACHE_DIR)extflash.irx: | $(PSX_IOP_CACHE_DIR)
+$(XFROM_IOP_CACHE_DIR)extflash.irx: | $(XFROM_IOP_CACHE_DIR)
 	@if [ -f "$(PS2SDK)/iop/irx/extflash.irx" ]; then \
 		cp -f "$(PS2SDK)/iop/irx/extflash.irx" "$@"; \
 	elif [ -n "$(PS2SDKSRC)" ] && [ -f "$(PS2SDKSRC)/iop/dev9/extflash/Makefile" ]; then \
@@ -28,7 +28,7 @@ $(PSX_IOP_CACHE_DIR)extflash.irx: | $(PSX_IOP_CACHE_DIR)
 		exit 1; \
 	fi
 
-$(PSX_IOP_CACHE_DIR)xfromman.irx: | $(PSX_IOP_CACHE_DIR)
+$(XFROM_IOP_CACHE_DIR)xfromman.irx: | $(XFROM_IOP_CACHE_DIR)
 	@if [ -f "$(PS2SDK)/iop/irx/xfromman.irx" ]; then \
 		cp -f "$(PS2SDK)/iop/irx/xfromman.irx" "$@"; \
 	elif [ -n "$(PS2SDKSRC)" ] && [ -f "$(PS2SDKSRC)/iop/memorycard/xfromman/Makefile" ]; then \
@@ -42,10 +42,10 @@ $(PSX_IOP_CACHE_DIR)xfromman.irx: | $(PSX_IOP_CACHE_DIR)
 		exit 1; \
 	fi
 
-$(EE_ASM_DIR)extflash_irx.c: $(PSX_IOP_CACHE_DIR)extflash.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)extflash_irx.c: $(XFROM_IOP_CACHE_DIR)extflash.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ extflash_irx
 
-$(EE_ASM_DIR)xfromman_irx.c: $(PSX_IOP_CACHE_DIR)xfromman.irx | $(EE_ASM_DIR)
+$(EE_ASM_DIR)xfromman_irx.c: $(XFROM_IOP_CACHE_DIR)xfromman.irx | $(EE_ASM_DIR)
 	$(BIN2S) $< $@ xfromman_irx
 endif
 

@@ -526,6 +526,9 @@ int LoaderFindConfigFile(FILE **fp_out,
     LoaderPathFamily boot_cwd_family;
     int boot_from_legacy_mass = 0;
     int boot_legacy_mass_unit = -1;
+#ifdef PS2BBL_MBR
+    int mbr_boot_config_profile = 0;
+#endif
     const char *mc_sysconf_config_path = g_is_psx_desr
                                              ? "mc?:/SYS-CONF/PSXBBL.INI"
                                              : "mc?:/SYS-CONF/PS2BBL.INI";
@@ -552,6 +555,11 @@ int LoaderFindConfigFile(FILE **fp_out,
     boot_path_hint = LoaderGetBootPathHint();
     boot_family_source_hint = LoaderGetBootConfigSourceHint();
     boot_cwd_family = LoaderPathFamilyFromPath(boot_cwd_config);
+#ifdef PS2BBL_MBR
+    mbr_boot_config_profile = ci_eq(boot_path_hint, "rom0:HDDBOOT") ||
+                              ci_eq(boot_path_hint, "rom0:MBRBOOT") ||
+                              ci_eq(boot_path_hint, "xfrom:XFROMBOOT");
+#endif
 #ifdef DISC_STOP_AT_BOOT
     // Disc-stop profile: do not probe disc CWD.
     // When enabled, force a deterministic startup search order that does not
@@ -570,7 +578,7 @@ int LoaderFindConfigFile(FILE **fp_out,
 #else
     (void)boot_legacy_mass_unit;
 #endif
-#if defined(PSX)
+#if defined(XFROM)
     if (g_is_psx_desr) {
         if (LoaderPathFamilyFromPath(boot_path_hint) == LOADER_PATH_FAMILY_XFROM ||
             LoaderPathFamilyFromPath(boot_cwd_config) == LOADER_PATH_FAMILY_XFROM ||
@@ -578,7 +586,7 @@ int LoaderFindConfigFile(FILE **fp_out,
             int xfrom_ret;
 
             xfrom_ret = LoaderEnsureXFromModulesLoaded();
-            DPRINTF("Config probe: PSX xfrom boot preload ret=%d\n", xfrom_ret);
+            DPRINTF("Config probe: XFROM boot preload ret=%d\n", xfrom_ret);
             (void)xfrom_ret;
         }
     }
@@ -641,9 +649,23 @@ int LoaderFindConfigFile(FILE **fp_out,
 #endif
         {
             if (source == 0) {
-                config_path = "CONFIG.INI";
-                source_hint = SOURCE_CWD;
+#ifdef PS2BBL_MBR
+                if (mbr_boot_config_profile &&
+                    boot_family_config != NULL &&
+                    *boot_family_config != '\0') {
+                    config_path = boot_family_config;
+                    source_hint = boot_family_source_hint;
+                } else
+#endif
+                {
+                    config_path = "CONFIG.INI";
+                    source_hint = SOURCE_CWD;
+                }
             } else if (source == 1) {
+#ifdef PS2BBL_MBR
+                if (mbr_boot_config_profile)
+                    continue;
+#endif
                 config_path = boot_cwd_config;
                 source_hint = boot_family_source_hint;
             } else if (source == 2) {
@@ -655,7 +677,7 @@ int LoaderFindConfigFile(FILE **fp_out,
             } else if (source == 4) {
                 if (!g_is_psx_desr)
                     continue;
-#if defined(PSX)
+#if defined(XFROM)
                 {
                     int xfrom_ret = LoaderEnsureXFromModulesLoaded();
                     if (xfrom_ret < 0) {
@@ -664,7 +686,7 @@ int LoaderFindConfigFile(FILE **fp_out,
                     }
                 }
 #endif
-                config_path = "xfrom:/PS2BBL/CONFIG.INI";
+                config_path = "xfrom0:/PS2BBL/CONFIG.INI";
 #ifdef XFROM
                 source_hint = SOURCE_XFROM;
 #else

@@ -200,7 +200,7 @@ int main(int argc, char *argv[])
     DPRINTF("init OSD system paths\n");
     OSDInitSystemPaths();
 
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
     if (!g_is_psx_desr) {
         DPRINTF("Certifying CDVD Boot\n");
         CDVDBootCertify(ROMVER); /* Not needed on PSX-DESR, but required on standard PS2 ROMs. */

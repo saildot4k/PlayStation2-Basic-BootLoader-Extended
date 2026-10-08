@@ -32,12 +32,13 @@ Config search is now boot-family aware to avoid loading unnecessary drivers at s
    - MMCE boot: `mmce?:/PS2BBL/CONFIG.INI`
    - MX4SIO boot: `mx4sio:/PS2BBL/CONFIG.INI`
    - APA HDD boot: `hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI`
+   - HDD MBR boot: `hdd0:__sysconf:pfs:/PS2BBL/PS2BBL.INI`
    - BDM boot: `usb:/PS2BBL/CONFIG.INI` / `mass:/PS2BBL/CONFIG.INI` / `ata:/PS2BBL/CONFIG.INI`
 3. Memory card fallback:
    - PS2 runtime: `mc?:/SYS-CONF/PS2BBL.INI`
    - PSX-DESR runtime: `mc?:/SYS-CONF/PSXBBL.INI`
 4. PSX runtime final fallback
-   - `xfrom:/PS2BBL/CONFIG.INI`
+   - `xfrom0:/PS2BBL/CONFIG.INI`
 5. When compiled with `DISC_STOP_AT_BOOT=1
    - `cdrom0:/PS2BBL/CONFIG.INI`
    - Memory card fallback as defined by point 3 above.
@@ -51,7 +52,7 @@ PS2BBL supports these launch/config path prefixes:
 - `mmce0:/`, `mmce1:/`, `mmce?:/` __MMCE builds__
 - `mx4sio:/` (preferred), and `massX:/` (legacy)  __MX4SIO builds__
 - `hdd0:partition:pfs:/<path to elf>` __HDD builds__
-- `xfrom:/` paths __PSX DESR builds__
+- `xfrom:/`, `xfrom0:/` paths __PSX DESR / MBR builds__
 - `ata:/` exFAT HDD BDM device
 - `ilink:/` (BDM mass-storage roots) __not yet implemented__
 - `DISC_STOP_AT_BOOT=1` compile-time profile to always stop optical disc after config bootstrap
@@ -59,6 +60,8 @@ PS2BBL supports these launch/config path prefixes:
 ### HDD MBR build
 
 `make mbr` builds `bin/PS2BBL_MBR.KELF`, an HDD `__mbr` payload variant linked as a raw EE binary at `0x00100000` and signed with the `mbr` KELF header. It follows the PS2 HDD MBR boot convention used by HDD-OSD/PSBBN, decrypts PSBBN `rom0:MBRBOOT` arguments, and handles `rom0:HDDBOOT`/MBR arguments for browser/error pass-through, disc/DVD boot requests, `BootHddApp`, and DNAS loader handoff.
+
+The MBR build includes the full device-driver set used by the all-drivers profile: HDD APA, USB BDM, ATA BDM, MX4SIO, MMCE, and XFROM. It also includes the PSX/DESR IOP boot path without enabling the full PSX profile; that path is only used when `rom0:ROMVER` identifies a PSX/DESR, while normal PS2 consoles use the standard IOP reset and CDVD boot certification path. Startup still follows the boot source: `rom0:HDDBOOT` / `rom0:MBRBOOT` load the HDD family first and prefer `hdd0:__sysconf:pfs:/PS2BBL/PS2BBL.INI`; `xfrom:XFROMBOOT` loads XFROM first and prefers `xfrom0:/PS2BBL/CONFIG.INI`.
 
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.

@@ -39,7 +39,7 @@
 #include "ps1.h"
 #include "ps2.h"
 
-#ifdef PSX
+#if defined(PSX) || defined(PSX_IOP_BOOT)
 #include <iopcontrol_special.h>
 #include "psx/plibcdvd_add.h"
 #endif

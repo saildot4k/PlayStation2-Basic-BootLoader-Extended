@@ -12,7 +12,7 @@ char *CONFIG_PATHS[SOURCE_COUNT] = {
     "hdd0:__sysconf:pfs:/PS2BBL/CONFIG.INI",
 #endif
 #ifdef XFROM
-    "xfrom:/PS2BBL/CONFIG.INI",
+    "xfrom0:/PS2BBL/CONFIG.INI",
 #endif
 #ifdef MMCE
     "mmce0:/PS2BBL/CONFIG.INI",

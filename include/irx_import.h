@@ -12,8 +12,11 @@ IMPORT_BIN2C(mcserv_irx);
 IMPORT_BIN2C(padman_irx);
 IMPORT_BIN2C(xparam_irx);
 
-#ifdef PSX
+#if defined(PSX) || defined(PSX_IOP_BOOT)
 IMPORT_BIN2C(psx_ioprp);
+#endif
+
+#ifdef XFROM
 IMPORT_BIN2C(extflash_irx);
 IMPORT_BIN2C(xfromman_irx);
 #endif

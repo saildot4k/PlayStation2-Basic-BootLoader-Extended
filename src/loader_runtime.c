@@ -60,7 +60,7 @@ void LogDetectedPlatform(void)
     char rom_prefix[ROMVER_MODEL_PREFIX_LEN + 1];
     const char *platform_name;
 
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
     platform_name = g_is_psx_desr ? "PSX-DESR" : "PS2";
 #else
     platform_name = "PS2";

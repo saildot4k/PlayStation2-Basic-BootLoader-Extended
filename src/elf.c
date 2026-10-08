@@ -61,7 +61,7 @@ static int arg_eq_ci(const char *a, const char *b);
 int LookForBDMDevice(void);
 #endif
 
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
 extern int g_is_psx_desr;
 #endif
 
@@ -1001,7 +1001,7 @@ static int RunLoaderElfViaStage2(const char *launch_filename,
     if (size_ps2_stage2_loader_elf < sizeof(embedded_elf_header_t))
         return -1;
 
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
     psx_desr_runtime = g_is_psx_desr ? 1 : 0;
 #endif
 
@@ -1512,7 +1512,7 @@ void RunLoaderElf(const char *filename, const char *party, int argc, char *argv[
     // Keep direct launcher usage as emergency-only behavior:
     // for non-ROM entries, require successful stage2 handoff.
     if (!launch_is_rom) {
-#if defined(PSX)
+#if defined(PSX) || defined(PSX_IOP_BOOT)
         if (g_is_psx_desr) {
             DPRINTF("Stage2 handoff failed for PSX non-ROM launch '%s'; continuing with direct fallback\n",
                     intent.launch_filename);
