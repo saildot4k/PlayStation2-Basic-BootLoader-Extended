@@ -49,7 +49,7 @@ STATUS = Beta
 
 # Prefer python3, fall back to python for CI images that don't ship python3 binary name.
 PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
-EE_OBJCOPY ?= $(EE_PREFIX)objcopy
+EE_OBJCOPY ?= $(EE_TOOL_PREFIX)objcopy
 
 # ---{ EXECUTABLES }--- #
 
