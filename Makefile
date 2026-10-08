@@ -132,8 +132,8 @@ ifeq ($(MBR), 1)
   override BASENAME = PS2BBL_MBR
   override KELFTYPE = MBR
   override EE_BIN_ENCRYPTED = $(BINDIR)$(BASENAME).KELF
+  override EE_LINKFILE = src/ps2_mbr/linkfile
   EE_CFLAGS += -DPS2BBL_MBR
-  EE_LDFLAGS += -Tsrc/ps2_mbr/linkfile
   EE_OBJS += mbr_entry.o mbr_args.o mbr_crypto.o
 endif
 

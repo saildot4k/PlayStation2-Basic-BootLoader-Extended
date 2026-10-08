@@ -2,7 +2,7 @@
 // the binary must enter PS2SDK crt0 before normal main(argc, argv) startup.
 void __start(void) __attribute__((weak));
 
-void __entrypoint(void) __attribute__((noreturn));
+void __entrypoint(void) __attribute__((noreturn, used, section(".text.__entrypoint")));
 void __entrypoint(void)
 {
     __asm__ volatile(
