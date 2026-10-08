@@ -20,12 +20,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apk add build-base git python3
+          apk add build-base git openssl-dev python3
 
       - uses: actions/checkout@v6
       - run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git fetch --prune --unshallow
+
+      - name: Build native kelftool
+        run: |
+          rm -rf /tmp/kelftool
+          git clone --depth 1 https://github.com/xfwcfw/kelftool.git /tmp/kelftool
+          make -C /tmp/kelftool
+          cp /tmp/kelftool/build/kelftool.elf tools/kelftool
+          chmod +x tools/kelftool
 
       - name: Resolve optional DISC_STOP_AT_BOOT
         run: |

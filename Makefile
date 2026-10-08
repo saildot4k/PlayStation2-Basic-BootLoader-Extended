@@ -423,7 +423,20 @@ $(EE_BIN_RAW): $(EE_BIN)
 	@bytes=$$(wc -c < $@); sectors=$$((($$bytes + 511) / 512)); echo " -- MBR raw size: $$bytes bytes ($$sectors sectors)"
 
 ensure-kelftool:
-	@if [ -f "$(KELFTOOL)" ]; then chmod +x "$(KELFTOOL)"; fi
+	@if [ ! -f "$(KELFTOOL)" ]; then \
+		echo "ERROR: $(KELFTOOL) not found. Build or install kelftool and set KELFTOOL=/path/to/kelftool."; \
+		exit 1; \
+	fi
+	@chmod +x "$(KELFTOOL)"
+	@tool_output=$$($(KELFTOOL) 2>&1 || true); \
+	case "$$tool_output" in \
+		*"encrypt <headerid>"*) ;; \
+		*) \
+			echo "$$tool_output"; \
+			echo "ERROR: $(KELFTOOL) is not runnable on this host. In Alpine CI, build kelftool natively or install the binary's glibc/OpenSSL compatibility libraries."; \
+			exit 1; \
+			;; \
+	esac
 
 ifeq ($(KELFTYPE), MBR)
 $(EE_BIN_ENCRYPTED): $(EE_BIN_RAW) | ensure-kelftool
