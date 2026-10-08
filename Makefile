@@ -50,6 +50,7 @@ STATUS = Beta
 # Prefer python3, fall back to python for CI images that don't ship python3 binary name.
 PYTHON ?= $(shell command -v python3 2>/dev/null || command -v python 2>/dev/null)
 EE_OBJCOPY ?= $(EE_TOOL_PREFIX)objcopy
+KELFTOOL ?= tools/kelftool
 
 # ---{ EXECUTABLES }--- #
 
@@ -359,7 +360,7 @@ endif
 EE_LIBS += -Wl,--start-group -lpatches -Wl,--end-group
 
 # ---{ RECIPES }--- #
-.PHONY: greeting debug all clean clean-subprojects kelf mbr packed release rebuild banner analyze clean
+.PHONY: greeting debug all clean clean-subprojects ensure-kelftool kelf mbr packed release rebuild banner analyze clean
 
 all: $(EE_BIN)
 ifeq ($(DEBUG), 1)
@@ -421,18 +422,21 @@ $(EE_BIN_RAW): $(EE_BIN)
 	$(EE_OBJCOPY) -O binary -v $< $@
 	@bytes=$$(wc -c < $@); sectors=$$((($$bytes + 511) / 512)); echo " -- MBR raw size: $$bytes bytes ($$sectors sectors)"
 
+ensure-kelftool:
+	@if [ -f "$(KELFTOOL)" ]; then chmod +x "$(KELFTOOL)"; fi
+
 ifeq ($(KELFTYPE), MBR)
-$(EE_BIN_ENCRYPTED): $(EE_BIN_RAW)
+$(EE_BIN_ENCRYPTED): $(EE_BIN_RAW) | ensure-kelftool
 	@echo " -- Encrypting ($(KELFTYPE))"
-	tools/kelftool encrypt mbr $< $@
+	$(KELFTOOL) encrypt mbr $< $@
 	@bytes=$$(wc -c < $@); sectors=$$((($$bytes + 511) / 512)); echo " -- MBR KELF size: $$bytes bytes ($$sectors sectors)"
 else
-$(EE_BIN_ENCRYPTED): $(EE_BIN_PACKED)
+$(EE_BIN_ENCRYPTED): $(EE_BIN_PACKED) | ensure-kelftool
 	@echo " -- Encrypting ($(KELFTYPE))"
 ifeq ($(KELFTYPE), MC)
-	tools/kelftool encrypt dnasload $< $@
+	$(KELFTOOL) encrypt dnasload $< $@
 else ifeq ($(KELFTYPE), HDD)
-	tools/kelftool encrypt fhdb $< $@
+	$(KELFTOOL) encrypt fhdb $< $@
 else
 	$(error UNKNOWN KELF TYPE: '$(KELFTYPE)')
 endif
