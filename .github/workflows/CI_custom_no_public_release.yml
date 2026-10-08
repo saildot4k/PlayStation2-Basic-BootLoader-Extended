@@ -31,7 +31,7 @@ jobs:
         run: |
           rm -rf /tmp/kelftool
           git clone --depth 1 https://github.com/xfwcfw/kelftool.git /tmp/kelftool
-          make -C /tmp/kelftool
+          make -C /tmp/kelftool CXXFLAGS="-include cstdint"
           cp /tmp/kelftool/build/kelftool.elf tools/kelftool
           chmod +x tools/kelftool
 
