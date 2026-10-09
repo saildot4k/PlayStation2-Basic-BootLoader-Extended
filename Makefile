@@ -430,10 +430,10 @@ ensure-kelftool:
 	@chmod +x "$(KELFTOOL)"
 	@tool_output=$$($(KELFTOOL) 2>&1 || true); \
 	case "$$tool_output" in \
-		*"encrypt <headerid>"*|*"encrypt - encrypt and sign kelf files"*) ;; \
+		*"encrypt <headerid>"*"mbr"*"dnasload"*) ;; \
 		*) \
 			echo "$$tool_output"; \
-			echo "ERROR: $(KELFTOOL) is not runnable on this host. In Alpine CI, build kelftool natively or install the binary's glibc/OpenSSL compatibility libraries."; \
+			echo "ERROR: $(KELFTOOL) must be the header-aware ps2homebrew/kelftool build with mbr and dnasload support."; \
 			exit 1; \
 			;; \
 	esac
@@ -446,7 +446,7 @@ ensure-kelftool:
 		echo "Create it locally or set the GitHub Actions PS2KEYS_DAT_B64 secret to base64-encoded PS2KEYS.dat."; \
 		exit 1; \
 	fi
-	@awk -F= 'NF != 2 { printf "ERROR: invalid PS2KEYS.dat line %d: expected KEY=HEX.\n", NR; bad=1; next } { value=$$2; if (value ~ /\r$$/) { crlf=1; sub(/\r$$/, "", value) } if (value !~ /^[0-9A-Fa-f]+$$/) { printf "ERROR: PS2KEYS.dat key %s contains non-hex characters.\n", $$1; bad=1; next } if (length(value) % 2) { printf "ERROR: PS2KEYS.dat key %s has an odd-length hex value.\n", $$1; bad=1 } } END { if (crlf) { print "ERROR: PS2KEYS.dat has CRLF line endings; convert it to LF before running kelftool."; bad=1 } exit bad }' "$$HOME/PS2KEYS.dat"
+	@awk -F= '/^[[:space:]]*($$|[;#])/ { next } /^[[:space:]]*\[[^]]+\][[:space:]]*$$/ { sections=1; next } NF != 2 { printf "ERROR: invalid PS2KEYS.dat line %d: expected KEY=HEX or [section].\n", NR; bad=1; next } { key=$$1; value=$$2; gsub(/^[ \t]+|[ \t]+$$/, "", key); gsub(/^[ \t]+|[ \t]+$$/, "", value); if (value ~ /\r$$/) { crlf=1; sub(/\r$$/, "", value) } if (value !~ /^[0-9A-Fa-f]+$$/) { printf "ERROR: PS2KEYS.dat key %s contains non-hex characters.\n", key; bad=1; next } if (length(value) % 2) { printf "ERROR: PS2KEYS.dat key %s has an odd-length hex value.\n", key; bad=1 } } END { if (crlf) { print "ERROR: PS2KEYS.dat has CRLF line endings; convert it to LF before running kelftool."; bad=1 } if (!sections) { print "ERROR: ps2homebrew/kelftool requires PS2KEYS.dat to contain a [default] section. CI adds this automatically for flat PS2KEYS_DAT_B64 secrets."; bad=1 } exit bad }' "$$HOME/PS2KEYS.dat"
 
 ifeq ($(KELFTYPE), MBR)
 $(EE_BIN_ENCRYPTED): $(EE_BIN_RAW) | ensure-kelftool

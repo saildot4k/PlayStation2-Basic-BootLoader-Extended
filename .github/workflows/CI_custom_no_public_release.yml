@@ -30,9 +30,9 @@ jobs:
       - name: Build native kelftool
         run: |
           rm -rf /tmp/kelftool
-          git clone --depth 1 https://github.com/xfwcfw/kelftool.git /tmp/kelftool
-          make -C /tmp/kelftool CXXFLAGS="-include cstdint"
-          cp /tmp/kelftool/build/kelftool.elf tools/kelftool
+          git clone --depth 1 https://github.com/ps2homebrew/kelftool.git /tmp/kelftool
+          make -C /tmp/kelftool CXXFLAGS="--std=c++17 -include cstdint"
+          cp /tmp/kelftool/build/kelftool tools/kelftool
           chmod +x tools/kelftool
 
       - name: Install kelftool keystore
@@ -44,15 +44,31 @@ jobs:
             exit 1
           fi
           tmp_keys="$(mktemp)"
-          trap 'rm -f "$tmp_keys"' EXIT
+          normalized_keys="$(mktemp)"
+          trap 'rm -f "$tmp_keys" "$normalized_keys"' EXIT
           printf '%s' "$PS2KEYS_DAT_B64" | tr -d '[:space:]' | base64 -d > "$tmp_keys"
-          tr -d '\r' < "$tmp_keys" > "$HOME/PS2KEYS.dat"
+          tr -d '\r' < "$tmp_keys" > "$normalized_keys"
+          if grep -Eq '^[[:space:]]*\[[^]]+\][[:space:]]*$' "$normalized_keys"; then
+            cp "$normalized_keys" "$HOME/PS2KEYS.dat"
+          else
+            { printf '[default]\n'; cat "$normalized_keys"; } > "$HOME/PS2KEYS.dat"
+          fi
           chmod 600 "$HOME/PS2KEYS.dat"
           awk -F= '
+            /^[[:space:]]*$/ || /^[[:space:]]*[;#]/ {
+              next
+            }
+            /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+              next
+            }
             NF != 2 {
               printf "::error title=Invalid PS2KEYS.dat::Line %d is not KEY=HEX.\n", NR
               bad = 1
               next
+            }
+            {
+              gsub(/^[ \t]+|[ \t]+$/, "", $1)
+              gsub(/^[ \t]+|[ \t]+$/, "", $2)
             }
             $2 !~ /^[0-9A-Fa-f]+$/ {
               printf "::error title=Invalid PS2KEYS.dat::%s contains non-hex characters.\n", $1
