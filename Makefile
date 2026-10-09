@@ -430,7 +430,7 @@ ensure-kelftool:
 	@chmod +x "$(KELFTOOL)"
 	@tool_output=$$($(KELFTOOL) 2>&1 || true); \
 	case "$$tool_output" in \
-		*"encrypt <headerid>"*) ;; \
+		*"encrypt <headerid>"*|*"encrypt - encrypt and sign kelf files"*) ;; \
 		*) \
 			echo "$$tool_output"; \
 			echo "ERROR: $(KELFTOOL) is not runnable on this host. In Alpine CI, build kelftool natively or install the binary's glibc/OpenSSL compatibility libraries."; \
