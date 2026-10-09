@@ -437,6 +437,15 @@ ensure-kelftool:
 			exit 1; \
 			;; \
 	esac
+	@if [ -z "$$HOME" ]; then \
+		echo "ERROR: HOME is not set; $(KELFTOOL) looks for PS2KEYS.dat under HOME."; \
+		exit 1; \
+	fi
+	@if [ ! -r "$$HOME/PS2KEYS.dat" ]; then \
+		echo "ERROR: kelftool keystore not found at $$HOME/PS2KEYS.dat."; \
+		echo "Create it locally or set the GitHub Actions PS2KEYS_DAT_B64 secret to base64-encoded PS2KEYS.dat."; \
+		exit 1; \
+	fi
 
 ifeq ($(KELFTYPE), MBR)
 $(EE_BIN_ENCRYPTED): $(EE_BIN_RAW) | ensure-kelftool

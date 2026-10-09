@@ -55,6 +55,17 @@ jobs:
           cp /tmp/kelftool/build/kelftool.elf tools/kelftool
           chmod +x tools/kelftool
 
+      - name: Install kelftool keystore
+        env:
+          PS2KEYS_DAT_B64: ${{ secrets.PS2KEYS_DAT_B64 }}
+        run: |
+          if [ -z "$PS2KEYS_DAT_B64" ]; then
+            echo "::error title=Missing PS2KEYS_DAT_B64::Add a repository secret named PS2KEYS_DAT_B64 containing base64-encoded PS2KEYS.dat; kelftool requires \$HOME/PS2KEYS.dat for KELF encryption."
+            exit 1
+          fi
+          printf '%s' "$PS2KEYS_DAT_B64" | base64 -d > "$HOME/PS2KEYS.dat"
+          chmod 600 "$HOME/PS2KEYS.dat"
+
       - name: Set output folders
         run: |
           if [ "${GITHUB_REF_NAME}" = "Retrogem-GAMEID" ]; then
