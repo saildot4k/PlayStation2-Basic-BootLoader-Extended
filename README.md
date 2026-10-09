@@ -63,7 +63,7 @@ PS2BBL supports these launch/config path prefixes:
 
 The MBR build includes the full device-driver set used by the all-drivers profile: HDD APA, USB BDM, ATA BDM, MX4SIO, MMCE, and XFROM. It also includes the PSX/DESR IOP boot path without enabling the full PSX profile; that path is only used when `rom0:ROMVER` identifies a PSX/DESR, while normal PS2 consoles use the standard IOP reset and CDVD boot certification path. Startup still follows the boot source: `rom0:HDDBOOT` / `rom0:MBRBOOT` load the HDD family first and prefer `hdd0:__sysconf:pfs:/PS2BBL/PS2BBL.INI`; `xfrom:XFROMBOOT` loads XFROM first and prefers `xfrom0:/PS2BBL/CONFIG.INI`.
 
-KELF encryption with `kelftool` requires `PS2KEYS.dat` at `$HOME/PS2KEYS.dat`. For GitHub Actions, add a repository secret named `PS2KEYS_DAT_B64` containing the base64-encoded contents of `PS2KEYS.dat`; the CI workflows restore it into `$HOME/PS2KEYS.dat` before building the MBR KELF.
+KELF encryption with `kelftool` requires `PS2KEYS.dat` at `$HOME/PS2KEYS.dat`. For GitHub Actions, add a repository secret named `PS2KEYS_DAT_B64` containing the base64-encoded contents of `PS2KEYS.dat`; the CI workflows restore it into `$HOME/PS2KEYS.dat`, normalize Windows CRLF line endings to LF, and validate the hex fields before building the MBR KELF.
 
 ### LOGO_DISPLAY
 Use `LOGO_DISPLAY = 3` for hotkey-name display. Names will be defined by `NAME_<BUTTON>`.

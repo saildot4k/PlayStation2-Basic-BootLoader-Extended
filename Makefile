@@ -446,6 +446,7 @@ ensure-kelftool:
 		echo "Create it locally or set the GitHub Actions PS2KEYS_DAT_B64 secret to base64-encoded PS2KEYS.dat."; \
 		exit 1; \
 	fi
+	@awk -F= 'NF != 2 { printf "ERROR: invalid PS2KEYS.dat line %d: expected KEY=HEX.\n", NR; bad=1; next } { value=$$2; if (value ~ /\r$$/) { crlf=1; sub(/\r$$/, "", value) } if (value !~ /^[0-9A-Fa-f]+$$/) { printf "ERROR: PS2KEYS.dat key %s contains non-hex characters.\n", $$1; bad=1; next } if (length(value) % 2) { printf "ERROR: PS2KEYS.dat key %s has an odd-length hex value.\n", $$1; bad=1 } } END { if (crlf) { print "ERROR: PS2KEYS.dat has CRLF line endings; convert it to LF before running kelftool."; bad=1 } exit bad }' "$$HOME/PS2KEYS.dat"
 
 ifeq ($(KELFTYPE), MBR)
 $(EE_BIN_ENCRYPTED): $(EE_BIN_RAW) | ensure-kelftool

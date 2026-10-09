@@ -43,8 +43,28 @@ jobs:
             echo "::error title=Missing PS2KEYS_DAT_B64::Add a repository secret named PS2KEYS_DAT_B64 containing base64-encoded PS2KEYS.dat; kelftool requires \$HOME/PS2KEYS.dat for KELF encryption."
             exit 1
           fi
-          printf '%s' "$PS2KEYS_DAT_B64" | base64 -d > "$HOME/PS2KEYS.dat"
+          tmp_keys="$(mktemp)"
+          trap 'rm -f "$tmp_keys"' EXIT
+          printf '%s' "$PS2KEYS_DAT_B64" | tr -d '[:space:]' | base64 -d > "$tmp_keys"
+          tr -d '\r' < "$tmp_keys" > "$HOME/PS2KEYS.dat"
           chmod 600 "$HOME/PS2KEYS.dat"
+          awk -F= '
+            NF != 2 {
+              printf "::error title=Invalid PS2KEYS.dat::Line %d is not KEY=HEX.\n", NR
+              bad = 1
+              next
+            }
+            $2 !~ /^[0-9A-Fa-f]+$/ {
+              printf "::error title=Invalid PS2KEYS.dat::%s contains non-hex characters.\n", $1
+              bad = 1
+              next
+            }
+            length($2) % 2 {
+              printf "::error title=Invalid PS2KEYS.dat::%s has an odd-length hex value.\n", $1
+              bad = 1
+            }
+            END { exit bad }
+          ' "$HOME/PS2KEYS.dat"
 
       - name: Resolve optional DISC_STOP_AT_BOOT
         run: |
